@@ -9,7 +9,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
     const session = await auth();
     const resolvedParams = await params;
 
-    const issue = await db.issue.findUnique({
+    const issue: any = await db.issue.findUnique({
         where: { id: resolvedParams.id },
         include: {
             reporter: true,
@@ -124,7 +124,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                         </h3>
 
                         <div className="space-y-4">
-                            {issue.notes.map(note => (
+                            {issue.notes.map((note: any) => (
                                 <div key={note.id} className="flex gap-4 group">
                                     <div className="shrink-0 mt-1">
                                         {note.author.image ? (
@@ -143,7 +143,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                             </span>
                                         </div>
                                         <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                                            {note.content.split(/(@\w+)/g).map((part, i) =>
+                                            {note.content.split(/(@\w+)/g).map((part: string, i: number) =>
                                                 part.startsWith('@') ? <span key={i} className="text-primary bg-primary/10 px-1 py-0.5 rounded font-medium">{part}</span> : part
                                             )}
                                         </p>

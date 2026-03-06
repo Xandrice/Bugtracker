@@ -13,7 +13,7 @@ export default async function BoardPage() {
         orderBy: { updatedAt: 'desc' }
     });
 
-    const issues: IssueSnippet[] = rawIssues.map(i => ({
+    const issues: IssueSnippet[] = rawIssues.map((i: any) => ({
         id: i.id,
         title: i.title,
         type: i.type as any,
