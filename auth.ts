@@ -7,6 +7,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     adapter: PrismaAdapter(db),
     providers: [Discord],
     session: { strategy: "jwt" },
+    trustHost: true,
     callbacks: {
         async signIn({ user, account }) {
             if (account?.provider === "discord" && account.providerAccountId) {
