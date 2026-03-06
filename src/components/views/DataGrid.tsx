@@ -37,23 +37,46 @@ export interface IssueSnippet {
     severity?: string
     environment?: string | null
     tags?: string | null
+    dueDate?: Date | null
+    resourceName?: string | null
+    storyPoints?: number | null
+}
+
+export const statusStyles: Record<IssueStatus, string> = {
+    OPEN: "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30",
+    IN_PROGRESS: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30",
+    REVIEW: "bg-violet-500/15 text-violet-600 dark:text-violet-400 border-violet-500/30",
+    DONE: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+}
+
+export const typeStyles: Record<IssueType, string> = {
+    BUG: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30",
+    FEATURE: "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30",
+    TASK: "bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30",
+}
+
+const priorityStyles: Record<IssuePriority, string> = {
+    LOW: "text-slate-500",
+    MEDIUM: "text-amber-500",
+    HIGH: "text-orange-500",
+    URGENT: "text-red-500",
 }
 
 export const StatusIcon = ({ status }: { status: IssueStatus }) => {
     switch (status) {
-        case "OPEN": return <CircleDashed className="h-4 w-4 text-blue-500" />
+        case "OPEN": return <CircleDashed className="h-4 w-4 text-sky-500" />
         case "IN_PROGRESS": return <KanbanSquare className="h-4 w-4 text-amber-500" />
-        case "REVIEW": return <AlertCircle className="h-4 w-4 text-purple-500" />
+        case "REVIEW": return <AlertCircle className="h-4 w-4 text-violet-500" />
         case "DONE": return <CheckCircle2 className="h-4 w-4 text-emerald-500" />
     }
 }
 
 export const PriorityIcon = ({ priority }: { priority: IssuePriority }) => {
     switch (priority) {
-        case "LOW": return <ArrowDown className="h-4 w-4 text-slate-500" />
-        case "MEDIUM": return <MoreHorizontal className="h-4 w-4 text-slate-500" />
-        case "HIGH": return <ArrowUp className="h-4 w-4 text-orange-500" />
-        case "URGENT": return <AlertCircle className="h-4 w-4 text-red-600" />
+        case "LOW": return <ArrowDown className={clsx("h-4 w-4", priorityStyles.LOW)} />
+        case "MEDIUM": return <MoreHorizontal className={clsx("h-4 w-4", priorityStyles.MEDIUM)} />
+        case "HIGH": return <ArrowUp className={clsx("h-4 w-4", priorityStyles.HIGH)} />
+        case "URGENT": return <AlertCircle className={clsx("h-4 w-4", priorityStyles.URGENT)} />
     }
 }
 
@@ -75,6 +98,7 @@ interface DataGridProps {
 export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
     const [sortConfig, setSortConfig] = useState<{ key: keyof IssueSnippet, direction: "asc" | "desc" } | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>("ALL");
+    const [typeFilter, setTypeFilter] = useState<string>("ALL");
     const [assigneeFilter, setAssigneeFilter] = useState<string>("ALL");
 
     const assignees = useMemo(() => {
@@ -104,6 +128,9 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
         if (statusFilter !== "ALL") {
             filtered = filtered.filter(i => i.status === statusFilter);
         }
+        if (typeFilter !== "ALL") {
+            filtered = filtered.filter(i => i.type === typeFilter);
+        }
         if (assigneeFilter !== "ALL") {
             if (assigneeFilter === "UNASSIGNED") {
                 filtered = filtered.filter(i => !i.assignee);
@@ -127,6 +154,11 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                 const bTime = new Date(b.updatedAt).getTime();
                 return sortConfig.direction === 'asc' ? aTime - bTime : bTime - aTime;
             }
+            if (sortConfig.key === 'dueDate') {
+                const aTime = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+                const bTime = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+                return sortConfig.direction === 'asc' ? aTime - bTime : bTime - aTime;
+            }
             if (sortConfig.key === 'assignee') {
                 const aName = a.assignee?.name || "";
                 const bName = b.assignee?.name || "";
@@ -144,17 +176,17 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
             if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [issues, sortConfig, statusFilter, assigneeFilter]);
+    }, [issues, sortConfig, statusFilter, typeFilter, assigneeFilter]);
 
     return (
         <div className="flex flex-col gap-4">
             {!hideFilters && (
-                <div className="flex items-center gap-4 bg-background p-3 rounded-md border shadow-sm">
-                    <div className="text-sm font-medium px-2 border-r pr-4">Filters</div>
+                <div className="flex flex-wrap items-center gap-3 bg-background p-4 rounded-xl border border-border shadow-sm">
+                    <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">Filters</div>
                     <select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
-                        className="text-xs bg-muted/50 hover:bg-muted px-3 py-1.5 rounded-full border transition-colors outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-background text-foreground"
+                        className="text-xs bg-background text-foreground px-3 py-2 rounded-lg border border-border transition-colors outline-none focus:ring-2 focus:ring-primary/30 appearance-none hover:bg-muted/50"
                     >
                         <option value="ALL">Status: All</option>
                         <option value="OPEN">Open</option>
@@ -162,11 +194,20 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                         <option value="REVIEW">Review</option>
                         <option value="DONE">Done</option>
                     </select>
-
+                    <select
+                        value={typeFilter}
+                        onChange={(e) => setTypeFilter(e.target.value)}
+                        className="text-xs bg-background text-foreground px-3 py-2 rounded-lg border border-border transition-colors outline-none focus:ring-2 focus:ring-primary/30 appearance-none hover:bg-muted/50"
+                    >
+                        <option value="ALL">Type: All</option>
+                        <option value="BUG">Bug</option>
+                        <option value="FEATURE">Feature</option>
+                        <option value="TASK">Task</option>
+                    </select>
                     <select
                         value={assigneeFilter}
                         onChange={(e) => setAssigneeFilter(e.target.value)}
-                        className="text-xs bg-muted/50 hover:bg-muted px-3 py-1.5 rounded-full border transition-colors outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-background text-foreground"
+                        className="text-xs bg-background text-foreground px-3 py-2 rounded-lg border border-border transition-colors outline-none focus:ring-2 focus:ring-primary/30 appearance-none hover:bg-muted/50"
                     >
                         <option value="ALL">Assignee: Anyone</option>
                         <option value="UNASSIGNED">Unassigned</option>
@@ -200,6 +241,9 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                 <th onClick={() => handleSort('assignee')} className="px-4 py-2 font-medium w-40 cursor-pointer hover:text-foreground">
                                     Assignee {getSortIndicator('assignee')}
                                 </th>
+                                <th onClick={() => handleSort('dueDate')} className="px-4 py-2 font-medium w-28 cursor-pointer hover:text-foreground">
+                                    Due {getSortIndicator('dueDate')}
+                                </th>
                                 <th onClick={() => handleSort('updatedAt')} className="px-4 py-2 font-medium w-32 text-right cursor-pointer hover:text-foreground">
                                     Updated {getSortIndicator('updatedAt')}
                                 </th>
@@ -208,7 +252,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                         <tbody className="divide-y divide-border">
                             {sortedAndFilteredIssues.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
                                         No issues found matching your criteria.
                                     </td>
                                 </tr>
@@ -224,21 +268,21 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                             </Link>
                                         </td>
                                         <td className="px-4 py-1">
-                                            <div className="flex items-center gap-2">
+                                            <span className={clsx("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-xs font-medium", typeStyles[issue.type])}>
                                                 <TypeIcon type={issue.type} />
-                                                <span className="text-xs uppercase font-medium">{issue.type}</span>
-                                            </div>
+                                                {issue.type.replace("_", " ")}
+                                            </span>
                                         </td>
-                                        <td className="px-4 py-1 font-medium text-foreground group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                                        <td className="px-4 py-1 font-medium text-foreground group-hover:text-primary">
                                             <Link href={`/issues/${issue.id}`} className="block py-2 truncate max-w-[500px]">
                                                 {issue.title}
                                             </Link>
                                         </td>
                                         <td className="px-4 py-1">
-                                            <div className="flex items-center gap-2">
+                                            <span className={clsx("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-xs font-medium", statusStyles[issue.status])}>
                                                 <StatusIcon status={issue.status} />
-                                                <span className="text-xs">{issue.status}</span>
-                                            </div>
+                                                {issue.status.replace("_", " ")}
+                                            </span>
                                         </td>
                                         <td className="px-4 py-1">
                                             <div className="flex items-center gap-1">
@@ -264,6 +308,11 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                             ) : (
                                                 <span className="text-xs text-muted-foreground italic">Unassigned</span>
                                             )}
+                                        </td>
+                                        <td className="px-4 py-1 text-muted-foreground text-xs">
+                                            {issue.dueDate
+                                                ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(issue.dueDate))
+                                                : "—"}
                                         </td>
                                         <td className="px-4 py-1 text-right text-muted-foreground text-xs font-mono">
                                             {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(issue.updatedAt))}

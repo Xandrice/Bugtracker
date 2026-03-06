@@ -9,9 +9,9 @@ export async function TopNavbar() {
     return (
         <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b bg-background px-4 lg:px-6 shrink-0 shadow-sm transition-colors duration-200">
             <div className="flex items-center gap-4">
-                <Link href="/" className="flex items-center gap-2 font-semibold text-primary transition-opacity hover:opacity-80">
-                    <Bug className="h-6 w-6" />
-                    <span className="text-lg tracking-tight hidden sm:block">BugTracker</span>
+                <Link href="/" className="flex items-center gap-2 font-bold text-foreground transition-opacity hover:opacity-90">
+                    <Bug className="h-6 w-6 text-primary" />
+                    <span className="text-lg tracking-tight hidden sm:block bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">FiveM Tracker</span>
                 </Link>
             </div>
 

@@ -41,8 +41,8 @@ export function LeftSidebar() {
     const pathname = usePathname();
 
     return (
-        <aside className="w-64 border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 h-[calc(100vh-3.5rem)] overflow-y-auto hidden md:block shrink-0 transition-colors duration-200">
-            <div className="flex flex-col gap-6 py-6 px-4">
+        <aside className="w-64 border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 h-[calc(100vh-3.5rem)] overflow-hidden hidden md:block shrink-0 transition-colors duration-200 flex flex-col">
+            <div className="flex flex-col gap-6 py-6 px-4 min-h-0 overflow-hidden">
                 {navItems.map((group, i) => (
                     <div key={i} className="flex flex-col gap-1">
                         <h4 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase px-2 mb-1">

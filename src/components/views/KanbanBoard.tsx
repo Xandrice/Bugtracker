@@ -29,10 +29,10 @@ interface KanbanBoardProps {
 }
 
 const COLUMNS = [
-    { id: "OPEN", title: "To Do" },
-    { id: "IN_PROGRESS", title: "In Progress" },
-    { id: "REVIEW", title: "Review" },
-    { id: "DONE", title: "Done" }
+    { id: "OPEN", title: "To Do", color: "sky" },
+    { id: "IN_PROGRESS", title: "In Progress", color: "amber" },
+    { id: "REVIEW", title: "Review", color: "violet" },
+    { id: "DONE", title: "Done", color: "emerald" }
 ]
 
 const IssueCard = forwardRef<HTMLDivElement, { issue: IssueSnippet, isOverlay?: boolean } & React.HTMLAttributes<HTMLDivElement>>(
@@ -41,8 +41,8 @@ const IssueCard = forwardRef<HTMLDivElement, { issue: IssueSnippet, isOverlay?: 
             <div
                 ref={ref}
                 {...props}
-                className={`p-3 bg-background border rounded-md shadow-sm mb-3 flex flex-col gap-2 cursor-grab transition-all hover:border-primary/50 relative overflow-hidden
-                    ${isOverlay ? 'scale-105 shadow-2xl rotate-2 z-50 cursor-grabbing border-primary ring-2 ring-primary ring-offset-2' : ''} 
+                className={`p-3 bg-background border rounded-lg shadow-sm mb-3 flex flex-col gap-2 cursor-grab transition-all hover:shadow-md relative overflow-hidden
+                    ${isOverlay ? 'scale-105 shadow-xl z-50 cursor-grabbing border-primary ring-2 ring-primary ring-offset-2' : 'hover:border-primary/40'} 
                     ${className}`}
             >
                 <div className="flex items-start justify-between gap-2">
@@ -117,14 +117,21 @@ function SortableItem({ issue }: { issue: IssueSnippet }) {
     )
 }
 
-function Column({ id, title, issues }: { id: string, title: string, issues: IssueSnippet[] }) {
+const columnBg: Record<string, string> = {
+    OPEN: "bg-sky-500/10 border-sky-500/30",
+    IN_PROGRESS: "bg-amber-500/10 border-amber-500/30",
+    REVIEW: "bg-violet-500/10 border-violet-500/30",
+    DONE: "bg-emerald-500/10 border-emerald-500/30",
+}
+
+function Column({ id, title, issues, color }: { id: string, title: string, issues: IssueSnippet[], color: string }) {
     const { setNodeRef, isOver } = useDroppable({ id });
 
     return (
-        <div ref={setNodeRef} className={`flex flex-col flex-1 shrink-0 w-80 bg-muted/40 rounded-lg border transition-colors ${isOver ? 'border-primary/50 bg-muted/60' : 'border-border/50'}`}>
-            <div className="p-3 border-b border-border/50 bg-muted/20 flex items-center justify-between rounded-t-lg pointer-events-none">
+        <div ref={setNodeRef} className={`flex flex-col flex-1 shrink-0 w-80 rounded-xl border transition-colors ${columnBg[id] || "bg-muted/40 border-border/50"} ${isOver ? "ring-2 ring-primary/50 ring-offset-2" : ""}`}>
+            <div className="p-3 border-b border-border/50 flex items-center justify-between rounded-t-xl pointer-events-none">
                 <h3 className="font-semibold text-sm">{title}</h3>
-                <span className="text-xs font-medium bg-background px-2 py-0.5 rounded-full border text-muted-foreground">
+                <span className="text-xs font-medium bg-background/80 px-2.5 py-1 rounded-full border text-muted-foreground">
                     {issues.length}
                 </span>
             </div>
@@ -224,6 +231,7 @@ export function KanbanBoard({ issues: initialIssues, onIssueMove }: KanbanBoardP
                         id={col.id}
                         title={col.title}
                         issues={getIssuesForColumn(col.id)}
+                        color={col.color}
                     />
                 ))}
 

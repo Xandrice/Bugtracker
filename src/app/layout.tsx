@@ -17,8 +17,8 @@ import { LeftSidebar } from "@/components/layout/LeftSidebar";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "BugTracker - Premium Issue Management",
-  description: "A free, premium bug tracker with kanban boards and shared notes.",
+  title: "FiveM Tracker - Bug & Feature Management",
+  description: "Bug and feature tracker for FiveM server development. Kanban boards and triage.",
 };
 
 export default function RootLayout({
@@ -27,12 +27,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-background text-foreground`}>
+    <html lang="en" suppressHydrationWarning className="h-full">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-full min-h-screen bg-background text-foreground overflow-hidden`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <div className="flex flex-col min-h-screen">
+          <div className="flex flex-col h-screen overflow-hidden">
             <TopNavbar />
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-1 min-h-0 overflow-hidden">
               <LeftSidebar />
               <main className="flex-1 overflow-y-auto bg-muted/10">
                 {children}

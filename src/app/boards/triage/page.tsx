@@ -17,28 +17,31 @@ export default async function BugTriagePage() {
         status: i.status as any,
         priority: i.priority as any,
         assignee: null,
-        updatedAt: i.updatedAt
+        updatedAt: i.updatedAt,
+        dueDate: i.dueDate ?? undefined,
+        resourceName: i.resourceName ?? undefined,
+        storyPoints: i.storyPoints ?? undefined,
     }));
 
     return (
         <div className="flex flex-col h-full p-6 max-w-[1600px] mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-2">
-                    <h1 className="text-2xl font-semibold tracking-tight">Bug Triage</h1>
+                    <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">Bug Triage</h1>
                     <p className="text-sm text-muted-foreground">
                         Review and categorize newly reported bugs before assignment.
                     </p>
                 </div>
                 <Link
                     href="/issues/new"
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 shadow-sm"
+                    className="bg-primary hover:opacity-90 text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 shadow-md"
                 >
                     <Plus className="h-4 w-4" />
                     New Issue
                 </Link>
             </div>
 
-            <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 p-4 rounded-md text-sm">
+            <div className="bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 p-4 rounded-xl text-sm">
                 <strong>Triage Goals:</strong> Priority assignment, severity validation, finding duplicates, and component tagging.
             </div>
 

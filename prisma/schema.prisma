@@ -70,15 +70,23 @@ model Issue {
   type        String   @default("BUG") // BUG, FEATURE, TASK
   tags        String?
   environment String?
-  
+
+  // FiveM-specific
+  resourceName       String?  // e.g. es_extended, my-job, police-mdt
+  serverVersion      String?  // e.g. 6683, artifact
+  reproductionSteps  String?  // Steps to reproduce (bugs)
+  expectedBehavior   String?  // What should happen (bugs/features)
+
+  // Jira/Trello/Asana-style
+  dueDate     DateTime?
+  storyPoints Int?     // 1,2,3,5,8 for estimation
+  label       String?  // Optional single label/category; tags for multi
+
   reporterId  String
   reporter    User     @relation("Reporter", fields: [reporterId], references: [id])
-  
   assigneeId  String?
   assignee    User?    @relation("Assignee", fields: [assigneeId], references: [id])
-  
   notes       Note[]
-  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

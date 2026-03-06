@@ -12,8 +12,8 @@ export default function SettingsPage() {
     const [isExporting, setIsExporting] = useState<false | "json" | "csv">(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const [projectName, setProjectName] = useState("BugTracker");
-    const [projectDesc, setProjectDesc] = useState("A free, premium bug tracker with kanban boards and shared notes.");
+    const [projectName, setProjectName] = useState("FiveM Tracker");
+    const [projectDesc, setProjectDesc] = useState("Bug & feature tracker for your FiveM server.");
 
     useEffect(() => {
         setMounted(true);
