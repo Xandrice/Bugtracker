@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { notFound } from "next/navigation"
 import { auth } from "@/../auth"
 import { createTeamNote, setAssignee } from "@/app/actions"
+import CommentForm from "./components/CommentForm"
 
 export default async function IssueDetailsPage({ params }: { params: Promise<{ id: string }> }) {
     const session = await auth();
@@ -155,33 +156,11 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                             )}
                         </div>
 
-                        <form action={createTeamNote} className="flex gap-4 mt-6 items-start pt-6 border-t border-border">
-                            <input type="hidden" name="issueId" value={issue.id} />
-                            <div className="shrink-0 mt-1">
-                                {session?.user?.image ? (
-                                    <img src={session.user.image} alt="You" className="w-8 h-8 rounded-full border object-cover" />
-                                ) : (
-                                    <UserCircle2 className="w-8 h-8 text-muted-foreground" />
-                                )}
-                            </div>
-                            <div className="flex-1 border border-border rounded-xl shadow-sm bg-background overflow-hidden focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                                <textarea
-                                    name="content"
-                                    required
-                                    placeholder="Add a note... Use @ to tag people"
-                                    className="w-full min-h-[100px] p-4 text-sm resize-y focus:outline-none bg-transparent"
-                                />
-                                <div className="bg-muted/50 px-3 py-2 border-t border-border flex items-center justify-between">
-                                    <div className="flex gap-2">
-                                        <button type="button" className="p-1.5 text-muted-foreground hover:bg-muted rounded text-xs transition-colors"><Paperclip className="h-4 w-4" /></button>
-                                        <button type="button" className="p-1.5 text-muted-foreground hover:bg-muted rounded text-xs transition-colors"><LinkIcon className="h-4 w-4" /></button>
-                                    </div>
-                                    <button type="submit" className="bg-primary hover:opacity-90 text-primary-foreground px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors">
-                                        <Send className="h-3.5 w-3.5" /> Comment
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
+                        <CommentForm
+                            issueId={issue.id}
+                            currentUserImage={session?.user?.image || null}
+                            users={assignableUsers}
+                        />
 
                     </div>
 

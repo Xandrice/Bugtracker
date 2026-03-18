@@ -4,6 +4,7 @@ import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { createTeamNote } from "@/app/actions";
 import { useFormStatus } from "react-dom";
+import { MentionTextarea } from "@/components/ui/MentionTextarea";
 
 function SubmitButton() {
     const { pending } = useFormStatus();
@@ -50,7 +51,7 @@ export default function NewNotePage() {
                     <label htmlFor="content" className="text-sm font-medium leading-none">
                         Content
                     </label>
-                    <textarea
+                    <MentionTextarea
                         id="content"
                         name="content"
                         className="flex min-h-[250px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 resize-y"
