@@ -160,12 +160,12 @@ export async function createTeamNote(formData: FormData) {
     await db.note.create({ data });
 
     // Handle Discord DMs for mentions
-    const mentions = content.match(/@(\w+)/g);
+    const mentions = content.match(/@([A-Za-z0-9_.-]+)/g);
     if (mentions && mentions.length > 0) {
-        const usernames = Array.from(new Set(mentions.map(m => m.slice(1).toLowerCase())));
+        const usernames = Array.from(new Set(mentions.map(m => m.slice(1).trim()).filter(Boolean)));
         const users = await db.user.findMany({
             where: {
-                OR: usernames.map(u => ({ name: { contains: u } })) // simple case-insensitive substring match
+                OR: usernames.map(u => ({ name: { contains: u, mode: "insensitive" } }))
             },
             include: {
                 accounts: {
