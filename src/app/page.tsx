@@ -19,6 +19,7 @@ export default async function Home() {
     type: i.type as any,
     status: i.status as any,
     priority: i.priority as any,
+    severity: i.severity as any,
     assignee: i.assignee ? { id: i.assignee.id, name: i.assignee.name, image: i.assignee.image } : null,
     updatedAt: i.updatedAt
   }));

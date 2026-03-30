@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import Link from "next/link"
 import {
     AlertCircle,
@@ -11,14 +11,16 @@ import {
     CircleDashed,
     MoreHorizontal,
     Lightbulb,
-    KanbanSquare
+    KanbanSquare,
+    Loader2
 } from "lucide-react"
 import clsx from "clsx"
+import { updateIssueWorkflow } from "@/app/actions"
 
-// Dummy types based on Prisma schema
 export type IssueStatus = "OPEN" | "IN_PROGRESS" | "REVIEW" | "DONE"
 export type IssuePriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT"
 export type IssueType = "BUG" | "FEATURE" | "TASK"
+export type IssueSeverity = "MINOR" | "MAJOR" | "CRITICAL" | "BLOCKER"
 
 export interface UserSnippet {
     id: string
@@ -34,7 +36,7 @@ export interface IssueSnippet {
     type: IssueType
     assignee: UserSnippet | null
     updatedAt: Date
-    severity?: string
+    severity?: IssueSeverity
     environment?: string | null
     tags?: string | null
     dueDate?: Date | null
@@ -88,26 +90,31 @@ export const TypeIcon = ({ type }: { type: IssueType }) => {
     }
 }
 
-import { useMemo } from "react"
-
 interface DataGridProps {
     issues: IssueSnippet[]
     hideFilters?: boolean
 }
 
 export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
+    const [localIssues, setLocalIssues] = useState(issues);
     const [sortConfig, setSortConfig] = useState<{ key: keyof IssueSnippet, direction: "asc" | "desc" } | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>("ALL");
     const [typeFilter, setTypeFilter] = useState<string>("ALL");
     const [assigneeFilter, setAssigneeFilter] = useState<string>("ALL");
+    const [pendingIssueId, setPendingIssueId] = useState<string | null>(null);
+    const [isPending, startTransition] = useTransition();
+
+    useEffect(() => {
+        setLocalIssues(issues);
+    }, [issues]);
 
     const assignees = useMemo(() => {
         const unique = new Map();
-        issues.forEach(i => {
+        localIssues.forEach(i => {
             if (i.assignee) unique.set(i.assignee.id, i.assignee);
         });
         return Array.from(unique.values());
-    }, [issues]);
+    }, [localIssues]);
 
     const handleSort = (key: keyof IssueSnippet) => {
         let direction: "asc" | "desc" = "desc";
@@ -123,7 +130,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
     };
 
     const sortedAndFilteredIssues = useMemo(() => {
-        let filtered = issues;
+        let filtered = localIssues;
 
         if (statusFilter !== "ALL") {
             filtered = filtered.filter(i => i.status === statusFilter);
@@ -176,7 +183,39 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
             if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [issues, sortConfig, statusFilter, typeFilter, assigneeFilter]);
+    }, [localIssues, sortConfig, statusFilter, typeFilter, assigneeFilter]);
+
+    const runWorkflowUpdate = (
+        issueId: string,
+        updates: Partial<{ type: IssueType; priority: IssuePriority; severity: IssueSeverity; status: IssueStatus }>
+    ) => {
+        const previous = localIssues;
+
+        setLocalIssues(prev => prev.map(issue => {
+            if (issue.id !== issueId) return issue;
+            return {
+                ...issue,
+                ...updates,
+            };
+        }));
+        setPendingIssueId(issueId);
+
+        startTransition(async () => {
+            try {
+                const result = await updateIssueWorkflow(issueId, updates);
+                if (result?.error) {
+                    setLocalIssues(previous);
+                }
+            } catch {
+                setLocalIssues(previous);
+            } finally {
+                setPendingIssueId(null);
+            }
+        });
+    };
+
+    const selectClasses =
+        "text-xs h-8 rounded-md border border-border bg-background px-2 focus:outline-none focus:ring-2 focus:ring-primary/30";
 
     return (
         <div className="flex flex-col gap-4">
@@ -238,6 +277,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                 <th onClick={() => handleSort('priority')} className="px-4 py-2 font-medium w-24 cursor-pointer hover:text-foreground">
                                     Priority {getSortIndicator('priority')}
                                 </th>
+                                <th className="px-4 py-2 font-medium w-32">Severity</th>
                                 <th onClick={() => handleSort('assignee')} className="px-4 py-2 font-medium w-40 cursor-pointer hover:text-foreground">
                                     Assignee {getSortIndicator('assignee')}
                                 </th>
@@ -247,12 +287,13 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                 <th onClick={() => handleSort('updatedAt')} className="px-4 py-2 font-medium w-32 text-right cursor-pointer hover:text-foreground">
                                     Updated {getSortIndicator('updatedAt')}
                                 </th>
+                                <th className="px-4 py-2 font-medium w-32 text-right">Resolve</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
                             {sortedAndFilteredIssues.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                                    <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
                                         No issues found matching your criteria.
                                     </td>
                                 </tr>
@@ -260,7 +301,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                 sortedAndFilteredIssues.map((issue) => (
                                     <tr
                                         key={issue.id}
-                                        className="hover:bg-muted/30 transition-colors group cursor-pointer"
+                                        className="hover:bg-muted/30 transition-colors group"
                                     >
                                         <td className="px-4 text-center">
                                             <Link href={`/issues/${issue.id}`} className="block py-2 text-muted-foreground hover:text-primary transition-colors font-mono">
@@ -268,10 +309,16 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                             </Link>
                                         </td>
                                         <td className="px-4 py-1">
-                                            <span className={clsx("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-xs font-medium", typeStyles[issue.type])}>
-                                                <TypeIcon type={issue.type} />
-                                                {issue.type.replace("_", " ")}
-                                            </span>
+                                            <select
+                                                value={issue.type}
+                                                className={selectClasses}
+                                                disabled={isPending && pendingIssueId === issue.id}
+                                                onChange={(e) => runWorkflowUpdate(issue.id, { type: e.target.value as IssueType })}
+                                            >
+                                                <option value="BUG">Bug</option>
+                                                <option value="FEATURE">Feature</option>
+                                                <option value="TASK">Task</option>
+                                            </select>
                                         </td>
                                         <td className="px-4 py-1 font-medium text-foreground group-hover:text-primary">
                                             <Link href={`/issues/${issue.id}`} className="block py-2 truncate max-w-[500px]">
@@ -279,15 +326,43 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                             </Link>
                                         </td>
                                         <td className="px-4 py-1">
-                                            <span className={clsx("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-xs font-medium", statusStyles[issue.status])}>
-                                                <StatusIcon status={issue.status} />
-                                                {issue.status.replace("_", " ")}
-                                            </span>
+                                            <select
+                                                value={issue.status}
+                                                className={selectClasses}
+                                                disabled={isPending && pendingIssueId === issue.id}
+                                                onChange={(e) => runWorkflowUpdate(issue.id, { status: e.target.value as IssueStatus })}
+                                            >
+                                                <option value="OPEN">Open</option>
+                                                <option value="IN_PROGRESS">In Progress</option>
+                                                <option value="REVIEW">Review</option>
+                                                <option value="DONE">Done</option>
+                                            </select>
                                         </td>
                                         <td className="px-4 py-1">
-                                            <div className="flex items-center gap-1">
-                                                <PriorityIcon priority={issue.priority} />
-                                            </div>
+                                            <select
+                                                value={issue.priority}
+                                                className={selectClasses}
+                                                disabled={isPending && pendingIssueId === issue.id}
+                                                onChange={(e) => runWorkflowUpdate(issue.id, { priority: e.target.value as IssuePriority })}
+                                            >
+                                                <option value="LOW">Low</option>
+                                                <option value="MEDIUM">Medium</option>
+                                                <option value="HIGH">High</option>
+                                                <option value="URGENT">Urgent</option>
+                                            </select>
+                                        </td>
+                                        <td className="px-4 py-1">
+                                            <select
+                                                value={issue.severity ?? "MINOR"}
+                                                className={selectClasses}
+                                                disabled={isPending && pendingIssueId === issue.id}
+                                                onChange={(e) => runWorkflowUpdate(issue.id, { severity: e.target.value as IssueSeverity })}
+                                            >
+                                                <option value="MINOR">Minor</option>
+                                                <option value="MAJOR">Major</option>
+                                                <option value="CRITICAL">Critical</option>
+                                                <option value="BLOCKER">Blocker</option>
+                                            </select>
                                         </td>
                                         <td className="px-4 py-1">
                                             {issue.assignee ? (
@@ -315,7 +390,33 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                                 : "—"}
                                         </td>
                                         <td className="px-4 py-1 text-right text-muted-foreground text-xs font-mono">
-                                            {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(issue.updatedAt))}
+                                            <div className="flex items-center justify-end gap-2">
+                                                <span>
+                                                    {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(issue.updatedAt))}
+                                                </span>
+                                                {pendingIssueId === issue.id && isPending && (
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-1 text-right">
+                                            <button
+                                                type="button"
+                                                disabled={isPending && pendingIssueId === issue.id}
+                                                onClick={() =>
+                                                    runWorkflowUpdate(issue.id, {
+                                                        status: issue.status === "DONE" ? "OPEN" : "DONE"
+                                                    })
+                                                }
+                                                className={clsx(
+                                                    "text-xs rounded-md px-2.5 py-1.5 border transition-colors",
+                                                    issue.status === "DONE"
+                                                        ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
+                                                        : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
+                                                )}
+                                            >
+                                                {issue.status === "DONE" ? "Reopen" : "Resolve"}
+                                            </button>
                                         </td>
                                     </tr>
                                 ))

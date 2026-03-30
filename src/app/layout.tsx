@@ -18,7 +18,7 @@ import { ThemeProvider } from "@/components/providers/ThemeProvider";
 
 export const metadata: Metadata = {
   title: "FiveM Tracker - Bug & Feature Management",
-  description: "Bug and feature tracker for FiveM server development. Kanban boards and triage.",
+  description: "Bug and feature tracker for FiveM server development with triage and issue workflows.",
 };
 
 export default function RootLayout({

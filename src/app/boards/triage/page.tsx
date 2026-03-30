@@ -16,6 +16,7 @@ export default async function BugTriagePage() {
         type: i.type as any,
         status: i.status as any,
         priority: i.priority as any,
+        severity: i.severity as any,
         assignee: null,
         updatedAt: i.updatedAt,
         dueDate: i.dueDate ?? undefined,

@@ -1,9 +1,9 @@
 import { StatusIcon, PriorityIcon, TypeIcon, statusStyles, typeStyles } from "@/components/views/DataGrid"
-import { Calendar, Clock, Link as LinkIcon, Paperclip, ChevronRight, UserCircle2, Send, MessageSquare, AlertCircle, Terminal, Tag, Code, Gamepad2, ListOrdered, Target } from "lucide-react"
+import { Calendar, Clock, ChevronRight, UserCircle2, MessageSquare, AlertCircle, Terminal, Tag, Code, Gamepad2, ListOrdered, Target } from "lucide-react"
 import { db } from "@/lib/db"
 import { notFound } from "next/navigation"
 import { auth } from "@/../auth"
-import { createTeamNote, setAssignee } from "@/app/actions"
+import { saveIssueWorkflow, setAssignee, toggleIssueResolved } from "@/app/actions"
 import CommentForm from "./components/CommentForm"
 import { getStaffUsers } from "@/lib/staff"
 
@@ -163,6 +163,74 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                 <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Properties</h3>
 
                 <div className="space-y-4 text-sm">
+                    <div className="flex flex-col gap-2 border-b border-border pb-4">
+                        <span className="text-muted-foreground font-medium">Workflow</span>
+                        <form action={saveIssueWorkflow} className="space-y-2">
+                            <input type="hidden" name="issueId" value={issue.id} />
+                            <div className="grid grid-cols-2 gap-2">
+                                <select
+                                    name="type"
+                                    defaultValue={issue.type}
+                                    className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                                >
+                                    <option value="BUG">Bug</option>
+                                    <option value="FEATURE">Feature</option>
+                                    <option value="TASK">Task</option>
+                                </select>
+                                <select
+                                    name="priority"
+                                    defaultValue={issue.priority}
+                                    className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                                >
+                                    <option value="LOW">Low</option>
+                                    <option value="MEDIUM">Medium</option>
+                                    <option value="HIGH">High</option>
+                                    <option value="URGENT">Urgent</option>
+                                </select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <select
+                                    name="severity"
+                                    defaultValue={issue.severity}
+                                    className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                                >
+                                    <option value="MINOR">Minor</option>
+                                    <option value="MAJOR">Major</option>
+                                    <option value="CRITICAL">Critical</option>
+                                    <option value="BLOCKER">Blocker</option>
+                                </select>
+                                <select
+                                    name="status"
+                                    defaultValue={issue.status}
+                                    className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                                >
+                                    <option value="OPEN">Open</option>
+                                    <option value="IN_PROGRESS">In Progress</option>
+                                    <option value="REVIEW">Review</option>
+                                    <option value="DONE">Done</option>
+                                </select>
+                            </div>
+                            <button type="submit" className="text-xs font-medium text-primary hover:underline">Save workflow fields</button>
+                        </form>
+                    </div>
+
+                    <div className="flex flex-col gap-2 border-b border-border pb-4">
+                        <span className="text-muted-foreground font-medium">Resolve</span>
+                        <form action={toggleIssueResolved} className="flex items-center justify-between gap-2">
+                            <input type="hidden" name="issueId" value={issue.id} />
+                            <input type="hidden" name="resolved" value={issue.status === "DONE" ? "false" : "true"} />
+                            <span className="text-xs text-muted-foreground">
+                                {issue.status === "DONE" ? "Issue is currently resolved." : "Mark issue as resolved when finished."}
+                            </span>
+                            <button
+                                type="submit"
+                                className="text-xs rounded-md px-2.5 py-1.5 border transition-colors border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
+                            >
+                                {issue.status === "DONE" ? "Reopen" : "Resolve"}
+                            </button>
+                        </form>
+                    </div>
+
                     <div className="flex flex-col gap-2 border-b border-border pb-4">
                         <span className="text-muted-foreground font-medium">Assignee</span>
                         <form action={setAssignee} className="flex flex-col gap-2">

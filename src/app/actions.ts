@@ -7,6 +7,20 @@ import { redirect } from "next/navigation";
 import { sendDiscordDM } from "@/lib/discord";
 import { getStaffUsers } from "@/lib/staff";
 
+const ALLOWED_STATUS = ["OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const;
+const ALLOWED_PRIORITY = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
+const ALLOWED_TYPE = ["BUG", "FEATURE", "TASK"] as const;
+const ALLOWED_SEVERITY = ["MINOR", "MAJOR", "CRITICAL", "BLOCKER"] as const;
+
+function revalidateIssuePaths(issueId: string) {
+    revalidatePath("/");
+    revalidatePath("/issues");
+    revalidatePath("/issues/me");
+    revalidatePath("/boards/triage");
+    revalidatePath("/boards/main");
+    revalidatePath(`/issues/${issueId}`);
+}
+
 export async function createIssue(formData: FormData) {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Unauthorized");
@@ -60,15 +74,94 @@ export async function updateIssueStatus(issueId: string, status: string) {
     const session = await auth();
     if (!session?.user?.id) return { error: "Unauthorized" };
 
+    if (!(ALLOWED_STATUS as readonly string[]).includes(status)) {
+        return { error: "Invalid status" };
+    }
+
     await db.issue.update({
         where: { id: issueId },
         data: { status }
     });
 
-    revalidatePath("/boards/main");
-    revalidatePath("/boards/triage");
-    revalidatePath("/issues");
-    revalidatePath(`/issues/${issueId}`);
+    revalidateIssuePaths(issueId);
+}
+
+export async function updateIssueWorkflow(
+    issueId: string,
+    updates: Partial<{ type: string; priority: string; severity: string; status: string }>
+) {
+    const session = await auth();
+    if (!session?.user?.id) return { error: "Unauthorized" };
+
+    const data: Record<string, string> = {};
+
+    if (updates.type !== undefined) {
+        if (!(ALLOWED_TYPE as readonly string[]).includes(updates.type)) {
+            return { error: "Invalid type" };
+        }
+        data.type = updates.type;
+    }
+
+    if (updates.priority !== undefined) {
+        if (!(ALLOWED_PRIORITY as readonly string[]).includes(updates.priority)) {
+            return { error: "Invalid priority" };
+        }
+        data.priority = updates.priority;
+    }
+
+    if (updates.severity !== undefined) {
+        if (!(ALLOWED_SEVERITY as readonly string[]).includes(updates.severity)) {
+            return { error: "Invalid severity" };
+        }
+        data.severity = updates.severity;
+    }
+
+    if (updates.status !== undefined) {
+        if (!(ALLOWED_STATUS as readonly string[]).includes(updates.status)) {
+            return { error: "Invalid status" };
+        }
+        data.status = updates.status;
+    }
+
+    if (Object.keys(data).length === 0) {
+        return { error: "No updates provided" };
+    }
+
+    await db.issue.update({
+        where: { id: issueId },
+        data
+    });
+
+    revalidateIssuePaths(issueId);
+}
+
+export async function saveIssueWorkflow(formData: FormData) {
+    const issueId = formData.get("issueId") as string | null;
+    if (!issueId) throw new Error("Missing issue");
+
+    const type = formData.get("type") as string | null;
+    const priority = formData.get("priority") as string | null;
+    const severity = formData.get("severity") as string | null;
+    const status = formData.get("status") as string | null;
+
+    const result = await updateIssueWorkflow(issueId, {
+        ...(type ? { type } : {}),
+        ...(priority ? { priority } : {}),
+        ...(severity ? { severity } : {}),
+        ...(status ? { status } : {}),
+    });
+
+    if (result?.error) throw new Error(result.error);
+}
+
+export async function toggleIssueResolved(formData: FormData) {
+    const issueId = formData.get("issueId") as string | null;
+    const resolved = formData.get("resolved") as string | null;
+    if (!issueId) throw new Error("Missing issue");
+
+    const nextStatus = resolved === "true" ? "DONE" : "OPEN";
+    const result = await updateIssueWorkflow(issueId, { status: nextStatus });
+    if (result?.error) throw new Error(result.error);
 }
 
 export async function updateIssue(issueId: string, formData: FormData) {
@@ -109,10 +202,7 @@ export async function updateIssue(issueId: string, formData: FormData) {
         data: data as any
     });
 
-    revalidatePath("/issues");
-    revalidatePath("/boards/main");
-    revalidatePath("/boards/triage");
-    revalidatePath(`/issues/${issueId}`);
+    revalidateIssuePaths(issueId);
 }
 
 export async function updateIssueAssignee(issueId: string, assigneeId: string | null) {
@@ -124,10 +214,7 @@ export async function updateIssueAssignee(issueId: string, assigneeId: string | 
         data: { assigneeId: assigneeId || null }
     });
 
-    revalidatePath("/issues");
-    revalidatePath("/boards/main");
-    revalidatePath("/boards/triage");
-    revalidatePath(`/issues/${issueId}`);
+    revalidateIssuePaths(issueId);
 }
 
 export async function setAssignee(formData: FormData): Promise<void> {

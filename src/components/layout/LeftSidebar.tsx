@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
     Inbox,
     ListTodo,
-    Trello,
     KanbanSquare,
     FileText,
     Users,
@@ -25,7 +24,6 @@ const navItems = [
         title: "Boards",
         items: [
             { name: "Bug Triage", href: "/boards/triage", icon: KanbanSquare },
-            { name: "Kanban Board", href: "/boards/main", icon: Trello },
         ]
     },
     {
