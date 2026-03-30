@@ -5,6 +5,7 @@ import { auth } from "@/../auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { sendDiscordDM } from "@/lib/discord";
+import { getStaffUsers } from "@/lib/staff";
 
 export async function createIssue(formData: FormData) {
     const session = await auth();
@@ -162,32 +163,32 @@ export async function createTeamNote(formData: FormData) {
     // Handle Discord DMs for mentions
     const mentions = content.match(/@([A-Za-z0-9_.-]+)/g);
     if (mentions && mentions.length > 0) {
-        const usernames = Array.from(new Set(mentions.map(m => m.slice(1).trim()).filter(Boolean)));
-        const users = await db.user.findMany({
-            where: {
-                OR: usernames.map(u => ({ name: { contains: u, mode: "insensitive" } }))
-            },
-            include: {
-                accounts: {
-                    where: { provider: "discord" }
-                }
-            }
+        const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const mentionTokens = Array.from(
+            new Set(
+                mentions
+                    .map((m) => normalize(m.slice(1).trim()))
+                    .filter(Boolean)
+            )
+        );
+
+        const staffUsers = await getStaffUsers();
+        const targets = staffUsers.filter((u) => {
+            if (!u.name || !u.discordId) return false;
+            const normalizedName = normalize(u.name);
+            return mentionTokens.some((token) => normalizedName.includes(token));
         });
 
-        // Filter valid targets to send
-        for (const user of users) {
-            const account = user.accounts[0];
-            if (account?.providerAccountId) {
-                // Determine base URL, useful if deployed to Vercel
-                const baseUrl = process.env.NEXTAUTH_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"));
-                const targetLink = issueId ? `${baseUrl}/issues/${issueId}` : `${baseUrl}/notes`;
+        for (const target of targets) {
+            if (!target.discordId) continue;
+            const baseUrl = process.env.NEXTAUTH_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"));
+            const targetLink = issueId ? `${baseUrl}/issues/${issueId}` : `${baseUrl}/notes`;
 
-                const senderName = session.user.name || "Someone";
-                let msg = `You were tagged in a BugTracker comment by **${senderName}**: \n${targetLink}`;
-                msg += `\n\n> ${content.replace(/\n/g, '\n> ')}`;
+            const senderName = session.user.name || "Someone";
+            let msg = `You were tagged in a BugTracker comment by **${senderName}**: \n${targetLink}`;
+            msg += `\n\n> ${content.replace(/\n/g, '\n> ')}`;
 
-                await sendDiscordDM(account.providerAccountId, msg);
-            }
+            await sendDiscordDM(target.discordId, msg);
         }
     }
 
@@ -244,11 +245,8 @@ export async function removeProjectMember(memberId: string) {
 export async function getMentionableUsers() {
     const session = await auth();
     if (!session?.user?.id) return [];
-
-    return await db.user.findMany({
-        select: { id: true, name: true, image: true },
-        orderBy: { name: 'asc' }
-    });
+    const staffUsers = await getStaffUsers();
+    return staffUsers.map((u) => ({ id: u.id, name: u.name, image: u.image }));
 }
 
 export async function exportProjectData() {

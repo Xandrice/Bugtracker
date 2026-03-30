@@ -5,6 +5,7 @@ import { notFound } from "next/navigation"
 import { auth } from "@/../auth"
 import { createTeamNote, setAssignee } from "@/app/actions"
 import CommentForm from "./components/CommentForm"
+import { getStaffUsers } from "@/lib/staff"
 
 export default async function IssueDetailsPage({ params }: { params: Promise<{ id: string }> }) {
     const session = await auth();
@@ -26,16 +27,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
         notFound();
     }
 
-    const assignableUsers = await db.user.findMany({
-        where: {
-            OR: [
-                { reportedIssues: { some: {} } },
-                { assignedIssues: { some: {} } }
-            ]
-        },
-        select: { id: true, name: true, image: true },
-        orderBy: { name: 'asc' }
-    });
+    const assignableUsers = await getStaffUsers();
 
     return (
         <div className="flex flex-col h-full overflow-hidden flex-1 md:flex-row">
