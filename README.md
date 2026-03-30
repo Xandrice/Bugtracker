@@ -6,8 +6,7 @@ Bug and feature tracker for FiveM server development (Next.js + Prisma + Auth.js
 
 1. Copy envs:
    - `cp .env.example .env.local` (or create `.env.local` manually on Windows)
-2. Set local `DATABASE_URL` to SQLite if desired:
-   - `DATABASE_URL="file:./dev.db"`
+2. Set `DATABASE_URL` in `.env.local` to your Postgres instance.
 3. Install and run:
 
 ```bash
@@ -17,7 +16,7 @@ pnpm dev
 
 ## Deploy to Vercel (migration from Render)
 
-Important: this app writes data, so do not use SQLite on Vercel. Use a managed database (Postgres recommended).
+This app expects PostgreSQL for production on Vercel.
 
 ### 1) Move DB off Render
 
@@ -58,7 +57,7 @@ Optional:
 
 ### 4) Prisma migration notes
 
-- If your current DB is SQLite and production is Postgres, create/apply migrations against Postgres before cutover.
+- If your current DB is SQLite and production is Postgres, export/import your data, then create/apply migrations against Postgres before cutover.
 - On Vercel deploys, migrations are applied via `prisma migrate deploy`.
 
 ### 5) Cut over from Render
