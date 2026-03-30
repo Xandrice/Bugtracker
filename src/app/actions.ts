@@ -152,6 +152,7 @@ export async function saveIssueWorkflow(formData: FormData) {
     });
 
     if (result?.error) throw new Error(result.error);
+    redirect(`/issues/${issueId}`);
 }
 
 export async function toggleIssueResolved(formData: FormData) {
@@ -162,6 +163,7 @@ export async function toggleIssueResolved(formData: FormData) {
     const nextStatus = resolved === "true" ? "DONE" : "OPEN";
     const result = await updateIssueWorkflow(issueId, { status: nextStatus });
     if (result?.error) throw new Error(result.error);
+    redirect(`/issues/${issueId}`);
 }
 
 export async function updateIssue(issueId: string, formData: FormData) {

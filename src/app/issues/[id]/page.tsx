@@ -6,6 +6,8 @@ import { auth } from "@/../auth"
 import { saveIssueWorkflow, setAssignee, toggleIssueResolved } from "@/app/actions"
 import CommentForm from "./components/CommentForm"
 import { getStaffUsers } from "@/lib/staff"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 
 export default async function IssueDetailsPage({ params }: { params: Promise<{ id: string }> }) {
     const session = await auth();
@@ -135,11 +137,11 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                                 )}
                                             </span>
                                         </div>
-                                        <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                                            {note.content.split(/(@\w+)/g).map((part: string, i: number) =>
-                                                part.startsWith('@') ? <span key={i} className="text-primary bg-primary/10 px-1 py-0.5 rounded font-medium">{part}</span> : part
-                                            )}
-                                        </p>
+                                        <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-pre:my-2 prose-code:before:content-[''] prose-code:after:content-['']">
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                {note.content}
+                                            </ReactMarkdown>
+                                        </div>
                                     </div>
                                 </div>
                             ))}

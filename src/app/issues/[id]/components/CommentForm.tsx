@@ -158,7 +158,7 @@ export default function CommentForm({
                     value={content}
                     onChange={handleChange}
                     onKeyDown={handleKeyDown}
-                    placeholder="Add a note... Use @ to tag people"
+                    placeholder="Add a note... Markdown supported (bold, lists, links, code). Use @ to tag people."
                     className="w-full min-h-[100px] p-4 text-sm resize-y focus:outline-none bg-transparent"
                     disabled={isPending}
                 />
