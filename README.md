@@ -34,10 +34,10 @@ This app expects PostgreSQL for production on Vercel.
 - Output directory:
   - leave default (`.next`).
 
-`pnpm vercel-build` syncs Prisma schema before the Next build:
+`pnpm vercel-build` runs the Next production build:
 
 ```json
-"vercel-build": "prisma db push && next build"
+"vercel-build": "next build"
 ```
 
 ### 3) Add Vercel environment variables
@@ -58,8 +58,10 @@ Optional:
 ### 4) Prisma migration notes
 
 - If your current DB is SQLite and production is Postgres, export/import your data, then apply schema to Postgres.
-- This project currently deploys with `prisma db push` (good for bootstrap and existing DBs without migration history).
-- If you want strict migration history later, baseline first and switch `vercel-build` back to `prisma migrate deploy`.
+- Apply schema changes manually (outside the Vercel build) using either:
+  - `pnpm prisma db push` (no migration history), or
+  - `pnpm prisma migrate deploy` (after baseline/migrations are set up).
+- Keeping Prisma out of build avoids accidental table drops in shared/existing databases.
 
 ### 5) Cut over from Render
 
