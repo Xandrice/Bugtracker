@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FiveM Tracker
 
-## Getting Started
+Bug and feature tracker for FiveM server development (Next.js + Prisma + Auth.js).
 
-First, run the development server:
+## Local development
+
+1. Copy envs:
+   - `cp .env.example .env.local` (or create `.env.local` manually on Windows)
+2. Set local `DATABASE_URL` to SQLite if desired:
+   - `DATABASE_URL="file:./dev.db"`
+3. Install and run:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Deploy to Vercel (migration from Render)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Important: this app writes data, so do not use SQLite on Vercel. Use a managed database (Postgres recommended).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 1) Move DB off Render
 
-## Learn More
+- Create a managed Postgres database (Neon, Supabase, or Vercel Postgres).
+- Put its connection string in `DATABASE_URL`.
 
-To learn more about Next.js, take a look at the following resources:
+### 2) Configure Vercel project
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Import this GitHub repo into Vercel.
+- Framework preset: Next.js.
+- Build command:
+  - `pnpm vercel-build`
+- Install command:
+  - `pnpm install`
+- Output directory:
+  - leave default (`.next`).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`pnpm vercel-build` runs Prisma migrations before the Next build:
 
-## Deploy on Vercel
+```json
+"vercel-build": "prisma migrate deploy && next build"
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 3) Add Vercel environment variables
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+At minimum set:
+
+- `DATABASE_URL` (managed Postgres connection string)
+- `AUTH_SECRET` (random long secret)
+- `AUTH_DISCORD_ID`
+- `AUTH_DISCORD_SECRET`
+- `AUTH_TRUST_HOST=true`
+
+Optional:
+
+- `NEXTAUTH_URL` (not required on Vercel, but can be set to your production URL)
+- `DISCORD_BOT_TOKEN` (only if using Discord DM mention notifications)
+
+### 4) Prisma migration notes
+
+- If your current DB is SQLite and production is Postgres, create/apply migrations against Postgres before cutover.
+- On Vercel deploys, migrations are applied via `prisma migrate deploy`.
+
+### 5) Cut over from Render
+
+1. Deploy on Vercel.
+2. Validate login + issue CRUD in production.
+3. Point your custom domain to Vercel.
+4. Disable/remove the Render service.

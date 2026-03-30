@@ -28,7 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className="h-full">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-full min-h-screen bg-background text-foreground overflow-hidden`}>
+      <body suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} antialiased h-full min-h-screen bg-background text-foreground overflow-hidden`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <div className="flex flex-col h-screen overflow-hidden">
             <TopNavbar />
