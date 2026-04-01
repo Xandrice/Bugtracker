@@ -67,27 +67,52 @@ export async function createIssue(formData: FormData) {
         throw new Error("Missing required fields");
     }
 
-    const issue = await db.issue.create({
-        data: {
-            title,
-            description,
-            type,
-            priority,
-            severity,
-            environment,
-            tags,
-            resourceName: resourceName || undefined,
-            serverVersion: serverVersion || undefined,
-            reproductionSteps: reproductionSteps || undefined,
-            expectedBehavior: expectedBehavior || undefined,
-            dueDate: dueDateRaw ? new Date(dueDateRaw) : undefined,
-            storyPoints: storyPointsRaw ? parseInt(storyPointsRaw, 10) : undefined,
-            label: label || undefined,
-            discordChannelId: undefined,
-            discordThreadId: discordPostId || undefined,
-            reporterId: session.user.id,
+    if (discordPostId) {
+        const existing = await db.issue.findUnique({
+            where: { discordThreadId: discordPostId },
+            select: { id: true },
+        });
+
+        if (existing) {
+            redirect(`/issues/${existing.id}`);
         }
-    });
+    }
+
+    let issue;
+    try {
+        issue = await db.issue.create({
+            data: {
+                title,
+                description,
+                type,
+                priority,
+                severity,
+                environment,
+                tags,
+                resourceName: resourceName || undefined,
+                serverVersion: serverVersion || undefined,
+                reproductionSteps: reproductionSteps || undefined,
+                expectedBehavior: expectedBehavior || undefined,
+                dueDate: dueDateRaw ? new Date(dueDateRaw) : undefined,
+                storyPoints: storyPointsRaw ? parseInt(storyPointsRaw, 10) : undefined,
+                label: label || undefined,
+                discordChannelId: undefined,
+                discordThreadId: discordPostId || undefined,
+                reporterId: session.user.id,
+            }
+        });
+    } catch (error: any) {
+        if (error?.code === "P2002" && discordPostId) {
+            const existing = await db.issue.findUnique({
+                where: { discordThreadId: discordPostId },
+                select: { id: true },
+            });
+            if (existing) {
+                redirect(`/issues/${existing.id}`);
+            }
+        }
+        throw error;
+    }
 
     // If a forum post ID is linked, publish an initial traceability message there.
     if (discordPostId) {
@@ -248,6 +273,19 @@ export async function updateIssue(issueId: string, formData: FormData) {
     if (label !== undefined) data.label = label || null;
     if (discordPostRaw !== undefined) {
         const parsed = parseDiscordPostInput(discordPostRaw);
+        if (parsed.postId) {
+            const existing = await db.issue.findFirst({
+                where: {
+                    discordThreadId: parsed.postId,
+                    id: { not: issueId },
+                },
+                select: { id: true },
+            });
+
+            if (existing) {
+                return { error: `This Discord post is already linked to issue ${existing.id}.` };
+            }
+        }
         data.discordThreadId = parsed.postId;
         data.discordChannelId = null;
     }
@@ -401,6 +439,20 @@ export async function updateIssueDiscordPost(formData: FormData) {
 
     const parsed = parseDiscordPostInput(discordPostRaw);
 
+    if (parsed.postId) {
+        const existing = await db.issue.findFirst({
+            where: {
+                discordThreadId: parsed.postId,
+                id: { not: issueId },
+            },
+            select: { id: true },
+        });
+
+        if (existing) {
+            throw new Error(`This Discord post is already linked to issue ${existing.id}.`);
+        }
+    }
+
     await db.issue.update({
         where: { id: issueId },
         data: {
@@ -428,6 +480,60 @@ export async function exportProjectData() {
     const members = await (db as any).projectMember.findMany();
 
     return { issues, members };
+}
+
+const DISCORD_FORUM_SUGGESTIONS_KEY = "discord.forum.suggestions";
+const DISCORD_FORUM_BUGS_KEY = "discord.forum.bugs";
+
+export async function getDiscordForumSettings() {
+    const suggestions = await (db as any).appSetting.findUnique({
+        where: { key: DISCORD_FORUM_SUGGESTIONS_KEY },
+        select: { value: true },
+    });
+    const bugs = await (db as any).appSetting.findUnique({
+        where: { key: DISCORD_FORUM_BUGS_KEY },
+        select: { value: true },
+    });
+
+    return {
+        suggestionsForumId: suggestions?.value || "",
+        bugsForumId: bugs?.value || "",
+    };
+}
+
+export async function saveDiscordForumSettings(input: { suggestionsForumId?: string; bugsForumId?: string }) {
+    const session = await auth();
+    if (!session?.user?.id) throw new Error("Unauthorized");
+
+    const cleanSuggestions = (input.suggestionsForumId || "").trim();
+    const cleanBugs = (input.bugsForumId || "").trim();
+
+    if (cleanSuggestions) {
+        await (db as any).appSetting.upsert({
+            where: { key: DISCORD_FORUM_SUGGESTIONS_KEY },
+            create: { key: DISCORD_FORUM_SUGGESTIONS_KEY, value: cleanSuggestions },
+            update: { value: cleanSuggestions },
+        });
+    } else {
+        await (db as any).appSetting.deleteMany({ where: { key: DISCORD_FORUM_SUGGESTIONS_KEY } });
+    }
+
+    if (cleanBugs) {
+        await (db as any).appSetting.upsert({
+            where: { key: DISCORD_FORUM_BUGS_KEY },
+            create: { key: DISCORD_FORUM_BUGS_KEY, value: cleanBugs },
+            update: { value: cleanBugs },
+        });
+    } else {
+        await (db as any).appSetting.deleteMany({ where: { key: DISCORD_FORUM_BUGS_KEY } });
+    }
+
+    revalidatePath("/settings");
+
+    return {
+        suggestionsForumId: cleanSuggestions,
+        bugsForumId: cleanBugs,
+    };
 }
 
 export async function deleteAllProjectData() {

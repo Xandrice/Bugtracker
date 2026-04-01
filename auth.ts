@@ -6,6 +6,9 @@ import { db } from "./src/lib/db"
 export const { handlers, signIn, signOut, auth } = NextAuth({
     adapter: PrismaAdapter(db),
     providers: [Discord],
+    secret: process.env.AUTH_SECRET,
+    basePath: "/api/auth",
+    ...(process.env.AUTH_URL ? { url: process.env.AUTH_URL } : {}),
     session: { strategy: "jwt" },
     trustHost: true,
     callbacks: {

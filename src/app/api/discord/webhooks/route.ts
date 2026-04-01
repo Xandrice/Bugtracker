@@ -20,7 +20,11 @@ type DiscordAuthor = {
 type DiscordMessageData = {
     id?: string;
     channel_id?: string;
+    channelId?: string;
     parent_id?: string;
+    parentId?: string;
+    guild_id?: string;
+    guildId?: string;
     content?: string;
     author?: DiscordAuthor;
     attachments?: Array<{ url?: string }>;
@@ -28,7 +32,13 @@ type DiscordMessageData = {
 
 type DiscordThreadUpdateData = {
     id?: string;
+    channelId?: string;
     archived?: boolean;
+};
+
+type ForumSettings = {
+    suggestionsForumId: string;
+    bugsForumId: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -79,7 +89,7 @@ function parseEvent(payload: unknown): InboundEvent | null {
     }
 
     // Relay fallback: event payload already flattened as MESSAGE_CREATE shape.
-    if (typeof payload.channel_id === "string" && isRecord(payload.author) && typeof payload.id === "string") {
+    if ((typeof payload.channel_id === "string" || typeof payload.channelId === "string") && isRecord(payload.author) && typeof payload.id === "string") {
         return { type: "MESSAGE_CREATE", data: payload };
     }
 
@@ -137,6 +147,65 @@ async function getOrCreateDiscordAuthor(author: DiscordAuthor) {
     });
 }
 
+async function getForumSettings(): Promise<ForumSettings> {
+    const [suggestions, bugs] = await Promise.all([
+        (db as any).appSetting.findUnique({ where: { key: "discord.forum.suggestions" }, select: { value: true } }),
+        (db as any).appSetting.findUnique({ where: { key: "discord.forum.bugs" }, select: { value: true } }),
+    ]);
+
+    return {
+        suggestionsForumId: suggestions?.value || "",
+        bugsForumId: bugs?.value || "",
+    };
+}
+
+function normalizedMessageData(data: Record<string, unknown>): DiscordMessageData {
+    const attachmentsRaw = Array.isArray(data.attachments) ? data.attachments : [];
+    const attachments = attachmentsRaw
+        .filter((item): item is Record<string, unknown> => isRecord(item))
+        .map((item) => ({ url: typeof item.url === "string" ? item.url : undefined }));
+
+    return {
+        id: typeof data.id === "string" ? data.id : undefined,
+        channel_id: typeof data.channel_id === "string" ? data.channel_id : undefined,
+        channelId: typeof data.channelId === "string" ? data.channelId : undefined,
+        parent_id: typeof data.parent_id === "string" ? data.parent_id : undefined,
+        parentId: typeof data.parentId === "string" ? data.parentId : undefined,
+        guild_id: typeof data.guild_id === "string" ? data.guild_id : undefined,
+        guildId: typeof data.guildId === "string" ? data.guildId : undefined,
+        content: typeof data.content === "string" ? data.content : undefined,
+        author: isRecord(data.author)
+            ? {
+                id: typeof data.author.id === "string" ? data.author.id : undefined,
+                username: typeof data.author.username === "string" ? data.author.username : undefined,
+                global_name: typeof data.author.global_name === "string" ? data.author.global_name : undefined,
+                discriminator: typeof data.author.discriminator === "string" ? data.author.discriminator : undefined,
+                avatar: typeof data.author.avatar === "string" ? data.author.avatar : undefined,
+                bot: typeof data.author.bot === "boolean" ? data.author.bot : undefined,
+            }
+            : undefined,
+        attachments,
+    };
+}
+
+function normalizedThreadUpdateData(data: Record<string, unknown>): DiscordThreadUpdateData {
+    return {
+        id: typeof data.id === "string" ? data.id : undefined,
+        channelId: typeof data.channelId === "string" ? data.channelId : undefined,
+        archived: typeof data.archived === "boolean" ? data.archived : undefined,
+    };
+}
+
+function isMessageFromConfiguredForum(data: DiscordMessageData, settings: ForumSettings) {
+    const parentId = data.parent_id || data.parentId || null;
+    const configured = [settings.suggestionsForumId, settings.bugsForumId].filter(Boolean);
+
+    // If no forum IDs are configured yet, allow all linked posts.
+    if (configured.length === 0) return true;
+
+    return !!parentId && configured.includes(parentId);
+}
+
 function revalidateIssue(issueId: string) {
     revalidatePath("/");
     revalidatePath("/issues");
@@ -147,7 +216,7 @@ function revalidateIssue(issueId: string) {
 }
 
 async function resolveIssueForMessageEvent(data: DiscordMessageData) {
-    const channelId = data.channel_id;
+    const channelId = data.channel_id || data.channelId;
 
     if (!channelId) {
         return null;
@@ -182,6 +251,11 @@ async function handleMessageCreate(data: DiscordMessageData) {
         return;
     }
 
+    const forumSettings = await getForumSettings();
+    if (!isMessageFromConfiguredForum(data, forumSettings)) {
+        return;
+    }
+
     const issue = await resolveIssueForMessageEvent(data);
     if (!issue) {
         return;
@@ -193,10 +267,9 @@ async function handleMessageCreate(data: DiscordMessageData) {
     }
 
     const authorTag = buildDiscordAuthorTag(author);
-    const guildId = typeof (data as Record<string, unknown>).guild_id === "string"
-        ? ((data as Record<string, unknown>).guild_id as string)
-        : null;
-    const postLink = guildId ? `https://discord.com/channels/${guildId}/${data.channel_id}` : null;
+    const guildId = data.guild_id || data.guildId || null;
+    const channelId = data.channel_id || data.channelId || null;
+    const postLink = guildId && channelId ? `https://discord.com/channels/${guildId}/${channelId}` : null;
     const attachments = Array.isArray(data.attachments) ? data.attachments : [];
     const attachmentLines = attachments
         .map((attachment) => attachment?.url)
@@ -232,7 +305,7 @@ async function handleMessageCreate(data: DiscordMessageData) {
 }
 
 async function handleThreadUpdate(data: DiscordThreadUpdateData) {
-    const threadId = data.id;
+    const threadId = data.id || data.channelId;
     const archived = data.archived === true;
 
     if (!threadId || !archived) {
@@ -299,12 +372,12 @@ export async function POST(req: Request) {
     }
 
     if (event.type === "MESSAGE_CREATE" || event.type === "MESSAGECREATE") {
-        await handleMessageCreate(event.data);
+        await handleMessageCreate(normalizedMessageData(event.data));
         return NextResponse.json({ ok: true, handled: "MESSAGE_CREATE" });
     }
 
     if (event.type === "THREAD_UPDATE" || event.type === "THREADUPDATE") {
-        await handleThreadUpdate(event.data);
+        await handleThreadUpdate(normalizedThreadUpdateData(event.data));
         return NextResponse.json({ ok: true, handled: "THREAD_UPDATE" });
     }
 

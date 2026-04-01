@@ -9,7 +9,7 @@ export default async function MyIssuesPage() {
     const session = await auth();
 
     if (!session?.user?.id) {
-        redirect("/api/auth/signin");
+        redirect("/api/auth/signin/discord?callbackUrl=/issues/me");
     }
 
     const rawIssues = await db.issue.findMany({
