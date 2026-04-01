@@ -465,6 +465,27 @@ export async function updateIssueDiscordPost(formData: FormData) {
     redirect(`/issues/${issueId}`);
 }
 
+export async function deleteIssue(formData: FormData) {
+    const session = await auth();
+    if (!session?.user?.id) throw new Error("Unauthorized");
+
+    const issueId = formData.get("issueId") as string | null;
+    if (!issueId) throw new Error("Missing issue");
+
+    await db.issue.delete({
+        where: { id: issueId },
+    });
+
+    revalidatePath("/");
+    revalidatePath("/issues");
+    revalidatePath("/issues/me");
+    revalidatePath("/boards/triage");
+    revalidatePath("/boards/main");
+    revalidatePath(`/issues/${issueId}`);
+
+    redirect("/issues");
+}
+
 export async function exportProjectData() {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Unauthorized");

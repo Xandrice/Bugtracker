@@ -5,6 +5,7 @@ import { notFound } from "next/navigation"
 import { auth } from "@/../auth"
 import { saveIssueWorkflow, setAssignee, toggleIssueResolved, updateIssueDiscordPost } from "@/app/actions"
 import CommentForm from "./components/CommentForm"
+import DeleteIssueForm from "./components/DeleteIssueForm"
 import { getStaffUsers } from "@/lib/staff"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -363,6 +364,11 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                 Math.round((issue.updatedAt.getTime() - Date.now()) / 86400000) === 0 ? 0 : Math.round((issue.updatedAt.getTime() - Date.now()) / 86400000), 'day'
                             )}
                         </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2 border-t border-border pt-4">
+                        <span className="text-muted-foreground font-medium">Danger Zone</span>
+                        <DeleteIssueForm issueId={issue.id} />
                     </div>
 
                 </div>
