@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { auth } from "@/../auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { sendDiscordDM } from "@/lib/discord";
+import { getAppBaseUrl, sendDiscordChannelMessage, sendDiscordDM } from "@/lib/discord";
 import { getStaffUsers } from "@/lib/staff";
 
 const ALLOWED_STATUS = ["OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const;
@@ -39,12 +39,17 @@ export async function createIssue(formData: FormData) {
     const dueDateRaw = formData.get("dueDate") as string | null;
     const storyPointsRaw = formData.get("storyPoints") as string | null;
     const label = formData.get("label") as string | null;
+    const discordChannelIdRaw = formData.get("discordChannelId") as string | null;
+    const discordThreadIdRaw = formData.get("discordThreadId") as string | null;
+
+    const discordChannelId = discordChannelIdRaw?.trim() || null;
+    const discordThreadId = discordThreadIdRaw?.trim() || null;
 
     if (!title || !type || !priority) {
         throw new Error("Missing required fields");
     }
 
-    await db.issue.create({
+    const issue = await db.issue.create({
         data: {
             title,
             description,
@@ -60,9 +65,34 @@ export async function createIssue(formData: FormData) {
             dueDate: dueDateRaw ? new Date(dueDateRaw) : undefined,
             storyPoints: storyPointsRaw ? parseInt(storyPointsRaw, 10) : undefined,
             label: label || undefined,
+            discordChannelId: discordChannelId || undefined,
+            discordThreadId: discordThreadId || undefined,
             reporterId: session.user.id,
         }
     });
+
+    // If a forum post/thread ID is linked, publish an initial traceability message there.
+    if (discordThreadId || discordChannelId) {
+        const baseUrl = getAppBaseUrl();
+        const issueLink = `${baseUrl}/issues/${issue.id}`;
+        const targetChannelId = discordThreadId || discordChannelId;
+        const introMessage = [
+            "This has been added to the developer tracker.",
+            `Issue: **${issue.title}**`,
+            `Type: ${issue.type} | Priority: ${issue.priority}`,
+            `Track it here: ${issueLink}`,
+        ].join("\n");
+
+        if (targetChannelId) {
+            const discordMessageId = await sendDiscordChannelMessage(targetChannelId, introMessage);
+            if (discordMessageId) {
+                await db.issue.update({
+                    where: { id: issue.id },
+                    data: { discordMessageId },
+                });
+            }
+        }
+    }
 
     revalidatePath("/issues");
     revalidatePath("/boards/triage");
@@ -183,6 +213,8 @@ export async function updateIssue(issueId: string, formData: FormData) {
     const expectedBehavior = formData.get("expectedBehavior") as string | null;
     const tags = formData.get("tags") as string | null;
     const label = formData.get("label") as string | null;
+    const discordChannelId = formData.get("discordChannelId") as string | null;
+    const discordThreadId = formData.get("discordThreadId") as string | null;
 
     const data: Record<string, unknown> = {};
     if (title != null) data.title = title;
@@ -198,6 +230,8 @@ export async function updateIssue(issueId: string, formData: FormData) {
     if (expectedBehavior !== undefined) data.expectedBehavior = expectedBehavior || null;
     if (tags !== undefined) data.tags = tags || null;
     if (label !== undefined) data.label = label || null;
+    if (discordChannelId !== undefined) data.discordChannelId = discordChannelId?.trim() || null;
+    if (discordThreadId !== undefined) data.discordThreadId = discordThreadId?.trim() || null;
 
     await db.issue.update({
         where: { id: issueId },
@@ -270,7 +304,7 @@ export async function createTeamNote(formData: FormData) {
 
         for (const target of targets) {
             if (!target.discordId) continue;
-            const baseUrl = process.env.NEXTAUTH_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"));
+            const baseUrl = getAppBaseUrl();
             const targetLink = issueId ? `${baseUrl}/issues/${issueId}` : `${baseUrl}/notes`;
 
             const senderName = session.user.name || "Someone";

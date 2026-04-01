@@ -53,7 +53,19 @@ At minimum set:
 Optional:
 
 - `NEXTAUTH_URL` (not required on Vercel, but can be set to your production URL)
-- `DISCORD_BOT_TOKEN` (only if using Discord DM mention notifications)
+- `DISCORD_BOT_TOKEN` (required for DM mentions and posting tracker notices in Discord forum posts)
+- `DISCORD_PUBLIC_KEY` (if receiving signed Discord interaction-style webhook requests)
+- `DISCORD_WEBHOOK_SECRET` (shared-secret fallback for relayed bot gateway events)
+
+### Discord forum sync notes
+
+- Issue form now supports optional Discord channel/thread IDs.
+- When an issue has linked Discord IDs, the bot posts an "added to developer tracker" message in the linked forum post/thread.
+- Webhook endpoint: `/api/discord/webhooks`
+- Supported inbound events: `MESSAGE_CREATE` and `THREAD_UPDATE`
+- Inbound Discord comments become issue notes without requiring the Discord user to be a ProjectMember.
+- If a linked thread is archived (`THREAD_UPDATE` with `archived=true`), the linked issue is auto-set to `DONE`.
+- Sync is one-way for close state: resolving in the tracker does not archive/close Discord threads.
 
 ### 4) Prisma migration notes
 

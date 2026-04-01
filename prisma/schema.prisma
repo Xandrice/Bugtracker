@@ -43,10 +43,10 @@ model User {
   image         String?
   accounts      Account[]
   sessions      Session[]
-  
+
   // BugTracker Relations
-  reportedIssues Issue[]  @relation("Reporter")
-  assignedIssues Issue[]  @relation("Assignee")
+  reportedIssues Issue[] @relation("Reporter")
+  assignedIssues Issue[] @relation("Assignee")
   notes          Note[]
 }
 
@@ -61,45 +61,52 @@ model VerificationToken {
 // BugTracker Models
 
 model Issue {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   title       String
   description String?
-  status      String   @default("OPEN") // OPEN, IN_PROGRESS, REVIEW, DONE
-  priority    String   @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
-  severity    String   @default("MINOR") // MINOR, MAJOR, CRITICAL, BLOCKER
-  type        String   @default("BUG") // BUG, FEATURE, TASK
+  status      String  @default("OPEN") // OPEN, IN_PROGRESS, REVIEW, DONE
+  priority    String  @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  severity    String  @default("MINOR") // MINOR, MAJOR, CRITICAL, BLOCKER
+  type        String  @default("BUG") // BUG, FEATURE, TASK
   tags        String?
   environment String?
 
   // FiveM-specific
-  resourceName       String?  // e.g. es_extended, my-job, police-mdt
-  serverVersion      String?  // e.g. 6683, artifact
-  reproductionSteps  String?  // Steps to reproduce (bugs)
-  expectedBehavior   String?  // What should happen (bugs/features)
+  resourceName      String? // e.g. es_extended, my-job, police-mdt
+  serverVersion     String? // e.g. 6683, artifact
+  reproductionSteps String? // Steps to reproduce (bugs)
+  expectedBehavior  String? // What should happen (bugs/features)
 
   // Jira/Trello/Asana-style
-  dueDate     DateTime?
-  storyPoints Int?     // 1,2,3,5,8 for estimation
-  label       String?  // Optional single label/category; tags for multi
+  dueDate          DateTime?
+  storyPoints      Int? // 1,2,3,5,8 for estimation
+  label            String? // Optional single label/category; tags for multi
+  discordChannelId String?
+  discordThreadId  String?   @unique
+  discordMessageId String?
 
-  reporterId  String
-  reporter    User     @relation("Reporter", fields: [reporterId], references: [id])
-  assigneeId  String?
-  assignee    User?    @relation("Assignee", fields: [assigneeId], references: [id])
-  notes       Note[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  reporterId String
+  reporter   User     @relation("Reporter", fields: [reporterId], references: [id])
+  assigneeId String?
+  assignee   User?    @relation("Assignee", fields: [assigneeId], references: [id])
+  notes      Note[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model Note {
-  id        String   @id @default(cuid())
-  title     String?
-  content   String
-  authorId  String
-  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  issueId   String?
-  issue     Issue?   @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  
+  id               String  @id @default(cuid())
+  title            String?
+  content          String
+  source           String  @default("APP") // APP, DISCORD
+  discordMessageId String? @unique
+  discordAuthorId  String?
+  discordAuthorTag String?
+  authorId         String
+  author           User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  issueId          String?
+  issue            Issue?  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -110,4 +117,3 @@ model ProjectMember {
   role      String   @default("Member")
   createdAt DateTime @default(now())
 }
-

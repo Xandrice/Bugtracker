@@ -130,7 +130,12 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                     </div>
                                     <div className="flex-1 bg-muted/30 border border-border rounded-xl p-4 transition-colors group-hover:bg-muted/50">
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="font-medium text-sm">{note.author.name || "Unknown User"}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-medium text-sm">{note.author.name || "Unknown User"}</span>
+                                                {note.source === "DISCORD" && (
+                                                    <span className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 font-semibold tracking-wide">DISCORD</span>
+                                                )}
+                                            </div>
                                             <span className="text-xs text-muted-foreground" title={note.createdAt.toLocaleString()}>
                                                 {new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(
                                                     Math.round((note.createdAt.getTime() - Date.now()) / 86400000) === 0 ? 0 : Math.round((note.createdAt.getTime() - Date.now()) / 86400000), 'day'
@@ -305,6 +310,21 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                         );
                                     })}
                                 </div>
+                            )}
+                        </div>
+                    )}
+
+                    {(issue.discordChannelId || issue.discordThreadId || issue.discordMessageId) && (
+                        <div className="flex flex-col gap-2 border-b border-border pb-4">
+                            <span className="text-muted-foreground">Discord Link</span>
+                            {issue.discordChannelId && (
+                                <div className="text-xs font-mono break-all">Channel: {issue.discordChannelId}</div>
+                            )}
+                            {issue.discordThreadId && (
+                                <div className="text-xs font-mono break-all">Thread: {issue.discordThreadId}</div>
+                            )}
+                            {issue.discordMessageId && (
+                                <div className="text-xs font-mono break-all">Notice Message: {issue.discordMessageId}</div>
                             )}
                         </div>
                     )}

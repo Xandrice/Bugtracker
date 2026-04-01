@@ -119,6 +119,34 @@ export default function NewIssuePage() {
                     </div>
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg bg-muted/40 border border-border">
+                    <div className="space-y-2">
+                        <label htmlFor="discordChannelId" className="text-sm font-medium leading-none">
+                            Discord channel ID (optional)
+                        </label>
+                        <input
+                            id="discordChannelId"
+                            name="discordChannelId"
+                            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            placeholder="Forum channel ID"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label htmlFor="discordThreadId" className="text-sm font-medium leading-none">
+                            Discord thread / forum post ID (optional)
+                        </label>
+                        <input
+                            id="discordThreadId"
+                            name="discordThreadId"
+                            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            placeholder="Forum post thread ID"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            When set, the bot will post a tracker notice in this forum post and sync replies back as comments.
+                        </p>
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                         <label htmlFor="environment" className="text-sm font-medium leading-none">Environment</label>
