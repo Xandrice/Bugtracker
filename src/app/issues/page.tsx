@@ -36,13 +36,15 @@ export default async function AllIssuesPage() {
                     </p>
                 </div>
 
-                <Link
-                    href="/issues/new"
-                    className="bg-primary hover:opacity-90 text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 shadow-md"
-                >
-                    <Plus className="h-4 w-4" />
-                    New Issue
-                </Link>
+                {session?.user?.id && (
+                    <Link
+                        href="/issues/new"
+                        className="bg-primary hover:opacity-90 text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 shadow-md"
+                    >
+                        <Plus className="h-4 w-4" />
+                        New Issue
+                    </Link>
+                )}
             </div>
 
             <DataGrid issues={issues} />

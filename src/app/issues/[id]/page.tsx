@@ -3,7 +3,7 @@ import { Calendar, Clock, ChevronRight, UserCircle2, MessageSquare, AlertCircle,
 import { db } from "@/lib/db"
 import { notFound } from "next/navigation"
 import { auth } from "@/../auth"
-import { saveIssueWorkflow, setAssignee, toggleIssueResolved } from "@/app/actions"
+import { saveIssueWorkflow, setAssignee, toggleIssueResolved, updateIssueDiscordPost } from "@/app/actions"
 import CommentForm from "./components/CommentForm"
 import { getStaffUsers } from "@/lib/staff"
 import ReactMarkdown from "react-markdown"
@@ -314,14 +314,32 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                         </div>
                     )}
 
-                    {(issue.discordChannelId || issue.discordThreadId || issue.discordMessageId) && (
+                    <div className="flex flex-col gap-2 border-b border-border pb-4">
+                        <span className="text-muted-foreground font-medium">Discord forum post</span>
+                        <form action={updateIssueDiscordPost} className="flex flex-col gap-2">
+                            <input type="hidden" name="issueId" value={issue.id} />
+                            <input
+                                type="text"
+                                name="discordPostId"
+                                defaultValue={issue.discordThreadId || ""}
+                                className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                                placeholder="Paste post link or post ID"
+                            />
+                            <button type="submit" className="text-xs font-medium text-primary hover:underline">Save post link</button>
+                        </form>
+                        {issue.discordThreadId && (
+                            <div className="text-xs font-mono break-all">Post ID: {issue.discordThreadId}</div>
+                        )}
+                        {issue.discordMessageId && (
+                            <div className="text-xs font-mono break-all">Notice Message: {issue.discordMessageId}</div>
+                        )}
+                    </div>
+
+                    {(issue.discordThreadId || issue.discordMessageId) && (
                         <div className="flex flex-col gap-2 border-b border-border pb-4">
-                            <span className="text-muted-foreground">Discord Link</span>
-                            {issue.discordChannelId && (
-                                <div className="text-xs font-mono break-all">Channel: {issue.discordChannelId}</div>
-                            )}
+                            <span className="text-muted-foreground">Discord sync</span>
                             {issue.discordThreadId && (
-                                <div className="text-xs font-mono break-all">Thread: {issue.discordThreadId}</div>
+                                <div className="text-xs font-mono break-all">Linked Post: {issue.discordThreadId}</div>
                             )}
                             {issue.discordMessageId && (
                                 <div className="text-xs font-mono break-all">Notice Message: {issue.discordMessageId}</div>

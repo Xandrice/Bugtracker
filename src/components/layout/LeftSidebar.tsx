@@ -35,13 +35,21 @@ const navItems = [
     }
 ];
 
-export function LeftSidebar() {
+export function LeftSidebar({ isLoggedIn }: { isLoggedIn: boolean }) {
     const pathname = usePathname();
+    const groups = isLoggedIn
+        ? navItems
+        : [
+            {
+                title: "Issues",
+                items: [{ name: "All Issues", href: "/issues", icon: ListTodo }],
+            }
+        ];
 
     return (
         <aside className="w-64 border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 h-[calc(100vh-3.5rem)] overflow-hidden hidden md:block shrink-0 transition-colors duration-200 flex flex-col">
             <div className="flex flex-col gap-6 py-6 px-4 min-h-0 overflow-hidden">
-                {navItems.map((group, i) => (
+                {groups.map((group, i) => (
                     <div key={i} className="flex flex-col gap-1">
                         <h4 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase px-2 mb-1">
                             {group.title}
@@ -72,23 +80,25 @@ export function LeftSidebar() {
                     </div>
                 ))}
 
-                <div className="mt-auto">
-                    <Link
-                        href="/settings"
-                        className={clsx(
-                            "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all group relative overflow-hidden",
-                            pathname === "/settings"
-                                ? "bg-primary/10 text-primary dark:bg-primary/20"
-                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                        )}
-                    >
-                        {pathname === "/settings" && (
-                            <span className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />
-                        )}
-                        <Settings2 className={clsx("h-4 w-4", pathname === "/settings" ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
-                        Project Settings
-                    </Link>
-                </div>
+                {isLoggedIn && (
+                    <div className="mt-auto">
+                        <Link
+                            href="/settings"
+                            className={clsx(
+                                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all group relative overflow-hidden",
+                                pathname === "/settings"
+                                    ? "bg-primary/10 text-primary dark:bg-primary/20"
+                                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                            )}
+                        >
+                            {pathname === "/settings" && (
+                                <span className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />
+                            )}
+                            <Settings2 className={clsx("h-4 w-4", pathname === "/settings" ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                            Project Settings
+                        </Link>
+                    </div>
+                )}
             </div>
         </aside>
     );

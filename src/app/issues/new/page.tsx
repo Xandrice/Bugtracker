@@ -3,7 +3,6 @@
 import { ArrowLeft, Save, Loader2, Gamepad2, Code, Calendar, Target } from "lucide-react";
 import Link from "next/link";
 import { createIssue } from "@/app/actions";
-import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 function SubmitButton() {
@@ -119,32 +118,19 @@ export default function NewIssuePage() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg bg-muted/40 border border-border">
-                    <div className="space-y-2">
-                        <label htmlFor="discordChannelId" className="text-sm font-medium leading-none">
-                            Discord channel ID (optional)
-                        </label>
-                        <input
-                            id="discordChannelId"
-                            name="discordChannelId"
-                            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                            placeholder="Forum channel ID"
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label htmlFor="discordThreadId" className="text-sm font-medium leading-none">
-                            Discord thread / forum post ID (optional)
-                        </label>
-                        <input
-                            id="discordThreadId"
-                            name="discordThreadId"
-                            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                            placeholder="Forum post thread ID"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                            When set, the bot will post a tracker notice in this forum post and sync replies back as comments.
-                        </p>
-                    </div>
+                <div className="space-y-2 p-4 rounded-lg bg-muted/40 border border-border">
+                    <label htmlFor="discordPostId" className="text-sm font-medium leading-none">
+                        Discord forum post (optional)
+                    </label>
+                    <input
+                        id="discordPostId"
+                        name="discordPostId"
+                        className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        placeholder="Paste post link or post ID"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        Example: https://discord.com/channels/1083964697532973157/1489040926197289083 or 1489040926197289083
+                    </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

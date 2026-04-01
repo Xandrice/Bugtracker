@@ -67,11 +67,25 @@ function parseEvent(payload: unknown): InboundEvent | null {
     }
 
     if (typeof payload.t === "string" && isRecord(payload.d)) {
-        return { type: payload.t, data: payload.d };
+        return { type: payload.t.toUpperCase(), data: payload.d };
     }
 
     if (typeof payload.type === "string" && isRecord(payload.data)) {
-        return { type: payload.type, data: payload.data };
+        return { type: payload.type.toUpperCase(), data: payload.data };
+    }
+
+    if (typeof payload.event === "string" && isRecord(payload.data)) {
+        return { type: payload.event.toUpperCase(), data: payload.data };
+    }
+
+    // Relay fallback: event payload already flattened as MESSAGE_CREATE shape.
+    if (typeof payload.channel_id === "string" && isRecord(payload.author) && typeof payload.id === "string") {
+        return { type: "MESSAGE_CREATE", data: payload };
+    }
+
+    // Relay fallback: event payload already flattened as THREAD_UPDATE shape.
+    if (typeof payload.id === "string" && typeof payload.archived === "boolean") {
+        return { type: "THREAD_UPDATE", data: payload };
     }
 
     return null;
@@ -134,7 +148,6 @@ function revalidateIssue(issueId: string) {
 
 async function resolveIssueForMessageEvent(data: DiscordMessageData) {
     const channelId = data.channel_id;
-    const parentId = data.parent_id;
 
     if (!channelId) {
         return null;
@@ -142,11 +155,7 @@ async function resolveIssueForMessageEvent(data: DiscordMessageData) {
 
     return (db as any).issue.findFirst({
         where: {
-            OR: [
-                { discordThreadId: channelId },
-                { discordChannelId: channelId },
-                ...(parentId ? [{ discordChannelId: parentId }] : []),
-            ]
+            discordThreadId: channelId,
         },
         select: { id: true },
     });
@@ -184,12 +193,20 @@ async function handleMessageCreate(data: DiscordMessageData) {
     }
 
     const authorTag = buildDiscordAuthorTag(author);
+    const guildId = typeof (data as Record<string, unknown>).guild_id === "string"
+        ? ((data as Record<string, unknown>).guild_id as string)
+        : null;
+    const postLink = guildId ? `https://discord.com/channels/${guildId}/${data.channel_id}` : null;
     const attachments = Array.isArray(data.attachments) ? data.attachments : [];
     const attachmentLines = attachments
         .map((attachment) => attachment?.url)
         .filter((url): url is string => typeof url === "string" && url.length > 0);
 
-    const noteContentParts = [`**Discord - ${authorTag}**`, content || "_(no text content)_"];
+    const noteContentParts = [
+        `**Discord - ${authorTag}**`,
+        ...(postLink ? [`Post: ${postLink}`] : []),
+        content || "_(no text content)_"
+    ];
     if (attachmentLines.length > 0) {
         noteContentParts.push(`Attachments:\n${attachmentLines.join("\n")}`);
     }
@@ -281,12 +298,12 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true, ignored: true });
     }
 
-    if (event.type === "MESSAGE_CREATE") {
+    if (event.type === "MESSAGE_CREATE" || event.type === "MESSAGECREATE") {
         await handleMessageCreate(event.data);
         return NextResponse.json({ ok: true, handled: "MESSAGE_CREATE" });
     }
 
-    if (event.type === "THREAD_UPDATE") {
+    if (event.type === "THREAD_UPDATE" || event.type === "THREADUPDATE") {
         await handleThreadUpdate(event.data);
         return NextResponse.json({ ok: true, handled: "THREAD_UPDATE" });
     }

@@ -21,6 +21,26 @@ function revalidateIssuePaths(issueId: string) {
     revalidatePath(`/issues/${issueId}`);
 }
 
+function parseDiscordPostInput(value: string | null): { postId: string | null; postLink: string | null } {
+    const raw = (value || "").trim();
+    if (!raw) return { postId: null, postLink: null };
+
+    const match = raw.match(/^https?:\/\/discord\.com\/channels\/([0-9]+)\/([0-9]+)(?:\/[0-9]+)?/i);
+    if (match) {
+        return {
+            postId: match[2],
+            postLink: `https://discord.com/channels/${match[1]}/${match[2]}`,
+        };
+    }
+
+    const idMatch = raw.match(/^\d+$/);
+    if (!idMatch) return { postId: null, postLink: null };
+
+    const guildId = (process.env.DISCORD_GUILD_ID || "").trim();
+    const postLink = guildId ? `https://discord.com/channels/${guildId}/${raw}` : null;
+    return { postId: raw, postLink };
+}
+
 export async function createIssue(formData: FormData) {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Unauthorized");
@@ -39,11 +59,9 @@ export async function createIssue(formData: FormData) {
     const dueDateRaw = formData.get("dueDate") as string | null;
     const storyPointsRaw = formData.get("storyPoints") as string | null;
     const label = formData.get("label") as string | null;
-    const discordChannelIdRaw = formData.get("discordChannelId") as string | null;
-    const discordThreadIdRaw = formData.get("discordThreadId") as string | null;
-
-    const discordChannelId = discordChannelIdRaw?.trim() || null;
-    const discordThreadId = discordThreadIdRaw?.trim() || null;
+    const discordPostRaw = (formData.get("discordPostId") as string | null)
+        ?? (formData.get("discordThreadId") as string | null);
+    const { postId: discordPostId, postLink: discordPostLink } = parseDiscordPostInput(discordPostRaw);
 
     if (!title || !type || !priority) {
         throw new Error("Missing required fields");
@@ -65,32 +83,30 @@ export async function createIssue(formData: FormData) {
             dueDate: dueDateRaw ? new Date(dueDateRaw) : undefined,
             storyPoints: storyPointsRaw ? parseInt(storyPointsRaw, 10) : undefined,
             label: label || undefined,
-            discordChannelId: discordChannelId || undefined,
-            discordThreadId: discordThreadId || undefined,
+            discordChannelId: undefined,
+            discordThreadId: discordPostId || undefined,
             reporterId: session.user.id,
         }
     });
 
-    // If a forum post/thread ID is linked, publish an initial traceability message there.
-    if (discordThreadId || discordChannelId) {
+    // If a forum post ID is linked, publish an initial traceability message there.
+    if (discordPostId) {
         const baseUrl = getAppBaseUrl();
         const issueLink = `${baseUrl}/issues/${issue.id}`;
-        const targetChannelId = discordThreadId || discordChannelId;
         const introMessage = [
             "This has been added to the developer tracker.",
             `Issue: **${issue.title}**`,
             `Type: ${issue.type} | Priority: ${issue.priority}`,
+            ...(discordPostLink ? [`Discord Post: ${discordPostLink}`] : []),
             `Track it here: ${issueLink}`,
         ].join("\n");
 
-        if (targetChannelId) {
-            const discordMessageId = await sendDiscordChannelMessage(targetChannelId, introMessage);
-            if (discordMessageId) {
-                await db.issue.update({
-                    where: { id: issue.id },
-                    data: { discordMessageId },
-                });
-            }
+        const discordMessageId = await sendDiscordChannelMessage(discordPostId, introMessage);
+        if (discordMessageId) {
+            await db.issue.update({
+                where: { id: issue.id },
+                data: { discordMessageId },
+            });
         }
     }
 
@@ -213,8 +229,8 @@ export async function updateIssue(issueId: string, formData: FormData) {
     const expectedBehavior = formData.get("expectedBehavior") as string | null;
     const tags = formData.get("tags") as string | null;
     const label = formData.get("label") as string | null;
-    const discordChannelId = formData.get("discordChannelId") as string | null;
-    const discordThreadId = formData.get("discordThreadId") as string | null;
+    const discordPostRaw = (formData.get("discordPostId") as string | null)
+        ?? (formData.get("discordThreadId") as string | null);
 
     const data: Record<string, unknown> = {};
     if (title != null) data.title = title;
@@ -230,8 +246,11 @@ export async function updateIssue(issueId: string, formData: FormData) {
     if (expectedBehavior !== undefined) data.expectedBehavior = expectedBehavior || null;
     if (tags !== undefined) data.tags = tags || null;
     if (label !== undefined) data.label = label || null;
-    if (discordChannelId !== undefined) data.discordChannelId = discordChannelId?.trim() || null;
-    if (discordThreadId !== undefined) data.discordThreadId = discordThreadId?.trim() || null;
+    if (discordPostRaw !== undefined) {
+        const parsed = parseDiscordPostInput(discordPostRaw);
+        data.discordThreadId = parsed.postId;
+        data.discordChannelId = null;
+    }
 
     await db.issue.update({
         where: { id: issueId },
@@ -370,6 +389,28 @@ export async function getMentionableUsers() {
     if (!session?.user?.id) return [];
     const staffUsers = await getStaffUsers();
     return staffUsers.map((u) => ({ id: u.id, name: u.name, image: u.image }));
+}
+
+export async function updateIssueDiscordPost(formData: FormData) {
+    const session = await auth();
+    if (!session?.user?.id) throw new Error("Unauthorized");
+
+    const issueId = formData.get("issueId") as string | null;
+    const discordPostRaw = formData.get("discordPostId") as string | null;
+    if (!issueId) throw new Error("Missing issue");
+
+    const parsed = parseDiscordPostInput(discordPostRaw);
+
+    await db.issue.update({
+        where: { id: issueId },
+        data: {
+            discordThreadId: parsed.postId,
+            discordChannelId: null,
+        }
+    });
+
+    revalidateIssuePaths(issueId);
+    redirect(`/issues/${issueId}`);
 }
 
 export async function exportProjectData() {
