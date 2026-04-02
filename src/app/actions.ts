@@ -12,6 +12,10 @@ const ALLOWED_PRIORITY = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 const ALLOWED_TYPE = ["BUG", "FEATURE", "TASK"] as const;
 const ALLOWED_SEVERITY = ["MINOR", "MAJOR", "CRITICAL", "BLOCKER"] as const;
 
+function redirectToSignIn(): never {
+    redirect("/api/auth/signin");
+}
+
 function revalidateIssuePaths(issueId: string) {
     revalidatePath("/");
     revalidatePath("/issues");
@@ -43,7 +47,7 @@ function parseDiscordPostInput(value: string | null): { postId: string | null; p
 
 export async function createIssue(formData: FormData) {
     const session = await auth();
-    if (!session?.user?.id) throw new Error("Unauthorized");
+    if (!session?.user?.id) redirectToSignIn();
 
     const title = formData.get("title") as string;
     const description = formData.get("description") as string | null;
@@ -222,6 +226,7 @@ export async function saveIssueWorkflow(formData: FormData) {
         ...(status ? { status } : {}),
     });
 
+    if (result?.error === "Unauthorized") redirectToSignIn();
     if (result?.error) throw new Error(result.error);
     redirect(`/issues/${issueId}`);
 }
@@ -233,6 +238,7 @@ export async function toggleIssueResolved(formData: FormData) {
 
     const nextStatus = resolved === "true" ? "DONE" : "OPEN";
     const result = await updateIssueWorkflow(issueId, { status: nextStatus });
+    if (result?.error === "Unauthorized") redirectToSignIn();
     if (result?.error) throw new Error(result.error);
     redirect(`/issues/${issueId}`);
 }
@@ -315,12 +321,13 @@ export async function setAssignee(formData: FormData): Promise<void> {
     const assigneeId = formData.get("assigneeId") as string | null;
     if (!issueId) throw new Error("Missing issue");
     const result = await updateIssueAssignee(issueId, assigneeId === "none" || !assigneeId ? null : assigneeId);
+    if (result?.error === "Unauthorized") redirectToSignIn();
     if (result?.error) throw new Error(result.error);
 }
 
 export async function createTeamNote(formData: FormData) {
     const session = await auth();
-    if (!session?.user?.id) throw new Error("Unauthorized");
+    if (!session?.user?.id) redirectToSignIn();
 
     const title = formData.get("title") as string | null;
     const content = formData.get("content") as string;
@@ -382,7 +389,7 @@ export async function createTeamNote(formData: FormData) {
 
 export async function addProjectMember(formData: FormData) {
     const session = await auth();
-    if (!session?.user?.id) throw new Error("Unauthorized");
+    if (!session?.user?.id) redirectToSignIn();
 
     const discordId = formData.get("discordId") as string;
     const role = formData.get("role") as string || "Member";
@@ -401,7 +408,7 @@ export async function addProjectMember(formData: FormData) {
 
 export async function updateProjectMemberRole(memberId: string, role: string) {
     const session = await auth();
-    if (!session?.user?.id) throw new Error("Unauthorized");
+    if (!session?.user?.id) redirectToSignIn();
 
     await (db as any).projectMember.update({
         where: { id: memberId },
@@ -413,7 +420,7 @@ export async function updateProjectMemberRole(memberId: string, role: string) {
 
 export async function removeProjectMember(memberId: string) {
     const session = await auth();
-    if (!session?.user?.id) throw new Error("Unauthorized");
+    if (!session?.user?.id) redirectToSignIn();
 
     await (db as any).projectMember.delete({
         where: { id: memberId }
@@ -431,7 +438,7 @@ export async function getMentionableUsers() {
 
 export async function updateIssueDiscordPost(formData: FormData) {
     const session = await auth();
-    if (!session?.user?.id) throw new Error("Unauthorized");
+    if (!session?.user?.id) redirectToSignIn();
 
     const issueId = formData.get("issueId") as string | null;
     const discordPostRaw = formData.get("discordPostId") as string | null;
@@ -467,7 +474,7 @@ export async function updateIssueDiscordPost(formData: FormData) {
 
 export async function deleteIssue(formData: FormData) {
     const session = await auth();
-    if (!session?.user?.id) throw new Error("Unauthorized");
+    if (!session?.user?.id) redirectToSignIn();
 
     const issueId = formData.get("issueId") as string | null;
     if (!issueId) throw new Error("Missing issue");
@@ -488,7 +495,7 @@ export async function deleteIssue(formData: FormData) {
 
 export async function exportProjectData() {
     const session = await auth();
-    if (!session?.user?.id) throw new Error("Unauthorized");
+    if (!session?.user?.id) redirectToSignIn();
 
     const issues = await db.issue.findMany({
         include: {
@@ -524,7 +531,7 @@ export async function getDiscordForumSettings() {
 
 export async function saveDiscordForumSettings(input: { suggestionsForumId?: string; bugsForumId?: string }) {
     const session = await auth();
-    if (!session?.user?.id) throw new Error("Unauthorized");
+    if (!session?.user?.id) redirectToSignIn();
 
     const cleanSuggestions = (input.suggestionsForumId || "").trim();
     const cleanBugs = (input.bugsForumId || "").trim();
@@ -559,7 +566,7 @@ export async function saveDiscordForumSettings(input: { suggestionsForumId?: str
 
 export async function deleteAllProjectData() {
     const session = await auth();
-    if (!session?.user?.id) throw new Error("Unauthorized");
+    if (!session?.user?.id) redirectToSignIn();
 
     // Clear all DB relations
     await db.note.deleteMany({});

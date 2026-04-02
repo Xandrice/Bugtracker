@@ -7,12 +7,20 @@ import { saveIssueWorkflow, setAssignee, toggleIssueResolved, updateIssueDiscord
 import CommentForm from "./components/CommentForm"
 import DeleteIssueForm from "./components/DeleteIssueForm"
 import { getStaffUsers } from "@/lib/staff"
+import { syncIssueNotesFromDiscord } from "@/lib/discordSync"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
 export default async function IssueDetailsPage({ params }: { params: Promise<{ id: string }> }) {
     const session = await auth();
     const resolvedParams = await params;
+
+    // Pull latest Discord thread replies into notes for linked issues.
+    try {
+        await syncIssueNotesFromDiscord(resolvedParams.id);
+    } catch (error) {
+        console.error("Failed to sync Discord notes for issue", resolvedParams.id, error);
+    }
 
     const issue: any = await db.issue.findUnique({
         where: { id: resolvedParams.id },
