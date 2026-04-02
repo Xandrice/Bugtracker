@@ -174,3 +174,28 @@ export async function getDiscordChannelMessages(channelId: string, limit = 50): 
         return null;
     }
 }
+
+export async function getDiscordChannelMessage(channelId: string, messageId: string): Promise<DiscordApiMessage | null> {
+    const token = getDiscordToken();
+    if (!token || !channelId || !messageId) {
+        return null;
+    }
+
+    try {
+        const response = await discordApi(`/channels/${channelId}/messages/${messageId}`, {
+            method: "GET",
+            cache: "no-store",
+        });
+
+        if (!response || !response.ok) {
+            console.error("Failed to fetch Discord message", response ? await response.text() : "No response");
+            return null;
+        }
+
+        const payload = await response.json();
+        return normalizeDiscordApiMessage(payload);
+    } catch (error) {
+        console.error("Error fetching Discord message", error);
+        return null;
+    }
+}

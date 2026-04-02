@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { getDiscordChannelMessages } from "@/lib/discord";
+import { getDiscordChannelMessage, getDiscordChannelMessages } from "@/lib/discord";
 
 type DiscordAuthor = {
     id?: string;
@@ -165,6 +165,57 @@ export async function syncIssueNotesFromDiscord(issueId: string) {
         await (db as any).note.update({
             where: { id: existing.id },
             data: updateData,
+        });
+    }
+
+    const placeholderNotes = await (db as any).note.findMany({
+        where: {
+            issueId: issue.id,
+            source: "DISCORD",
+            discordMessageId: { not: null },
+            content: { contains: "(no text content)" },
+        },
+        select: {
+            id: true,
+            discordMessageId: true,
+        },
+    });
+
+    for (const note of placeholderNotes as Array<{ id: string; discordMessageId: string | null }>) {
+        if (!note.discordMessageId) continue;
+
+        const message = await getDiscordChannelMessage(issue.discordThreadId, note.discordMessageId);
+        if (!message?.id || !message.author || message.author.bot) continue;
+
+        const freshText = message.content?.trim() || "";
+        if (!freshText) continue;
+
+        const authorTag = buildDiscordAuthorTag(message.author as DiscordAuthor);
+        const guildId = message.guild_id || (process.env.DISCORD_GUILD_ID || "").trim() || null;
+        const postLink = guildId && message.channel_id
+            ? `https://discord.com/channels/${guildId}/${message.channel_id}/${message.id}`
+            : null;
+        const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+        const attachmentLines = attachments
+            .map((attachment) => attachment?.url)
+            .filter((url): url is string => typeof url === "string" && url.length > 0);
+
+        const noteContentParts = [
+            `**Discord - ${authorTag}**`,
+            ...(postLink ? [`Post: ${postLink}`] : []),
+            freshText,
+        ];
+
+        if (attachmentLines.length > 0) {
+            noteContentParts.push(`Attachments:\n${attachmentLines.join("\n")}`);
+        }
+
+        await (db as any).note.update({
+            where: { id: note.id },
+            data: {
+                content: noteContentParts.join("\n\n"),
+                ...(message.timestamp ? { createdAt: new Date(message.timestamp) } : {}),
+            },
         });
     }
 
