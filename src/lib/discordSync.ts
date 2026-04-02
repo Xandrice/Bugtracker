@@ -112,15 +112,16 @@ export async function syncIssueNotesFromDiscord(issueId: string) {
             id: true,
             discordMessageId: true,
             createdAt: true,
+            content: true,
         },
     });
 
-    const existingByMessageId = new Map<string, { id: string; createdAt: Date }>(
+    const existingByMessageId = new Map<string, { id: string; createdAt: Date; content: string }>(
         existingNotes
             .filter((note: { discordMessageId?: string | null }) => !!note.discordMessageId)
-            .map((note: { id: string; discordMessageId: string; createdAt: Date }) => [
+            .map((note: { id: string; discordMessageId: string; createdAt: Date; content: string }) => [
                 note.discordMessageId,
-                { id: note.id, createdAt: note.createdAt },
+                { id: note.id, createdAt: note.createdAt, content: note.content },
             ])
     );
 
@@ -130,13 +131,40 @@ export async function syncIssueNotesFromDiscord(issueId: string) {
         if (!existing) continue;
 
         const discordTimestamp = new Date(message.timestamp);
-        if (Math.abs(existing.createdAt.getTime() - discordTimestamp.getTime()) < 1000) {
-            continue;
+        const timestampChanged = Math.abs(existing.createdAt.getTime() - discordTimestamp.getTime()) >= 1000;
+
+        const freshText = message.content?.trim() || "";
+        const hasPlaceholder = existing.content.includes("_(no text content)_");
+        const contentChanged = hasPlaceholder && freshText.length > 0;
+
+        if (!timestampChanged && !contentChanged) continue;
+
+        const updateData: Record<string, unknown> = {};
+        if (timestampChanged) updateData.createdAt = discordTimestamp;
+        if (contentChanged) {
+            const authorTag = buildDiscordAuthorTag(message.author as DiscordAuthor);
+            const guildId = message.guild_id || (process.env.DISCORD_GUILD_ID || "").trim() || null;
+            const postLink = guildId && message.channel_id
+                ? `https://discord.com/channels/${guildId}/${message.channel_id}/${message.id}`
+                : null;
+            const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+            const attachmentLines = attachments
+                .map((a) => a?.url)
+                .filter((url): url is string => typeof url === "string" && url.length > 0);
+            const parts = [
+                `**Discord - ${authorTag}**`,
+                ...(postLink ? [`Post: ${postLink}`] : []),
+                freshText,
+            ];
+            if (attachmentLines.length > 0) {
+                parts.push(`Attachments:\n${attachmentLines.join("\n")}`);
+            }
+            updateData.content = parts.join("\n\n");
         }
 
         await (db as any).note.update({
             where: { id: existing.id },
-            data: { createdAt: discordTimestamp },
+            data: updateData,
         });
     }
 
