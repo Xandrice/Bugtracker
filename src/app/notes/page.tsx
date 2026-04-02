@@ -57,8 +57,11 @@ export default async function NotesPage() {
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
                                                 <span className="font-semibold text-sm">{note.author.name}</span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {note.createdAt.toLocaleDateString()}
+                                                <span className="text-xs text-muted-foreground" title={note.createdAt.toISOString()}>
+                                                    {new Intl.DateTimeFormat("en-US", {
+                                                        dateStyle: "medium",
+                                                        timeStyle: "short",
+                                                    }).format(note.createdAt)}
                                                 </span>
                                             </div>
                                         </div>

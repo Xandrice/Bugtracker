@@ -109,15 +109,38 @@ export async function syncIssueNotesFromDiscord(issueId: string) {
             },
         },
         select: {
+            id: true,
             discordMessageId: true,
+            createdAt: true,
         },
     });
 
-    const existingMessageIds = new Set(
+    const existingByMessageId = new Map<string, { id: string; createdAt: Date }>(
         existingNotes
-            .map((note: { discordMessageId?: string | null }) => note.discordMessageId)
-            .filter((id: string | null | undefined): id is string => !!id)
+            .filter((note: { discordMessageId?: string | null }) => !!note.discordMessageId)
+            .map((note: { id: string; discordMessageId: string; createdAt: Date }) => [
+                note.discordMessageId,
+                { id: note.id, createdAt: note.createdAt },
+            ])
     );
+
+    for (const message of filtered) {
+        if (!message.id || !message.timestamp) continue;
+        const existing = existingByMessageId.get(message.id);
+        if (!existing) continue;
+
+        const discordTimestamp = new Date(message.timestamp);
+        if (Math.abs(existing.createdAt.getTime() - discordTimestamp.getTime()) < 1000) {
+            continue;
+        }
+
+        await (db as any).note.update({
+            where: { id: existing.id },
+            data: { createdAt: discordTimestamp },
+        });
+    }
+
+    const existingMessageIds = new Set(existingByMessageId.keys());
 
     const unsynced = filtered
         .filter((message) => !existingMessageIds.has(message.id as string))
@@ -155,6 +178,8 @@ export async function syncIssueNotesFromDiscord(issueId: string) {
             noteContentParts.push(`Attachments:\n${attachmentLines.join("\n")}`);
         }
 
+        const discordCreatedAt = message.timestamp ? new Date(message.timestamp) : undefined;
+
         try {
             await (db as any).note.create({
                 data: {
@@ -165,6 +190,7 @@ export async function syncIssueNotesFromDiscord(issueId: string) {
                     discordMessageId: message.id,
                     discordAuthorId: message.author?.id,
                     discordAuthorTag: authorTag,
+                    ...(discordCreatedAt ? { createdAt: discordCreatedAt } : {}),
                 },
             });
             syncedCount += 1;

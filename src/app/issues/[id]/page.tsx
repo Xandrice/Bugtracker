@@ -145,10 +145,11 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                                     <span className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 font-semibold tracking-wide">DISCORD</span>
                                                 )}
                                             </div>
-                                            <span className="text-xs text-muted-foreground" title={note.createdAt.toLocaleString()}>
-                                                {new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(
-                                                    Math.round((note.createdAt.getTime() - Date.now()) / 86400000) === 0 ? 0 : Math.round((note.createdAt.getTime() - Date.now()) / 86400000), 'day'
-                                                )}
+                                            <span className="text-xs text-muted-foreground" title={note.createdAt.toISOString()}>
+                                                {new Intl.DateTimeFormat("en-US", {
+                                                    dateStyle: "medium",
+                                                    timeStyle: "short",
+                                                }).format(note.createdAt)}
                                             </span>
                                         </div>
                                         <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-pre:my-2 prose-code:before:content-[''] prose-code:after:content-['']">
