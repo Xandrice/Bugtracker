@@ -247,22 +247,37 @@ async function handleMessageCreate(data: DiscordMessageData) {
     const author = data.author;
     const content = data.content?.trim() || "";
 
+    console.log("[handleMessageCreate] messageId:", messageId, "authorId:", author?.id, "isBot:", author?.bot);
+
     if (!messageId || !author || author.bot) {
+        console.log("[handleMessageCreate] Early exit - missing messageId, author, or bot");
         return;
     }
 
     const forumSettings = await getForumSettings();
-    if (!isMessageFromConfiguredForum(data, forumSettings)) {
+    console.log("[handleMessageCreate] Forum settings:", forumSettings);
+    
+    const isMsgFromConfiguredForum = isMessageFromConfiguredForum(data, forumSettings);
+    console.log("[handleMessageCreate] Message from configured forum:", isMsgFromConfiguredForum, "(parentId:", data.parent_id || data.parentId, ")");
+    
+    if (!isMsgFromConfiguredForum) {
+        console.log("[handleMessageCreate] Filtered out - not from configured forum");
         return;
     }
 
     const issue = await resolveIssueForMessageEvent(data);
+    console.log("[handleMessageCreate] Resolved issue:", issue?.id || "null");
+    
     if (!issue) {
+        console.log("[handleMessageCreate] No issue found for channelId:", data.channel_id || data.channelId);
         return;
     }
 
     const noteAuthor = await getOrCreateDiscordAuthor(author);
+    console.log("[handleMessageCreate] Note author created/retrieved:", noteAuthor?.id);
+    
     if (!noteAuthor) {
+        console.log("[handleMessageCreate] Failed to get or create author");
         return;
     }
 
@@ -285,6 +300,7 @@ async function handleMessageCreate(data: DiscordMessageData) {
     }
 
     try {
+        console.log("[handleMessageCreate] Creating note for issue:", issue.id);
         await (db as any).note.create({
             data: {
                 issueId: issue.id,
@@ -296,8 +312,10 @@ async function handleMessageCreate(data: DiscordMessageData) {
                 discordAuthorTag: authorTag,
             }
         });
+        console.log("[handleMessageCreate] Note created successfully");
         revalidateIssue(issue.id);
     } catch (error: unknown) {
+        console.log("[handleMessageCreate] Error creating note:", error);
         if (!isRecord(error) || error.code !== "P2002") {
             throw error;
         }
@@ -331,6 +349,7 @@ async function handleThreadUpdate(data: DiscordThreadUpdateData) {
 
 export async function POST(req: Request) {
     const rawBody = await req.text();
+    console.log("[Discord Webhook] POST received, body length:", rawBody.length);
 
     const signature = req.headers.get("x-signature-ed25519");
     const timestamp = req.headers.get("x-signature-timestamp");
@@ -338,16 +357,22 @@ export async function POST(req: Request) {
     const relaySecret = process.env.DISCORD_WEBHOOK_SECRET;
     const relayHeader = req.headers.get("x-discord-webhook-secret");
 
+    console.log("[Discord Webhook] Auth check - publicKey present:", !!publicKey, "relaySecret present:", !!relaySecret);
+
     if (publicKey && signature && timestamp) {
         const valid = verifyDiscordRequest(rawBody, signature, timestamp, publicKey);
+        console.log("[Discord Webhook] Signature verification:", valid);
         if (!valid) {
             return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
         }
     } else if (relaySecret) {
-        if (!relayHeader || relayHeader !== relaySecret) {
+        const isValid = relayHeader === relaySecret;
+        console.log("[Discord Webhook] Relay auth check:", isValid ? "PASS" : "FAIL", "(header:", relayHeader, ", expected:", relaySecret, ")");
+        if (!relayHeader || !isValid) {
             return NextResponse.json({ error: "Unauthorized relay" }, { status: 401 });
         }
     } else {
+        console.log("[Discord Webhook] ERROR: No auth config provided");
         return NextResponse.json(
             { error: "Missing webhook validation configuration" },
             { status: 500 }
@@ -357,29 +382,50 @@ export async function POST(req: Request) {
     let payload: unknown = null;
     try {
         payload = rawBody ? JSON.parse(rawBody) : null;
-    } catch {
+        console.log("[Discord Webhook] Parsed payload:", JSON.stringify(payload, null, 2).substring(0, 500));
+    } catch (e) {
+        console.log("[Discord Webhook] JSON parse error:", e);
         return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
     }
 
     // Discord interaction handshake support.
     if (isRecord(payload) && payload.type === 1) {
+        console.log("[Discord Webhook] Discord interaction handshake");
         return NextResponse.json({ type: 1 });
     }
 
     const event = parseEvent(payload);
+    console.log("[Discord Webhook] parseEvent result:", event?.type || "null");
     if (!event) {
+        console.log("[Discord Webhook] No matching event type found");
         return NextResponse.json({ ok: true, ignored: true });
     }
 
     if (event.type === "MESSAGE_CREATE" || event.type === "MESSAGECREATE") {
-        await handleMessageCreate(normalizedMessageData(event.data));
+        console.log("[Discord Webhook] Handling MESSAGE_CREATE");
+        const msgData = normalizedMessageData(event.data);
+        console.log("[Discord Webhook] Normalized message data:", { 
+            messageId: msgData.id, 
+            channelId: msgData.channel_id || msgData.channelId, 
+            parentId: msgData.parent_id || msgData.parentId,
+            authorId: msgData.author?.id,
+            botAuthor: msgData.author?.bot
+        });
+        await handleMessageCreate(msgData);
         return NextResponse.json({ ok: true, handled: "MESSAGE_CREATE" });
     }
 
     if (event.type === "THREAD_UPDATE" || event.type === "THREADUPDATE") {
-        await handleThreadUpdate(normalizedThreadUpdateData(event.data));
+        console.log("[Discord Webhook] Handling THREAD_UPDATE");
+        const threadData = normalizedThreadUpdateData(event.data);
+        console.log("[Discord Webhook] Normalized thread data:", { 
+            threadId: threadData.id || threadData.channelId,
+            archived: threadData.archived 
+        });
+        await handleThreadUpdate(threadData);
         return NextResponse.json({ ok: true, handled: "THREAD_UPDATE" });
     }
 
+    console.log("[Discord Webhook] Event type not handled:", event.type);
     return NextResponse.json({ ok: true, ignored: event.type });
 }
