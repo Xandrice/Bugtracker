@@ -185,10 +185,25 @@ export async function syncIssueNotesFromDiscord(issueId: string) {
         if (!note.discordMessageId) continue;
 
         const message = await getDiscordChannelMessage(issue.discordThreadId, note.discordMessageId);
-        if (!message?.id || !message.author || message.author.bot) continue;
+        if (!message?.id || !message.author || message.author.bot) {
+            console.warn("[discordSync] Could not load Discord message for placeholder repair", {
+                issueId: issue.id,
+                threadId: issue.discordThreadId,
+                messageId: note.discordMessageId,
+            });
+            continue;
+        }
 
         const freshText = message.content?.trim() || "";
-        if (!freshText) continue;
+        if (!freshText) {
+            console.warn("[discordSync] Discord message content is empty during placeholder repair", {
+                issueId: issue.id,
+                threadId: issue.discordThreadId,
+                messageId: note.discordMessageId,
+                authorId: message.author.id,
+            });
+            continue;
+        }
 
         const authorTag = buildDiscordAuthorTag(message.author as DiscordAuthor);
         const guildId = message.guild_id || (process.env.DISCORD_GUILD_ID || "").trim() || null;
