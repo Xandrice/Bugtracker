@@ -25,8 +25,11 @@ export default function NewNotePage() {
     return (
         <div className="gta-page max-w-3xl">
             <div className="gta-hero flex flex-col gap-2">
-                <Link href="/notes" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit transition-colors">
-                    <ArrowLeft className="h-4 w-4" />
+                <Link
+                    href="/notes"
+                    className="inline-flex items-center gap-1.5 w-fit rounded-sm border border-border/70 bg-muted/35 px-2 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-foreground hover:text-white hover:border-primary/50 transition-colors"
+                >
+                    <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
                     Back to notes
                 </Link>
                 <h1 className="gta-heading mt-2">Create Crew Note</h1>
