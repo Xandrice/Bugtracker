@@ -62,6 +62,7 @@ model VerificationToken {
 
 model Issue {
   id          String  @id @default(cuid())
+  issueNumber Int?    @unique
   title       String
   description String?
   status      String  @default("OPEN") // OPEN, IN_PROGRESS, REVIEW, DONE

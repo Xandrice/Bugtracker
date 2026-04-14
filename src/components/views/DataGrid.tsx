@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import clsx from "clsx"
 import { updateIssueWorkflow } from "@/app/actions"
+import { formatIssueRef } from "@/lib/issue-ids"
 
 export type IssueStatus = "OPEN" | "IN_PROGRESS" | "REVIEW" | "DONE"
 export type IssuePriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT"
@@ -30,6 +31,7 @@ export interface UserSnippet {
 
 export interface IssueSnippet {
     id: string
+    issueNumber?: number | null
     title: string
     status: IssueStatus
     priority: IssuePriority
@@ -311,8 +313,8 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                         className="hover:bg-muted/45 transition-colors group"
                                     >
                                         <td className="px-3 text-center">
-                                            <Link href={`/issues/${issue.id}`} className="block py-1.5 text-muted-foreground hover:text-primary transition-colors font-mono text-xs">
-                                                {issue.id.slice(-5)}
+                                            <Link href={`/issues/${formatIssueRef(issue.issueNumber, issue.id)}`} className="block py-1.5 text-muted-foreground hover:text-primary transition-colors font-mono text-xs uppercase">
+                                                {formatIssueRef(issue.issueNumber, issue.id)}
                                             </Link>
                                         </td>
                                         <td className="px-3 py-1">
@@ -328,7 +330,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                             </select>
                                         </td>
                                         <td className="px-3 py-1 font-medium text-foreground group-hover:text-primary text-sm">
-                                            <Link href={`/issues/${issue.id}`} className="block py-2 truncate max-w-[500px]">
+                                            <Link href={`/issues/${formatIssueRef(issue.issueNumber, issue.id)}`} className="block py-2 truncate max-w-[500px]">
                                                 {issue.title}
                                             </Link>
                                         </td>
