@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Save, Loader2, Gamepad2, Code, Calendar, Target } from "lucide-react";
+import { ArrowLeft, Save, Loader2, Calendar, Target } from "lucide-react";
 import Link from "next/link";
 import { createIssue } from "@/app/actions";
 import { useFormStatus } from "react-dom";
@@ -107,31 +107,6 @@ export default function NewIssuePage() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg bg-primary/5 border border-primary/20">
-                    <div className="space-y-2">
-                        <label htmlFor="resourceName" className="text-sm font-medium leading-none flex items-center gap-1.5">
-                            <Code className="h-4 w-4 text-accent" /> Resource name
-                        </label>
-                        <input
-                            id="resourceName"
-                            name="resourceName"
-                            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                            placeholder="e.g. es_extended, police-mdt"
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label htmlFor="serverVersion" className="text-sm font-medium leading-none flex items-center gap-1.5">
-                            <Gamepad2 className="h-4 w-4 text-accent" /> Server / build
-                        </label>
-                        <input
-                            id="serverVersion"
-                            name="serverVersion"
-                            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                            placeholder="e.g. 6683, artifact"
-                        />
-                    </div>
-                </div>
-
                 <div className="space-y-2 p-4 rounded-lg bg-muted/40 border border-border">
                     <label htmlFor="discordPostId" className="text-sm font-medium leading-none">
                         Discord forum post (optional)
@@ -154,7 +129,7 @@ export default function NewIssuePage() {
                             id="tags"
                             name="tags"
                             className="flex h-10 w-full rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                            placeholder="police, mdt, ui, lua..."
+                            placeholder="resource:police-mdt, ui, lua..."
                         />
                     </div>
                     <div className="space-y-2">
@@ -163,7 +138,7 @@ export default function NewIssuePage() {
                             id="label"
                             name="label"
                             className="flex h-10 w-full rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                            placeholder="e.g. Scripts, Police, Economy"
+                            placeholder="e.g. Resource: police-mdt, Scripts, Police"
                         />
                     </div>
                 </div>
