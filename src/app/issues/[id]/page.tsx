@@ -42,17 +42,17 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
 
     return (
         <div className="flex flex-col h-full overflow-hidden flex-1 md:flex-row">
-            <div className="flex-1 flex flex-col min-w-0 overflow-y-auto border-r border-border/50 bg-background/50">
+            <div className="flex-1 flex flex-col min-w-0 overflow-y-auto border-r border-border/50 bg-transparent">
                 <div className="px-8 py-6 max-w-4xl w-full mx-auto space-y-8">
 
-                    <div className="space-y-4">
+                    <div className="gta-hero space-y-4">
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <span className="font-mono font-medium">FiveM Tracker</span>
+                            <span className="font-display text-lg uppercase tracking-[0.18em]">Renegade Roleplay</span>
                             <ChevronRight className="h-4 w-4" />
                             <span className="font-mono text-primary">{issue.id.slice(-8)}</span>
                         </div>
 
-                        <h1 className="text-3xl font-bold tracking-tight leading-tight">
+                        <h1 className="gta-heading text-4xl leading-tight">
                             {issue.title}
                         </h1>
 
@@ -78,7 +78,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                     </div>
 
                     {issue.description && (
-                        <div className="bg-background border border-border rounded-xl p-5 shadow-sm text-sm">
+                        <div className="gta-surface p-5 text-sm">
                             <h3 className="font-semibold text-muted-foreground mb-3 text-xs uppercase tracking-wider">Description</h3>
                             <p className="leading-relaxed whitespace-pre-wrap">{issue.description}</p>
                         </div>
@@ -87,7 +87,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                     {(issue.resourceName || issue.serverVersion) && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {issue.resourceName && (
-                                <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+                                <div className="gta-surface bg-primary/5 border-primary/20 p-4">
                                     <h3 className="font-semibold text-muted-foreground mb-2 text-xs uppercase tracking-wider flex items-center gap-2">
                                         <Code className="h-4 w-4 text-primary" /> Resource
                                     </h3>
@@ -95,7 +95,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                 </div>
                             )}
                             {issue.serverVersion && (
-                                <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+                                <div className="gta-surface bg-primary/5 border-primary/20 p-4">
                                     <h3 className="font-semibold text-muted-foreground mb-2 text-xs uppercase tracking-wider flex items-center gap-2">
                                         <Gamepad2 className="h-4 w-4 text-primary" /> Server / Build
                                     </h3>
@@ -177,7 +177,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
             </div>
 
             <div className="w-full md:w-80 border-l border-border bg-background/80 p-6 flex flex-col gap-6 shrink-0 overflow-y-auto">
-                <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Properties</h3>
+                <h3 className="font-display text-xl uppercase tracking-[0.18em] text-muted-foreground">Properties</h3>
 
                 <div className="space-y-4 text-sm">
                     <div className="flex flex-col gap-2 border-b border-border pb-4">

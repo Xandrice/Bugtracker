@@ -1,4 +1,4 @@
-import { BookOpen, Send, MessageSquare, Plus } from "lucide-react";
+import { BookOpen, MessageSquare, Plus } from "lucide-react";
 import { db } from "@/lib/db";
 import { auth } from "@/../auth";
 import Link from "next/link";
@@ -13,15 +13,15 @@ export default async function NotesPage() {
     const notes: any[] = notesRaw;
 
     return (
-        <div className="flex flex-col h-full p-6 max-w-[1200px] mx-auto space-y-6">
-            <div className="flex items-center justify-between">
+        <div className="gta-page max-w-[1200px]">
+            <div className="gta-hero flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
+                    <div className="p-2 bg-primary/20 text-primary rounded-lg border border-primary/30">
                         <BookOpen className="h-6 w-6" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">Team Notes</h1>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <h1 className="gta-heading text-3xl">Crew Notes</h1>
+                        <p className="gta-subheading mt-1">
                             Shared documentation and team discussions.
                         </p>
                     </div>
@@ -29,7 +29,7 @@ export default async function NotesPage() {
 
                 <Link
                     href="/notes/new"
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 shadow-sm"
+                    className="gta-action"
                 >
                     <Plus className="h-4 w-4" />
                     New Note
@@ -44,7 +44,7 @@ export default async function NotesPage() {
                         </div>
                     ) : (
                         notes.map(note => (
-                            <div key={note.id} className="bg-background rounded-xl border shadow-sm p-5 space-y-4">
+                            <div key={note.id} className="gta-surface p-5 space-y-4">
                                 <div className="flex items-start gap-4">
                                     {note.author.image ? (
                                         <img src={note.author.image} className="w-10 h-10 rounded-full border" alt="Avatar" />
@@ -86,15 +86,15 @@ export default async function NotesPage() {
                 </div>
 
                 <div className="space-y-4">
-                    <div className="bg-background rounded-xl border shadow-sm p-5">
-                        <h3 className="font-semibold text-sm mb-4">Pinned Notes</h3>
+                    <div className="gta-surface p-5">
+                        <h3 className="font-display text-xl mb-4 uppercase tracking-[0.18em]">Pinned Notes</h3>
                         <ul className="space-y-3">
                             <li>
-                                <a href="#" className="text-sm text-blue-500 hover:underline line-clamp-2">Architecture decision for v2.0 - Migration to App Router</a>
+                                <a href="#" className="text-sm text-primary hover:underline line-clamp-2">Architecture decision for v2.0 - Migration to App Router</a>
                                 <span className="text-xs text-muted-foreground mt-1 block">Jan 12, 2026</span>
                             </li>
                             <li>
-                                <a href="#" className="text-sm text-blue-500 hover:underline line-clamp-2">Discord Dev Portal Configuration Guide</a>
+                                <a href="#" className="text-sm text-primary hover:underline line-clamp-2">Discord Dev Portal Configuration Guide</a>
                                 <span className="text-xs text-muted-foreground mt-1 block">Jan 5, 2026</span>
                             </li>
                         </ul>

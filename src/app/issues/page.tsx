@@ -27,11 +27,11 @@ export default async function AllIssuesPage() {
     }));
 
     return (
-        <div className="flex flex-col h-full p-6 max-w-[1600px] mx-auto space-y-6">
-            <div className="flex items-center justify-between">
+        <div className="gta-page">
+            <div className="gta-hero flex items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">All Issues</h1>
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <h1 className="gta-heading">All Cases</h1>
+                    <p className="gta-subheading">
                         Bugs, features, and tasks for your FiveM server.
                     </p>
                 </div>
@@ -39,7 +39,7 @@ export default async function AllIssuesPage() {
                 {session?.user?.id && (
                     <Link
                         href="/issues/new"
-                        className="bg-primary hover:opacity-90 text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 shadow-md"
+                        className="gta-action"
                     >
                         <Plus className="h-4 w-4" />
                         New Issue

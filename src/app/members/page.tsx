@@ -30,15 +30,15 @@ export default async function MembersPage() {
     });
 
     return (
-        <div className="flex flex-col h-full p-6 max-w-[1200px] mx-auto space-y-6">
-            <div className="flex items-center justify-between">
+        <div className="gta-page max-w-[1200px]">
+            <div className="gta-hero flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                    <div className="p-2 bg-primary/20 text-primary rounded-lg border border-primary/30">
                         <Users className="h-6 w-6" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">Project Members</h1>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <h1 className="gta-heading text-3xl">Crew Roster</h1>
+                        <p className="gta-subheading mt-1">
                             Manage your team members and their roles.
                         </p>
                     </div>
@@ -48,17 +48,17 @@ export default async function MembersPage() {
                     <input
                         name="discordId"
                         placeholder="Discord ID..."
-                        className="h-10 px-3 rounded-md text-sm border bg-background focus:outline-none focus:border-primary"
+                        className="h-10 px-3 rounded-md text-sm border border-input bg-background focus:outline-none focus:border-primary"
                         required
                     />
-                    <button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2">
+                    <button type="submit" className="gta-action">
                         <Plus className="h-4 w-4" />
                         Add Member
                     </button>
                 </form>
             </div>
 
-            <div className="bg-background rounded-xl border shadow-sm">
+            <div className="gta-surface">
                 <table className="w-full text-sm text-left">
                     <thead className="bg-muted/50 border-b text-muted-foreground text-xs uppercase tracking-wider [&>tr>th:first-child]:rounded-tl-xl [&>tr>th:last-child]:rounded-tr-xl">
                         <tr>

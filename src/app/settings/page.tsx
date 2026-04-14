@@ -110,21 +110,21 @@ export default function SettingsPage() {
     };
 
     return (
-        <div className="flex flex-col h-full p-6 max-w-[1200px] mx-auto space-y-6">
-            <div className="flex items-center gap-3">
-                <div className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg">
+        <div className="gta-page max-w-[1200px]">
+            <div className="gta-hero flex items-center gap-3">
+                <div className="p-2 bg-primary/20 text-primary rounded-lg border border-primary/30">
                     <Settings2 className="h-6 w-6" />
                 </div>
                 <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">Project Settings</h1>
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <h1 className="gta-heading text-3xl">Control Center</h1>
+                    <p className="gta-subheading mt-1">
                         Manage your project preferences and integrations.
                     </p>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="col-span-1 border-r pr-6 space-y-1">
+                <div className="col-span-1 border-r border-border/70 pr-6 space-y-1">
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
                         const isActive = activeTab === tab.id;
@@ -133,8 +133,8 @@ export default function SettingsPage() {
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-r-md text-sm font-medium transition-colors border-l-2 ${isActive
-                                    ? "bg-primary/10 text-primary border-primary"
-                                    : "text-muted-foreground hover:bg-muted border-transparent"
+                                    ? "bg-primary/15 text-foreground border-primary"
+                                    : "text-muted-foreground hover:bg-muted/60 border-transparent"
                                     }`}
                             >
                                 <Icon className="h-4 w-4" />
@@ -147,7 +147,7 @@ export default function SettingsPage() {
                 <div className="md:col-span-3 space-y-6">
                     {activeTab === "general" && (
                         <>
-                            <div className="bg-background border rounded-xl shadow-sm overflow-hidden">
+                            <div className="gta-surface overflow-hidden">
                                 <div className="px-6 py-4 border-b bg-muted/30">
                                     <h3 className="font-semibold">Project Details</h3>
                                     <p className="text-xs text-muted-foreground">Basic information about your project.</p>
@@ -182,7 +182,7 @@ export default function SettingsPage() {
                                 </div>
                             </div>
 
-                            <div className="bg-background border rounded-xl shadow-sm overflow-hidden">
+                            <div className="gta-surface overflow-hidden">
                                 <div className="px-6 py-4 border-b bg-muted/30">
                                     <h3 className="font-semibold">Discord Forums</h3>
                                     <p className="text-xs text-muted-foreground">Configure forum parent IDs used by webhook filtering.</p>
@@ -221,7 +221,7 @@ export default function SettingsPage() {
                     )}
 
                     {activeTab === "appearance" && (
-                        <div className="bg-background border rounded-xl shadow-sm overflow-hidden">
+                        <div className="gta-surface overflow-hidden">
                             <div className="px-6 py-4 border-b bg-muted/30">
                                 <h3 className="font-semibold">Appearance Settings</h3>
                                 <p className="text-xs text-muted-foreground">Customize the look and feel of the application.</p>
@@ -262,7 +262,7 @@ export default function SettingsPage() {
 
                     {activeTab === "export" && (
                         <div className="space-y-6">
-                            <div className="bg-background border rounded-xl shadow-sm overflow-hidden">
+                            <div className="gta-surface overflow-hidden">
                                 <div className="px-6 py-4 border-b bg-muted/30">
                                     <h3 className="font-semibold">Data Export</h3>
                                     <p className="text-xs text-muted-foreground">Export your project data indefinitely.</p>

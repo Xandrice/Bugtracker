@@ -47,11 +47,11 @@ export function LeftSidebar({ isLoggedIn }: { isLoggedIn: boolean }) {
         ];
 
     return (
-        <aside className="w-64 border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 h-[calc(100vh-3.5rem)] overflow-hidden hidden md:block shrink-0 transition-colors duration-200 flex flex-col">
-            <div className="flex flex-col gap-6 py-6 px-4 min-h-0 overflow-hidden">
+        <aside className="w-56 border-r border-border/80 bg-background/92 backdrop-blur supports-[backdrop-filter]:bg-background/72 h-[calc(100vh-3rem)] overflow-hidden hidden md:block shrink-0 transition-colors duration-200 flex flex-col">
+            <div className="flex flex-col gap-4 py-4 px-3 min-h-0 overflow-hidden">
                 {groups.map((group, i) => (
-                    <div key={i} className="flex flex-col gap-1">
-                        <h4 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase px-2 mb-1">
+                    <div key={i} className="flex flex-col gap-1 gta-surface p-2">
+                        <h4 className="text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase px-2 mb-1">
                             {group.title}
                         </h4>
                         <nav className="flex flex-col gap-1">
@@ -62,16 +62,16 @@ export function LeftSidebar({ isLoggedIn }: { isLoggedIn: boolean }) {
                                         key={item.href}
                                         href={item.href}
                                         className={clsx(
-                                            "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all group relative overflow-hidden",
+                                            "flex items-center gap-2.5 rounded-sm px-2 py-1.5 text-xs uppercase tracking-[0.08em] font-medium transition-all group relative overflow-hidden border",
                                             isActive
-                                                ? "bg-primary/10 text-primary dark:bg-primary/20"
-                                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                                ? "bg-primary/20 text-foreground border-primary/40"
+                                                : "text-muted-foreground hover:bg-muted/70 hover:text-foreground border-border/40"
                                         )}
                                     >
                                         {isActive && (
-                                            <span className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />
+                                            <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-accent" />
                                         )}
-                                        <item.icon className={clsx("h-4 w-4", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                                        <item.icon className={clsx("h-3.5 w-3.5", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
                                         {item.name}
                                     </Link>
                                 );
@@ -85,16 +85,16 @@ export function LeftSidebar({ isLoggedIn }: { isLoggedIn: boolean }) {
                         <Link
                             href="/settings"
                             className={clsx(
-                                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all group relative overflow-hidden",
+                                "flex items-center gap-2.5 rounded-sm px-2 py-1.5 text-xs uppercase tracking-[0.08em] font-medium transition-all group relative overflow-hidden gta-surface border",
                                 pathname === "/settings"
-                                    ? "bg-primary/10 text-primary dark:bg-primary/20"
-                                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    ? "bg-primary/20 text-foreground border-primary/40"
+                                    : "text-muted-foreground hover:bg-muted/70 hover:text-foreground border-border/40"
                             )}
                         >
                             {pathname === "/settings" && (
-                                <span className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />
+                                <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-accent" />
                             )}
-                            <Settings2 className={clsx("h-4 w-4", pathname === "/settings" ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                            <Settings2 className={clsx("h-3.5 w-3.5", pathname === "/settings" ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
                             Project Settings
                         </Link>
                     </div>

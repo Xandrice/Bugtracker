@@ -23,17 +23,17 @@ function SubmitButton() {
 
 export default function NewNotePage() {
     return (
-        <div className="flex flex-col h-full p-6 max-w-3xl mx-auto space-y-6">
-            <div className="flex flex-col gap-2">
+        <div className="gta-page max-w-3xl">
+            <div className="gta-hero flex flex-col gap-2">
                 <Link href="/notes" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit transition-colors">
                     <ArrowLeft className="h-4 w-4" />
                     Back to notes
                 </Link>
-                <h1 className="text-3xl font-bold tracking-tight mt-2">Create New Note</h1>
-                <p className="text-muted-foreground">Share documentation or start a new team discussion.</p>
+                <h1 className="gta-heading mt-2">Create Crew Note</h1>
+                <p className="gta-subheading">Share documentation or start a new team discussion.</p>
             </div>
 
-            <form action={createTeamNote} className="space-y-6 bg-background p-6 lg:p-8 rounded-xl border shadow-sm">
+            <form action={createTeamNote} className="space-y-6 gta-surface p-6 lg:p-8">
                 <div className="space-y-2">
                     <label htmlFor="title" className="text-sm font-medium leading-none">
                         Note Title

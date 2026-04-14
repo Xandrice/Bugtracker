@@ -25,21 +25,21 @@ export default async function Home() {
   }));
 
   return (
-    <div className="flex flex-col h-full p-6 max-w-[1600px] mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="gta-page">
+      <div className="gta-hero flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">All Issues</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Browse and manage all issues across the project.
+          <h1 className="gta-heading">Reports</h1>
+          <p className="gta-subheading">
+            Dispatch board for incoming incidents and development operations.
           </p>
         </div>
 
         <Link
           href="/issues/new"
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 shadow-sm"
+          className="gta-action"
         >
           <Plus className="h-4 w-4" />
-          New Issue
+          File Incident
         </Link>
       </div>
 

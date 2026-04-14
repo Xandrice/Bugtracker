@@ -22,21 +22,21 @@ function SubmitButton() {
 
 export default function NewIssuePage() {
     return (
-        <div className="flex flex-col h-full p-6 max-w-3xl mx-auto space-y-6">
-            <div className="flex flex-col gap-2">
+        <div className="gta-page max-w-3xl">
+            <div className="gta-hero flex flex-col gap-2">
                 <Link href="/issues" className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1 w-fit transition-colors">
                     <ArrowLeft className="h-4 w-4" />
                     Back to issues
                 </Link>
-                <h1 className="text-3xl font-bold tracking-tight mt-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                    Report Bug or Feature
+                <h1 className="gta-heading mt-2">
+                    New Dispatch Ticket
                 </h1>
-                <p className="text-muted-foreground">
+                <p className="gta-subheading">
                     Submit a bug, feature request, or task for your FiveM server. Include resource name and steps to reproduce when relevant.
                 </p>
             </div>
 
-            <form action={createIssue} className="space-y-6 bg-background p-6 lg:p-8 rounded-xl border border-border shadow-lg shadow-primary/5">
+            <form action={createIssue} className="space-y-6 gta-surface p-6 lg:p-8">
                 <div className="space-y-2">
                     <label htmlFor="title" className="text-sm font-medium leading-none">
                         Title <span className="text-danger">*</span>

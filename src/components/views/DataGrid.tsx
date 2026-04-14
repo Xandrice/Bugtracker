@@ -45,9 +45,9 @@ export interface IssueSnippet {
 }
 
 export const statusStyles: Record<IssueStatus, string> = {
-    OPEN: "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30",
+    OPEN: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30",
     IN_PROGRESS: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30",
-    REVIEW: "bg-violet-500/15 text-violet-600 dark:text-violet-400 border-violet-500/30",
+    REVIEW: "bg-primary/15 text-blue-700 dark:text-blue-300 border-primary/40",
     DONE: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
 }
 
@@ -68,7 +68,7 @@ export const StatusIcon = ({ status }: { status: IssueStatus }) => {
     switch (status) {
         case "OPEN": return <CircleDashed className="h-4 w-4 text-sky-500" />
         case "IN_PROGRESS": return <KanbanSquare className="h-4 w-4 text-amber-500" />
-        case "REVIEW": return <AlertCircle className="h-4 w-4 text-violet-500" />
+        case "REVIEW": return <AlertCircle className="h-4 w-4 text-primary" />
         case "DONE": return <CheckCircle2 className="h-4 w-4 text-emerald-500" />
     }
 }
@@ -215,17 +215,17 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
     };
 
     const selectClasses =
-        "text-xs h-8 rounded-md border border-border bg-background px-2 focus:outline-none focus:ring-2 focus:ring-primary/30";
+        "text-[11px] h-7 rounded-sm border border-border/80 bg-background/85 px-2 uppercase tracking-[0.06em] focus:outline-none focus:ring-2 focus:ring-primary/30";
 
     return (
         <div className="flex flex-col gap-4">
             {!hideFilters && (
-                <div className="flex flex-wrap items-center gap-3 bg-background p-4 rounded-xl border border-border shadow-sm">
-                    <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">Filters</div>
+                <div className="flex flex-wrap items-center gap-2.5 gta-surface p-2.5">
+                    <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.2em] px-1">Filters</div>
                     <select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
-                        className="text-xs bg-background text-foreground px-3 py-2 rounded-lg border border-border transition-colors outline-none focus:ring-2 focus:ring-primary/30 appearance-none hover:bg-muted/50"
+                        className="text-[11px] bg-background text-foreground px-2.5 py-1.5 rounded-sm border border-border/80 transition-colors outline-none focus:ring-2 focus:ring-primary/30 appearance-none hover:bg-muted/50 uppercase tracking-[0.06em]"
                     >
                         <option value="ALL">Status: All</option>
                         <option value="OPEN">Open</option>
@@ -236,7 +236,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                     <select
                         value={typeFilter}
                         onChange={(e) => setTypeFilter(e.target.value)}
-                        className="text-xs bg-background text-foreground px-3 py-2 rounded-lg border border-border transition-colors outline-none focus:ring-2 focus:ring-primary/30 appearance-none hover:bg-muted/50"
+                        className="text-[11px] bg-background text-foreground px-2.5 py-1.5 rounded-sm border border-border/80 transition-colors outline-none focus:ring-2 focus:ring-primary/30 appearance-none hover:bg-muted/50 uppercase tracking-[0.06em]"
                     >
                         <option value="ALL">Type: All</option>
                         <option value="BUG">Bug</option>
@@ -246,7 +246,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                     <select
                         value={assigneeFilter}
                         onChange={(e) => setAssigneeFilter(e.target.value)}
-                        className="text-xs bg-background text-foreground px-3 py-2 rounded-lg border border-border transition-colors outline-none focus:ring-2 focus:ring-primary/30 appearance-none hover:bg-muted/50"
+                        className="text-[11px] bg-background text-foreground px-2.5 py-1.5 rounded-sm border border-border/80 transition-colors outline-none focus:ring-2 focus:ring-primary/30 appearance-none hover:bg-muted/50 uppercase tracking-[0.06em]"
                     >
                         <option value="ALL">Assignee: Anyone</option>
                         <option value="UNASSIGNED">Unassigned</option>
@@ -257,40 +257,40 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                 </div>
             )}
 
-            <div className="w-full bg-background rounded-md border shadow-sm overflow-hidden text-sm">
+            <div className="w-full gta-surface overflow-hidden text-sm">
                 <div className="overflow-x-auto">
                     <table className="w-full whitespace-nowrap text-left border-collapse">
                         <thead>
-                            <tr className="border-b bg-muted/50 text-muted-foreground font-medium text-xs tracking-wider select-none">
-                                <th onClick={() => handleSort('id')} className="px-4 py-2 font-medium w-12 text-center cursor-pointer hover:text-foreground">
+                            <tr className="border-b border-border/70 bg-muted/60 text-muted-foreground font-medium text-[10px] tracking-[0.16em] uppercase select-none">
+                                <th onClick={() => handleSort('id')} className="px-3 py-2 font-medium w-12 text-center cursor-pointer hover:text-foreground">
                                     ID {getSortIndicator('id')}
                                 </th>
-                                <th onClick={() => handleSort('type')} className="px-4 py-2 font-medium w-32 cursor-pointer hover:text-foreground">
+                                <th onClick={() => handleSort('type')} className="px-3 py-2 font-medium w-32 cursor-pointer hover:text-foreground">
                                     Type {getSortIndicator('type')}
                                 </th>
-                                <th onClick={() => handleSort('title')} className="px-4 py-2 font-medium cursor-pointer hover:text-foreground">
+                                <th onClick={() => handleSort('title')} className="px-3 py-2 font-medium cursor-pointer hover:text-foreground">
                                     Title {getSortIndicator('title')}
                                 </th>
-                                <th onClick={() => handleSort('status')} className="px-4 py-2 font-medium w-32 cursor-pointer hover:text-foreground">
+                                <th onClick={() => handleSort('status')} className="px-3 py-2 font-medium w-32 cursor-pointer hover:text-foreground">
                                     Status {getSortIndicator('status')}
                                 </th>
-                                <th onClick={() => handleSort('priority')} className="px-4 py-2 font-medium w-24 cursor-pointer hover:text-foreground">
+                                <th onClick={() => handleSort('priority')} className="px-3 py-2 font-medium w-24 cursor-pointer hover:text-foreground">
                                     Priority {getSortIndicator('priority')}
                                 </th>
-                                <th className="px-4 py-2 font-medium w-32">Severity</th>
-                                <th onClick={() => handleSort('assignee')} className="px-4 py-2 font-medium w-40 cursor-pointer hover:text-foreground">
+                                <th className="px-3 py-2 font-medium w-32">Severity</th>
+                                <th onClick={() => handleSort('assignee')} className="px-3 py-2 font-medium w-40 cursor-pointer hover:text-foreground">
                                     Assignee {getSortIndicator('assignee')}
                                 </th>
-                                <th onClick={() => handleSort('dueDate')} className="px-4 py-2 font-medium w-28 cursor-pointer hover:text-foreground">
+                                <th onClick={() => handleSort('dueDate')} className="px-3 py-2 font-medium w-28 cursor-pointer hover:text-foreground">
                                     Due {getSortIndicator('dueDate')}
                                 </th>
-                                <th onClick={() => handleSort('updatedAt')} className="px-4 py-2 font-medium w-32 text-right cursor-pointer hover:text-foreground">
+                                <th onClick={() => handleSort('updatedAt')} className="px-3 py-2 font-medium w-32 text-right cursor-pointer hover:text-foreground">
                                     Updated {getSortIndicator('updatedAt')}
                                 </th>
-                                <th className="px-4 py-2 font-medium w-32 text-right">Resolve</th>
+                                <th className="px-3 py-2 font-medium w-32 text-right">Resolve</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-border">
+                        <tbody className="divide-y divide-border/60">
                             {sortedAndFilteredIssues.length === 0 ? (
                                 <tr>
                                     <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
@@ -301,14 +301,14 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                 sortedAndFilteredIssues.map((issue) => (
                                     <tr
                                         key={issue.id}
-                                        className="hover:bg-muted/30 transition-colors group"
+                                        className="hover:bg-muted/45 transition-colors group"
                                     >
-                                        <td className="px-4 text-center">
-                                            <Link href={`/issues/${issue.id}`} className="block py-2 text-muted-foreground hover:text-primary transition-colors font-mono">
+                                        <td className="px-3 text-center">
+                                            <Link href={`/issues/${issue.id}`} className="block py-1.5 text-muted-foreground hover:text-primary transition-colors font-mono text-xs">
                                                 {issue.id.slice(-5)}
                                             </Link>
                                         </td>
-                                        <td className="px-4 py-1">
+                                        <td className="px-3 py-1">
                                             <select
                                                 value={issue.type}
                                                 className={selectClasses}
@@ -320,12 +320,12 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                                 <option value="TASK">Task</option>
                                             </select>
                                         </td>
-                                        <td className="px-4 py-1 font-medium text-foreground group-hover:text-primary">
+                                        <td className="px-3 py-1 font-medium text-foreground group-hover:text-primary text-sm">
                                             <Link href={`/issues/${issue.id}`} className="block py-2 truncate max-w-[500px]">
                                                 {issue.title}
                                             </Link>
                                         </td>
-                                        <td className="px-4 py-1">
+                                        <td className="px-3 py-1">
                                             <select
                                                 value={issue.status}
                                                 className={selectClasses}
@@ -338,7 +338,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                                 <option value="DONE">Done</option>
                                             </select>
                                         </td>
-                                        <td className="px-4 py-1">
+                                        <td className="px-3 py-1">
                                             <select
                                                 value={issue.priority}
                                                 className={selectClasses}
@@ -351,7 +351,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                                 <option value="URGENT">Urgent</option>
                                             </select>
                                         </td>
-                                        <td className="px-4 py-1">
+                                        <td className="px-3 py-1">
                                             <select
                                                 value={issue.severity ?? "MINOR"}
                                                 className={selectClasses}
@@ -364,7 +364,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                                 <option value="BLOCKER">Blocker</option>
                                             </select>
                                         </td>
-                                        <td className="px-4 py-1">
+                                        <td className="px-3 py-1">
                                             {issue.assignee ? (
                                                 <div className="flex items-center gap-2">
                                                     {issue.assignee.image ? (
@@ -384,12 +384,12 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                                 <span className="text-xs text-muted-foreground italic">Unassigned</span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-1 text-muted-foreground text-xs">
+                                        <td className="px-3 py-1 text-muted-foreground text-xs">
                                             {issue.dueDate
                                                 ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(issue.dueDate))
                                                 : "—"}
                                         </td>
-                                        <td className="px-4 py-1 text-right text-muted-foreground text-xs font-mono">
+                                        <td className="px-3 py-1 text-right text-muted-foreground text-xs font-mono">
                                             <div className="flex items-center justify-end gap-2">
                                                 <span>
                                                     {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(issue.updatedAt))}
@@ -399,7 +399,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-4 py-1 text-right">
+                                        <td className="px-3 py-1 text-right">
                                             <button
                                                 type="button"
                                                 disabled={isPending && pendingIssueId === issue.id}
