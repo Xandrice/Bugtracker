@@ -134,12 +134,18 @@ export default function NewIssuePage() {
                     </div>
                     <div className="space-y-2">
                         <label htmlFor="label" className="text-sm font-medium leading-none">Label / category</label>
-                        <input
+                        <select
                             id="label"
                             name="label"
-                            className="flex h-10 w-full rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                            placeholder="e.g. Resource: police-mdt, Scripts, Police"
-                        />
+                            className="flex h-10 w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        >
+                            <option value="">Select category</option>
+                            <option value="SCRIPT">Script</option>
+                            <option value="MAP">Map</option>
+                            <option value="CAR">Car</option>
+                            <option value="CLOTHES">Clothes</option>
+                            <option value="OTHER">Other / Misc</option>
+                        </select>
                     </div>
                 </div>
 
