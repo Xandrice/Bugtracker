@@ -43,35 +43,35 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
     return (
         <div className="flex flex-col h-full overflow-hidden flex-1 md:flex-row">
             <div className="flex-1 flex flex-col min-w-0 overflow-y-auto border-r border-border/50 bg-transparent">
-                <div className="px-8 py-6 max-w-4xl w-full mx-auto space-y-8">
+                <div className="px-6 py-5 max-w-4xl w-full mx-auto space-y-6">
 
-                    <div className="gta-hero space-y-4">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <span className="font-display text-lg uppercase tracking-[0.18em]">Renegade Roleplay</span>
-                            <ChevronRight className="h-4 w-4" />
+                    <div className="gta-hero space-y-3">
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <span className="font-display text-sm uppercase tracking-[0.14em]">Renegade Roleplay</span>
+                            <ChevronRight className="h-3.5 w-3.5" />
                             <span className="font-mono text-primary">{issue.id.slice(-8)}</span>
                         </div>
 
-                        <h1 className="gta-heading text-4xl leading-tight">
+                        <h1 className="gta-heading text-3xl leading-tight">
                             {issue.title}
                         </h1>
 
-                        <div className="flex flex-wrap items-center gap-2 mt-4">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-sm font-medium ${statusStyles[issue.status as keyof typeof statusStyles] || "bg-muted"}`}>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-xs font-medium ${statusStyles[issue.status as keyof typeof statusStyles] || "bg-muted"}`}>
                                 <StatusIcon status={issue.status as any} /> {issue.status.replace("_", " ")}
                             </span>
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-sm font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-xs font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30">
                                 <PriorityIcon priority={issue.priority as any} /> {priorityLabels[issue.priority as keyof typeof priorityLabels] || issue.priority}
                             </span>
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-sm font-medium ${typeStyles[issue.type as keyof typeof typeStyles] || "bg-muted"}`}>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-xs font-medium ${typeStyles[issue.type as keyof typeof typeStyles] || "bg-muted"}`}>
                                 <TypeIcon type={issue.type as any} /> {issue.type}
                             </span>
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-sm font-medium bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30">
-                                <AlertCircle className="h-4 w-4" /> {issue.severity}
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-xs font-medium bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30">
+                                <AlertCircle className="h-3.5 w-3.5" /> {issue.severity}
                             </span>
                             {issue.storyPoints != null && (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-sm font-medium bg-muted">
-                                    <Target className="h-4 w-4" /> {issue.storyPoints} pts
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-xs font-medium bg-muted">
+                                    <Target className="h-3.5 w-3.5" /> {issue.storyPoints} pts
                                 </span>
                             )}
                         </div>
@@ -176,12 +176,12 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                 </div>
             </div>
 
-            <div className="w-full md:w-80 border-l border-border bg-background/80 p-6 flex flex-col gap-6 shrink-0 overflow-y-auto">
-                <h3 className="font-display text-xl uppercase tracking-[0.18em] text-muted-foreground">Properties</h3>
+            <div className="w-full md:w-72 border-l border-border bg-background/80 p-4 flex flex-col gap-3 shrink-0 overflow-y-auto">
+                <h3 className="font-display text-lg uppercase tracking-[0.16em] text-muted-foreground">Properties</h3>
 
-                <div className="space-y-4 text-sm">
-                    <div className="flex flex-col gap-2 border-b border-border pb-4">
-                        <span className="text-muted-foreground font-medium">Workflow</span>
+                <div className="space-y-2 text-sm">
+                    <details open className="gta-surface p-2">
+                        <summary className="cursor-pointer text-xs uppercase tracking-[0.1em] text-muted-foreground font-semibold">Workflow & Priority</summary>
                         <form action={saveIssueWorkflow} className="space-y-2">
                             <input type="hidden" name="issueId" value={issue.id} />
                             <div className="grid grid-cols-2 gap-2">
@@ -229,28 +229,11 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                             </div>
                             <button type="submit" className="text-xs font-medium text-primary hover:underline">Save workflow fields</button>
                         </form>
-                    </div>
+                    </details>
 
-                    <div className="flex flex-col gap-2 border-b border-border pb-4">
-                        <span className="text-muted-foreground font-medium">Resolve</span>
-                        <form action={toggleIssueResolved} className="flex items-center justify-between gap-2">
-                            <input type="hidden" name="issueId" value={issue.id} />
-                            <input type="hidden" name="resolved" value={issue.status === "DONE" ? "false" : "true"} />
-                            <span className="text-xs text-muted-foreground">
-                                {issue.status === "DONE" ? "Issue is currently resolved." : "Mark issue as resolved when finished."}
-                            </span>
-                            <button
-                                type="submit"
-                                className="text-xs rounded-md px-2.5 py-1.5 border transition-colors border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
-                            >
-                                {issue.status === "DONE" ? "Reopen" : "Resolve"}
-                            </button>
-                        </form>
-                    </div>
-
-                    <div className="flex flex-col gap-2 border-b border-border pb-4">
-                        <span className="text-muted-foreground font-medium">Assignee</span>
-                        <form action={setAssignee} className="flex flex-col gap-2">
+                    <details open className="gta-surface p-2">
+                        <summary className="cursor-pointer text-xs uppercase tracking-[0.1em] text-muted-foreground font-semibold">Assignee</summary>
+                        <form action={setAssignee} className="flex flex-col gap-2 mt-2">
                             <input type="hidden" name="issueId" value={issue.id} />
                             <select
                                 name="assigneeId"
@@ -264,122 +247,143 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                             </select>
                             <button type="submit" className="text-xs font-medium text-primary hover:underline">Update assignee</button>
                         </form>
-                    </div>
+                    </details>
 
-                    <div className="flex flex-col gap-2 border-b border-border pb-4">
-                        <span className="text-muted-foreground">Reporter</span>
-                        <div className="flex items-center gap-2 font-medium">
-                            {issue.reporter ? (
-                                <>
-                                    {issue.reporter.image ? (
-                                        <img src={issue.reporter.image} alt={issue.reporter.name || "Reporter"} className="w-6 h-6 rounded-full border object-cover" />
+                    <details open className="gta-surface p-2">
+                        <summary className="cursor-pointer text-xs uppercase tracking-[0.1em] text-muted-foreground font-semibold">Resolve</summary>
+                        <form action={toggleIssueResolved} className="flex items-center justify-between gap-2">
+                            <input type="hidden" name="issueId" value={issue.id} />
+                            <input type="hidden" name="resolved" value={issue.status === "DONE" ? "false" : "true"} />
+                            <span className="text-xs text-muted-foreground">
+                                {issue.status === "DONE" ? "Issue is currently resolved." : "Mark issue as resolved when finished."}
+                            </span>
+                            <button
+                                type="submit"
+                                className="text-xs rounded-md px-2.5 py-1.5 border transition-colors border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
+                            >
+                                {issue.status === "DONE" ? "Reopen" : "Resolve"}
+                            </button>
+                        </form>
+                    </details>
+
+                    <details open className="gta-surface p-2">
+                        <summary className="cursor-pointer text-xs uppercase tracking-[0.1em] text-muted-foreground font-semibold">Core Info</summary>
+                        <div className="space-y-3 mt-2">
+                            <div className="flex flex-col gap-1.5">
+                                <span className="text-muted-foreground text-xs">Reporter</span>
+                                <div className="flex items-center gap-2 font-medium">
+                                    {issue.reporter ? (
+                                        <>
+                                            {issue.reporter.image ? (
+                                                <img src={issue.reporter.image} alt={issue.reporter.name || "Reporter"} className="w-5 h-5 rounded-full border object-cover" />
+                                            ) : (
+                                                <UserCircle2 className="w-5 h-5 text-muted-foreground" />
+                                            )}
+                                            <span className="text-sm">{issue.reporter.name}</span>
+                                        </>
                                     ) : (
-                                        <UserCircle2 className="w-6 h-6 text-muted-foreground" />
+                                        <span className="text-muted-foreground italic text-sm">Unknown</span>
                                     )}
-                                    {issue.reporter.name}
-                                </>
-                            ) : (
-                                <span className="text-muted-foreground italic">Unknown</span>
+                                </div>
+                            </div>
+
+                            {issue.dueDate && (
+                                <div className="flex flex-col gap-1.5">
+                                    <span className="text-muted-foreground text-xs">Due date</span>
+                                    <div className="flex items-center gap-2 font-medium text-sm">
+                                        <Calendar className="h-3.5 w-3.5 text-primary" />
+                                        {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(issue.dueDate)}
+                                    </div>
+                                </div>
                             )}
-                        </div>
-                    </div>
 
-                    {issue.dueDate && (
-                        <div className="flex flex-col gap-2 border-b border-border pb-4">
-                            <span className="text-muted-foreground">Due date</span>
-                            <div className="flex items-center gap-2 font-medium">
-                                <Calendar className="h-4 w-4 text-primary" />
-                                {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(issue.dueDate)}
-                            </div>
-                        </div>
-                    )}
-
-                    {issue.environment && (
-                        <div className="flex flex-col gap-2 border-b border-border pb-4">
-                            <span className="text-muted-foreground">Environment</span>
-                            <div className="flex items-center gap-2 font-medium">
-                                <Terminal className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                <span className="truncate" title={issue.environment}>{issue.environment}</span>
-                            </div>
-                        </div>
-                    )}
-
-                    {(issue.tags || issue.label) && (
-                        <div className="flex flex-col gap-2 border-b border-border pb-4">
-                            <span className="text-muted-foreground">Tags {issue.label && `· ${issue.label}`}</span>
-                            {issue.tags && (
-                                <div className="flex flex-wrap items-center gap-2">
-                                    {issue.tags.split(',').map((tag: string) => {
-                                        const t = tag.trim();
-                                        if (!t) return null;
-                                        return (
-                                            <span key={t} className="px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 text-xs font-medium flex items-center">
-                                                <Tag className="h-3 w-3 mr-1 opacity-70" />
-                                                {t}
-                                            </span>
-                                        );
-                                    })}
+                            {(issue.tags || issue.label) && (
+                                <div className="flex flex-col gap-1.5">
+                                    <span className="text-muted-foreground text-xs">Tags {issue.label && `· ${issue.label}`}</span>
+                                    {issue.tags && (
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            {issue.tags.split(',').map((tag: string) => {
+                                                const t = tag.trim();
+                                                if (!t) return null;
+                                                return (
+                                                    <span key={t} className="px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 text-[11px] font-medium flex items-center">
+                                                        <Tag className="h-3 w-3 mr-1 opacity-70" />
+                                                        {t}
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
-                    )}
+                    </details>
 
-                    <div className="flex flex-col gap-2 border-b border-border pb-4">
-                        <span className="text-muted-foreground font-medium">Discord forum post</span>
-                        <form action={updateIssueDiscordPost} className="flex flex-col gap-2">
-                            <input type="hidden" name="issueId" value={issue.id} />
-                            <input
-                                type="text"
-                                name="discordPostId"
-                                defaultValue={issue.discordThreadId || ""}
-                                className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary"
-                                placeholder="Paste post link or post ID"
-                            />
-                            <button type="submit" className="text-xs font-medium text-primary hover:underline">Save post link</button>
-                        </form>
-                        {issue.discordThreadId && (
-                            <div className="text-xs font-mono break-all">Post ID: {issue.discordThreadId}</div>
-                        )}
-                        {issue.discordMessageId && (
-                            <div className="text-xs font-mono break-all">Notice Message: {issue.discordMessageId}</div>
-                        )}
-                    </div>
-
-                    {(issue.discordThreadId || issue.discordMessageId) && (
-                        <div className="flex flex-col gap-2 border-b border-border pb-4">
-                            <span className="text-muted-foreground">Discord sync</span>
-                            {issue.discordThreadId && (
-                                <div className="text-xs font-mono break-all">Linked Post: {issue.discordThreadId}</div>
+                    <details className="gta-surface p-2">
+                        <summary className="cursor-pointer text-xs uppercase tracking-[0.1em] text-muted-foreground font-semibold">Debug & Integrations</summary>
+                        <div className="space-y-3 mt-2">
+                            {issue.environment && (
+                                <div className="flex flex-col gap-1.5">
+                                    <span className="text-muted-foreground text-xs">Environment</span>
+                                    <div className="flex items-center gap-2 font-medium text-sm">
+                                        <Terminal className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                        <span className="truncate" title={issue.environment}>{issue.environment}</span>
+                                    </div>
+                                </div>
                             )}
-                            {issue.discordMessageId && (
-                                <div className="text-xs font-mono break-all">Notice Message: {issue.discordMessageId}</div>
-                            )}
+
+                            <div className="flex flex-col gap-1.5">
+                                <span className="text-muted-foreground text-xs font-medium">Discord forum post</span>
+                                <form action={updateIssueDiscordPost} className="flex flex-col gap-2">
+                                    <input type="hidden" name="issueId" value={issue.id} />
+                                    <input
+                                        type="text"
+                                        name="discordPostId"
+                                        defaultValue={issue.discordThreadId || ""}
+                                        className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                                        placeholder="Paste post link or post ID"
+                                    />
+                                    <button type="submit" className="text-xs font-medium text-primary hover:underline">Save post link</button>
+                                </form>
+                                {issue.discordThreadId && (
+                                    <div className="text-[11px] font-mono break-all">Post ID: {issue.discordThreadId}</div>
+                                )}
+                                {issue.discordMessageId && (
+                                    <div className="text-[11px] font-mono break-all">Notice Message: {issue.discordMessageId}</div>
+                                )}
+                            </div>
                         </div>
-                    )}
+                    </details>
 
-                    <div className="flex flex-col gap-2 border-b border-border pb-4">
-                        <span className="text-muted-foreground">Created</span>
-                        <div className="flex items-center gap-2 font-medium">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                            {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(issue.createdAt)}
+                    <details className="gta-surface p-2">
+                        <summary className="cursor-pointer text-xs uppercase tracking-[0.1em] text-muted-foreground font-semibold">Timeline</summary>
+                        <div className="space-y-3 mt-2">
+                            <div className="flex flex-col gap-1.5">
+                                <span className="text-muted-foreground text-xs">Created</span>
+                                <div className="flex items-center gap-2 font-medium text-sm">
+                                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                                    {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(issue.createdAt)}
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <span className="text-muted-foreground text-xs">Updated</span>
+                                <div className="flex items-center gap-2 font-medium text-sm" title={issue.updatedAt.toLocaleString()}>
+                                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                                    {new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(
+                                        Math.round((issue.updatedAt.getTime() - Date.now()) / 86400000) === 0 ? 0 : Math.round((issue.updatedAt.getTime() - Date.now()) / 86400000), 'day'
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    </details>
 
-                    <div className="flex flex-col gap-2">
-                        <span className="text-muted-foreground">Updated</span>
-                        <div className="flex items-center gap-2 font-medium" title={issue.updatedAt.toLocaleString()}>
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            {new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(
-                                Math.round((issue.updatedAt.getTime() - Date.now()) / 86400000) === 0 ? 0 : Math.round((issue.updatedAt.getTime() - Date.now()) / 86400000), 'day'
-                            )}
+                    <details className="gta-surface p-2">
+                        <summary className="cursor-pointer text-xs uppercase tracking-[0.1em] text-muted-foreground font-semibold">Danger Zone</summary>
+                        <div className="mt-2">
+                            <DeleteIssueForm issueId={issue.id} />
                         </div>
-                    </div>
-
-                    <div className="flex flex-col gap-2 border-t border-border pt-4">
-                        <span className="text-muted-foreground font-medium">Danger Zone</span>
-                        <DeleteIssueForm issueId={issue.id} />
-                    </div>
-
+                    </details>
                 </div>
             </div>
 
