@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bug, Search, Bell, Settings, UserCircle } from "lucide-react";
+import { Bug, Search, Bell, Settings, UserCircle, LogOut, ChevronDown } from "lucide-react";
 import { auth } from "@/../auth";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -33,22 +33,40 @@ export async function TopNavbar() {
                 <button className="rounded-sm p-1.5 text-muted-foreground hover:bg-muted transition-colors border border-border/70">
                     <Bell className="h-3.5 w-3.5" />
                 </button>
-                <button className="rounded-sm p-1.5 text-muted-foreground hover:bg-muted transition-colors hidden sm:block border border-border/70">
+                <Link href="/settings" className="rounded-sm p-1.5 text-muted-foreground hover:bg-muted transition-colors hidden sm:block border border-border/70">
                     <Settings className="h-3.5 w-3.5" />
-                </button>
+                </Link>
 
                 {session?.user ? (
-                    session.user.image ? (
-                        <img
-                            src={session.user.image}
-                            alt="User profile"
-                            className="h-7 w-7 rounded-full border border-border cursor-pointer hover:ring-2 hover:ring-primary hover:ring-offset-1 hover:ring-offset-background transition-all object-cover"
-                        />
-                    ) : (
-                        <div className="h-7 w-7 rounded-full border border-border cursor-pointer hover:ring-2 hover:ring-primary hover:ring-offset-1 transition-all bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 text-xs">
-                            {session.user.name?.charAt(0).toUpperCase() || "U"}
+                    <details className="relative">
+                        <summary className="list-none flex items-center gap-1.5 cursor-pointer rounded-sm border border-border/70 px-1.5 py-1 hover:bg-muted transition-colors [&::-webkit-details-marker]:hidden">
+                            {session.user.image ? (
+                                <img
+                                    src={session.user.image}
+                                    alt="User profile"
+                                    className="h-6 w-6 rounded-full border border-border object-cover"
+                                />
+                            ) : (
+                                <div className="h-6 w-6 rounded-full border border-border bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px]">
+                                    {session.user.name?.charAt(0).toUpperCase() || "U"}
+                                </div>
+                            )}
+                            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                        </summary>
+                        <div className="absolute right-0 mt-2 w-44 rounded-md border border-border bg-background/95 p-1 shadow-lg shadow-black/35 backdrop-blur">
+                            <div className="px-2 py-1.5 text-[11px] uppercase tracking-[0.08em] text-muted-foreground border-b border-border/70">
+                                {session.user.name || "Signed in"}
+                            </div>
+                            <Link href="/settings" className="mt-1 flex items-center gap-2 rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
+                                <Settings className="h-3.5 w-3.5" />
+                                Settings
+                            </Link>
+                            <Link href="/api/auth/signout?callbackUrl=/" className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-xs text-rose-300 hover:bg-rose-500/10 transition-colors">
+                                <LogOut className="h-3.5 w-3.5" />
+                                Log out
+                            </Link>
                         </div>
-                    )
+                    </details>
                 ) : (
                     <Link href="/api/auth/signin?provider=discord&callbackUrl=/issues">
                         <UserCircle className="h-7 w-7 text-muted-foreground hover:text-primary transition-colors cursor-pointer" />

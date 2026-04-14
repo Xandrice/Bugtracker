@@ -64,6 +64,13 @@ const priorityStyles: Record<IssuePriority, string> = {
     URGENT: "text-red-500",
 }
 
+export const priorityLabels: Record<IssuePriority, string> = {
+    URGENT: "P0 (Immediate Attention)",
+    HIGH: "P1 (High Impact)",
+    MEDIUM: "P2 (Standard Impact)",
+    LOW: "P2 (Low Impact)",
+}
+
 export const StatusIcon = ({ status }: { status: IssueStatus }) => {
     switch (status) {
         case "OPEN": return <CircleDashed className="h-4 w-4 text-sky-500" />
@@ -345,10 +352,10 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                                 disabled={isPending && pendingIssueId === issue.id}
                                                 onChange={(e) => runWorkflowUpdate(issue.id, { priority: e.target.value as IssuePriority })}
                                             >
-                                                <option value="LOW">Low</option>
-                                                <option value="MEDIUM">Medium</option>
-                                                <option value="HIGH">High</option>
-                                                <option value="URGENT">Urgent</option>
+                                                <option value="URGENT">{priorityLabels.URGENT}</option>
+                                                <option value="HIGH">{priorityLabels.HIGH}</option>
+                                                <option value="MEDIUM">{priorityLabels.MEDIUM}</option>
+                                                <option value="LOW">{priorityLabels.LOW}</option>
                                             </select>
                                         </td>
                                         <td className="px-3 py-1">

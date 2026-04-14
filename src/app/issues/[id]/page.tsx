@@ -1,4 +1,4 @@
-import { StatusIcon, PriorityIcon, TypeIcon, statusStyles, typeStyles } from "@/components/views/DataGrid"
+import { StatusIcon, PriorityIcon, TypeIcon, priorityLabels, statusStyles, typeStyles } from "@/components/views/DataGrid"
 import { Calendar, Clock, ChevronRight, UserCircle2, MessageSquare, AlertCircle, Terminal, Tag, Code, Gamepad2, ListOrdered, Target } from "lucide-react"
 import { db } from "@/lib/db"
 import { notFound } from "next/navigation"
@@ -61,7 +61,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                 <StatusIcon status={issue.status as any} /> {issue.status.replace("_", " ")}
                             </span>
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-sm font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30">
-                                <PriorityIcon priority={issue.priority as any} /> {issue.priority}
+                                <PriorityIcon priority={issue.priority as any} /> {priorityLabels[issue.priority as keyof typeof priorityLabels] || issue.priority}
                             </span>
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-sm font-medium ${typeStyles[issue.type as keyof typeof typeStyles] || "bg-muted"}`}>
                                 <TypeIcon type={issue.type as any} /> {issue.type}
@@ -199,10 +199,10 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                     defaultValue={issue.priority}
                                     className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
                                 >
-                                    <option value="LOW">Low</option>
-                                    <option value="MEDIUM">Medium</option>
-                                    <option value="HIGH">High</option>
-                                    <option value="URGENT">Urgent</option>
+                                    <option value="URGENT">{priorityLabels.URGENT}</option>
+                                    <option value="HIGH">{priorityLabels.HIGH}</option>
+                                    <option value="MEDIUM">{priorityLabels.MEDIUM}</option>
+                                    <option value="LOW">{priorityLabels.LOW}</option>
                                 </select>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
@@ -211,10 +211,10 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                     defaultValue={issue.severity}
                                     className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
                                 >
-                                    <option value="MINOR">Minor</option>
-                                    <option value="MAJOR">Major</option>
-                                    <option value="CRITICAL">Critical</option>
-                                    <option value="BLOCKER">Blocker</option>
+                                    <option value="MINOR">Minor (1-5 affected)</option>
+                                    <option value="MAJOR">Major (6-20 affected)</option>
+                                    <option value="CRITICAL">Critical (21+ affected)</option>
+                                    <option value="BLOCKER">Blocker (Most/All affected)</option>
                                 </select>
                                 <select
                                     name="status"

@@ -4,6 +4,7 @@ import { ArrowLeft, Save, Loader2, Gamepad2, Code, Calendar, Target } from "luci
 import Link from "next/link";
 import { createIssue } from "@/app/actions";
 import { useFormStatus } from "react-dom";
+import { useState } from "react";
 
 function SubmitButton() {
     const { pending } = useFormStatus();
@@ -21,12 +22,20 @@ function SubmitButton() {
 }
 
 export default function NewIssuePage() {
+    const [severity, setSeverity] = useState("MINOR");
+    const severityImpactCopy: Record<string, string> = {
+        MINOR: "Affects a few players (1-5) with a workaround available.",
+        MAJOR: "Affects multiple players (6-20) and disrupts normal play.",
+        CRITICAL: "Affects many players (21+) and blocks core gameplay loops.",
+        BLOCKER: "Affects nearly everyone and prevents the server or feature from being used.",
+    };
+
     return (
         <div className="gta-page max-w-3xl">
             <div className="gta-hero flex flex-col gap-2">
                 <Link
                     href="/issues"
-                    className="inline-flex items-center gap-1.5 w-fit rounded-sm border border-border/70 bg-muted/35 px-2 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-foreground hover:text-white hover:border-primary/50 transition-colors"
+                    className="relative z-10 inline-flex items-center gap-1.5 w-fit rounded-sm border border-border/70 bg-muted/45 px-2.5 py-1.5 leading-none text-[11px] font-semibold uppercase tracking-[0.08em] text-white/95 hover:text-white hover:border-primary/50 transition-colors"
                 >
                     <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
                     Back to issues
@@ -75,10 +84,9 @@ export default function NewIssuePage() {
                             name="priority"
                             className="flex h-10 w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                         >
-                            <option value="LOW">Low</option>
-                            <option value="MEDIUM">Medium</option>
-                            <option value="HIGH">High</option>
-                            <option value="URGENT">Urgent</option>
+                            <option value="URGENT">P0 (Immediate Attention)</option>
+                            <option value="HIGH">P1 (High Impact)</option>
+                            <option value="MEDIUM">P2 (Standard Impact)</option>
                         </select>
                     </div>
                     <div className="space-y-2">
@@ -86,13 +94,16 @@ export default function NewIssuePage() {
                         <select
                             id="severity"
                             name="severity"
+                            value={severity}
+                            onChange={(e) => setSeverity(e.target.value)}
                             className="flex h-10 w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                         >
-                            <option value="MINOR">Minor</option>
-                            <option value="MAJOR">Major</option>
-                            <option value="CRITICAL">Critical</option>
-                            <option value="BLOCKER">Blocker</option>
+                            <option value="MINOR">Minor (1-5 affected)</option>
+                            <option value="MAJOR">Major (6-20 affected)</option>
+                            <option value="CRITICAL">Critical (21+ affected)</option>
+                            <option value="BLOCKER">Blocker (Most/All affected)</option>
                         </select>
+                        <p className="text-xs text-muted-foreground">{severityImpactCopy[severity]}</p>
                     </div>
                 </div>
 
@@ -136,16 +147,7 @@ export default function NewIssuePage() {
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                        <label htmlFor="environment" className="text-sm font-medium leading-none">Environment</label>
-                        <input
-                            id="environment"
-                            name="environment"
-                            className="flex h-10 w-full rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                            placeholder="E.g. Windows, FXServer 6683"
-                        />
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <label htmlFor="tags" className="text-sm font-medium leading-none">Tags</label>
                         <input
@@ -166,7 +168,7 @@ export default function NewIssuePage() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                     <div className="space-y-2">
                         <label htmlFor="dueDate" className="text-sm font-medium leading-none flex items-center gap-1.5">
                             <Calendar className="h-4 w-4 text-muted-foreground" /> Due date
@@ -177,21 +179,6 @@ export default function NewIssuePage() {
                             type="date"
                             className="flex h-10 w-full rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                         />
-                    </div>
-                    <div className="space-y-2">
-                        <label htmlFor="storyPoints" className="text-sm font-medium leading-none">Story points</label>
-                        <select
-                            id="storyPoints"
-                            name="storyPoints"
-                            className="flex h-10 w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                        >
-                            <option value="">—</option>
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="3">3</option>
-                            <option value="5">5</option>
-                            <option value="8">8</option>
-                        </select>
                     </div>
                 </div>
 
@@ -212,16 +199,6 @@ export default function NewIssuePage() {
                         name="reproductionSteps"
                         className="flex min-h-[80px] w-full rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary resize-y"
                         placeholder="1. Go to... 2. Click... 3. See error"
-                    />
-                </div>
-
-                <div className="space-y-2">
-                    <label htmlFor="expectedBehavior" className="text-sm font-medium leading-none">Expected behavior</label>
-                    <textarea
-                        id="expectedBehavior"
-                        name="expectedBehavior"
-                        className="flex min-h-[80px] w-full rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary resize-y"
-                        placeholder="What should happen instead?"
                     />
                 </div>
 

@@ -95,7 +95,7 @@ select option {
 }
 
 .gta-hero {
-  @apply relative overflow-hidden rounded-lg border border-border/90 p-4;
+  @apply relative overflow-visible rounded-lg border border-border/90 p-4;
   background:
     linear-gradient(115deg, color-mix(in oklab, var(--muted), #000 30%) 0%, color-mix(in oklab, var(--background), #000 10%) 62%, color-mix(in oklab, var(--background), #00152e 20%) 100%),
     url("/gta-stripes.svg");

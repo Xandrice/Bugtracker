@@ -27,7 +27,7 @@ export default function NewNotePage() {
             <div className="gta-hero flex flex-col gap-2">
                 <Link
                     href="/notes"
-                    className="inline-flex items-center gap-1.5 w-fit rounded-sm border border-border/70 bg-muted/35 px-2 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-foreground hover:text-white hover:border-primary/50 transition-colors"
+                    className="relative z-10 inline-flex items-center gap-1.5 w-fit rounded-sm border border-border/70 bg-muted/45 px-2.5 py-1.5 leading-none text-[11px] font-semibold uppercase tracking-[0.08em] text-white/95 hover:text-white hover:border-primary/50 transition-colors"
                 >
                     <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
                     Back to notes
