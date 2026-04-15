@@ -12,6 +12,7 @@ export default async function BugTriagePage() {
 
     const issues: IssueSnippet[] = rawIssues.map((i: any) => ({
         id: i.id,
+        issueNumber: i.issueNumber ?? null,
         title: i.title,
         type: i.type as any,
         status: i.status as any,

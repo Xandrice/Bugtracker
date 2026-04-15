@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAppBaseUrl, sendDiscordChannelMessage, sendDiscordDM } from "@/lib/discord";
 import { getStaffUsers } from "@/lib/staff";
+import { formatIssueRef } from "@/lib/issue-ids";
 
 const ALLOWED_STATUS = ["OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const;
 const ALLOWED_PRIORITY = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
@@ -14,6 +15,19 @@ const ALLOWED_SEVERITY = ["MINOR", "MAJOR", "CRITICAL", "BLOCKER"] as const;
 
 function redirectToSignIn(): never {
     redirect("/api/auth/signin");
+}
+
+async function getIssuePublicRef(issueId: string) {
+    const issue = await db.issue.findUnique({
+        where: { id: issueId },
+        select: { issueNumber: true },
+    });
+    return formatIssueRef(issue?.issueNumber, issueId);
+}
+
+async function redirectToIssue(issueId: string): Promise<never> {
+    const issueRef = await getIssuePublicRef(issueId);
+    redirect(`/issues/${issueRef}`);
 }
 
 function revalidateIssuePaths(issueId: string) {
@@ -48,6 +62,7 @@ function parseDiscordPostInput(value: string | null): { postId: string | null; p
 export async function createIssue(formData: FormData) {
     const session = await auth();
     if (!session?.user?.id) redirectToSignIn();
+    const reporterId = session.user.id;
 
     const title = formData.get("title") as string;
     const description = formData.get("description") as string | null;
@@ -74,45 +89,67 @@ export async function createIssue(formData: FormData) {
     if (discordPostId) {
         const existing = await db.issue.findUnique({
             where: { discordThreadId: discordPostId },
-            select: { id: true },
+            select: { id: true, issueNumber: true },
         });
 
         if (existing) {
-            redirect(`/issues/${existing.id}`);
+            redirect(`/issues/${formatIssueRef(existing.issueNumber, existing.id)}`);
         }
     }
 
     let issue;
     try {
-        issue = await db.issue.create({
-            data: {
-                title,
-                description,
-                type,
-                priority,
-                severity,
-                environment,
-                tags,
-                resourceName: resourceName || undefined,
-                serverVersion: serverVersion || undefined,
-                reproductionSteps: reproductionSteps || undefined,
-                expectedBehavior: expectedBehavior || undefined,
-                dueDate: dueDateRaw ? new Date(dueDateRaw) : undefined,
-                storyPoints: storyPointsRaw ? parseInt(storyPointsRaw, 10) : undefined,
-                label: label || undefined,
-                discordChannelId: undefined,
-                discordThreadId: discordPostId || undefined,
-                reporterId: session.user.id,
+        let createdIssue = null;
+        for (let attempt = 0; attempt < 3 && !createdIssue; attempt += 1) {
+            try {
+                createdIssue = await db.$transaction(async (tx) => {
+                    const lastIssue = await tx.issue.findFirst({
+                        where: { issueNumber: { not: null } },
+                        orderBy: { issueNumber: "desc" },
+                        select: { issueNumber: true },
+                    });
+                    const nextIssueNumber = (lastIssue?.issueNumber ?? 0) + 1;
+
+                    return tx.issue.create({
+                        data: {
+                            issueNumber: nextIssueNumber,
+                            title,
+                            description,
+                            type,
+                            priority,
+                            severity,
+                            environment,
+                            tags,
+                            resourceName: resourceName || undefined,
+                            serverVersion: serverVersion || undefined,
+                            reproductionSteps: reproductionSteps || undefined,
+                            expectedBehavior: expectedBehavior || undefined,
+                            dueDate: dueDateRaw ? new Date(dueDateRaw) : undefined,
+                            storyPoints: storyPointsRaw ? parseInt(storyPointsRaw, 10) : undefined,
+                            label: label || undefined,
+                            discordChannelId: undefined,
+                            discordThreadId: discordPostId || undefined,
+                            reporter: { connect: { id: reporterId } },
+                        }
+                    });
+                });
+            } catch (error: any) {
+                if (error?.code !== "P2002") throw error;
             }
-        });
+        }
+
+        if (!createdIssue) {
+            throw new Error("Failed to allocate next issue number");
+        }
+        issue = createdIssue;
     } catch (error: any) {
         if (error?.code === "P2002" && discordPostId) {
             const existing = await db.issue.findUnique({
                 where: { discordThreadId: discordPostId },
-                select: { id: true },
+                select: { id: true, issueNumber: true },
             });
             if (existing) {
-                redirect(`/issues/${existing.id}`);
+                redirect(`/issues/${formatIssueRef(existing.issueNumber, existing.id)}`);
             }
         }
         throw error;
@@ -121,7 +158,7 @@ export async function createIssue(formData: FormData) {
     // If a forum post ID is linked, publish an initial traceability message there.
     if (discordPostId) {
         const baseUrl = getAppBaseUrl();
-        const issueLink = `${baseUrl}/issues/${issue.id}`;
+        const issueLink = `${baseUrl}/issues/${formatIssueRef(issue.issueNumber, issue.id)}`;
         const introMessage = [
             "This has been added to the developer tracker.",
             `Issue: **${issue.title}**`,
@@ -228,7 +265,7 @@ export async function saveIssueWorkflow(formData: FormData) {
 
     if (result?.error === "Unauthorized") redirectToSignIn();
     if (result?.error) throw new Error(result.error);
-    redirect(`/issues/${issueId}`);
+    await redirectToIssue(issueId);
 }
 
 export async function toggleIssueResolved(formData: FormData) {
@@ -240,7 +277,7 @@ export async function toggleIssueResolved(formData: FormData) {
     const result = await updateIssueWorkflow(issueId, { status: nextStatus });
     if (result?.error === "Unauthorized") redirectToSignIn();
     if (result?.error) throw new Error(result.error);
-    redirect(`/issues/${issueId}`);
+    await redirectToIssue(issueId);
 }
 
 export async function updateIssue(issueId: string, formData: FormData) {
@@ -369,7 +406,8 @@ export async function createTeamNote(formData: FormData) {
         for (const target of targets) {
             if (!target.discordId) continue;
             const baseUrl = getAppBaseUrl();
-            const targetLink = issueId ? `${baseUrl}/issues/${issueId}` : `${baseUrl}/notes`;
+            const issueRef = issueId ? await getIssuePublicRef(issueId) : null;
+            const targetLink = issueRef ? `${baseUrl}/issues/${issueRef}` : `${baseUrl}/notes`;
 
             const senderName = session.user.name || "Someone";
             let msg = `You were tagged in a BugTracker comment by **${senderName}**: \n${targetLink}`;
@@ -452,11 +490,11 @@ export async function updateIssueDiscordPost(formData: FormData) {
                 discordThreadId: parsed.postId,
                 id: { not: issueId },
             },
-            select: { id: true },
+            select: { id: true, issueNumber: true },
         });
 
         if (existing) {
-            throw new Error(`This Discord post is already linked to issue ${existing.id}.`);
+            throw new Error(`This Discord post is already linked to issue ${formatIssueRef(existing.issueNumber, existing.id)}.`);
         }
     }
 
@@ -469,7 +507,7 @@ export async function updateIssueDiscordPost(formData: FormData) {
     });
 
     revalidateIssuePaths(issueId);
-    redirect(`/issues/${issueId}`);
+    await redirectToIssue(issueId);
 }
 
 export async function deleteIssue(formData: FormData) {

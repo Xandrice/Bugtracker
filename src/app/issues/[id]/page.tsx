@@ -1,7 +1,7 @@
 import { StatusIcon, PriorityIcon, TypeIcon, priorityLabels, statusStyles, typeStyles } from "@/components/views/DataGrid"
 import { Calendar, Clock, ChevronRight, UserCircle2, MessageSquare, AlertCircle, Terminal, Tag, Code, Gamepad2, ListOrdered, Target } from "lucide-react"
 import { db } from "@/lib/db"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { auth } from "@/../auth"
 import { saveIssueWorkflow, setAssignee, toggleIssueResolved, updateIssueDiscordPost } from "@/app/actions"
 import CommentForm from "./components/CommentForm"
@@ -10,20 +10,15 @@ import { getStaffUsers } from "@/lib/staff"
 import { syncIssueNotesFromDiscord } from "@/lib/discordSync"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { formatIssueRef, parseIssueRef } from "@/lib/issue-ids"
 
 export default async function IssueDetailsPage({ params }: { params: Promise<{ id: string }> }) {
     const session = await auth();
     const resolvedParams = await params;
-
-    // Pull latest Discord thread replies into notes for linked issues.
-    try {
-        await syncIssueNotesFromDiscord(resolvedParams.id);
-    } catch (error) {
-        console.error("Failed to sync Discord notes for issue", resolvedParams.id, error);
-    }
+    const parsedIssueNumber = parseIssueRef(resolvedParams.id);
 
     const issue: any = await db.issue.findUnique({
-        where: { id: resolvedParams.id },
+        where: parsedIssueNumber ? { issueNumber: parsedIssueNumber } : { id: resolvedParams.id },
         include: {
             reporter: true,
             assignee: true,
@@ -38,7 +33,22 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
         notFound();
     }
 
+    const publicIssueRef = formatIssueRef(issue.issueNumber, issue.id);
+    if (resolvedParams.id.toLowerCase() !== publicIssueRef.toLowerCase()) {
+        redirect(`/issues/${publicIssueRef}`);
+    }
+
+    try {
+        await syncIssueNotesFromDiscord(issue.id);
+    } catch (error) {
+        console.error("Failed to sync Discord notes for issue", issue.id, error);
+    }
+
     const assignableUsers = await getStaffUsers();
+    const workflowType = ["BUG", "FEATURE", "TASK"].includes(issue.type) ? issue.type : "BUG";
+    const workflowPriority = ["URGENT", "HIGH", "MEDIUM", "LOW"].includes(issue.priority) ? issue.priority : "MEDIUM";
+    const workflowSeverity = ["MINOR", "MAJOR", "CRITICAL", "BLOCKER"].includes(issue.severity) ? issue.severity : "MINOR";
+    const workflowStatus = ["OPEN", "IN_PROGRESS", "REVIEW", "DONE"].includes(issue.status) ? issue.status : "OPEN";
 
     return (
         <div className="flex flex-col h-full overflow-hidden flex-1 md:flex-row">
@@ -49,7 +59,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <span className="font-display text-sm uppercase tracking-[0.14em]">Renegade Roleplay</span>
                             <ChevronRight className="h-3.5 w-3.5" />
-                            <span className="font-mono text-primary">{issue.id.slice(-8)}</span>
+                            <span className="font-mono text-primary uppercase">{publicIssueRef}</span>
                         </div>
 
                         <h1 className="gta-heading text-3xl leading-tight">
@@ -185,47 +195,59 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                         <form action={saveIssueWorkflow} className="space-y-2">
                             <input type="hidden" name="issueId" value={issue.id} />
                             <div className="grid grid-cols-2 gap-2">
-                                <select
-                                    name="type"
-                                    defaultValue={issue.type}
-                                    className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
-                                >
-                                    <option value="BUG">Bug</option>
-                                    <option value="FEATURE">Feature</option>
-                                    <option value="TASK">Task</option>
-                                </select>
-                                <select
-                                    name="priority"
-                                    defaultValue={issue.priority}
-                                    className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
-                                >
-                                    <option value="URGENT">{priorityLabels.URGENT}</option>
-                                    <option value="HIGH">{priorityLabels.HIGH}</option>
-                                    <option value="MEDIUM">{priorityLabels.MEDIUM}</option>
-                                    <option value="LOW">{priorityLabels.LOW}</option>
-                                </select>
+                                <div className="space-y-1">
+                                    <label className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Type</label>
+                                    <select
+                                        name="type"
+                                        defaultValue={workflowType}
+                                        className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                                    >
+                                        <option value="BUG">Bug</option>
+                                        <option value="FEATURE">Feature</option>
+                                        <option value="TASK">Task</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Priority</label>
+                                    <select
+                                        name="priority"
+                                        defaultValue={workflowPriority}
+                                        className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                                    >
+                                        <option value="URGENT">{priorityLabels.URGENT}</option>
+                                        <option value="HIGH">{priorityLabels.HIGH}</option>
+                                        <option value="MEDIUM">{priorityLabels.MEDIUM}</option>
+                                        <option value="LOW">{priorityLabels.LOW}</option>
+                                    </select>
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
-                                <select
-                                    name="severity"
-                                    defaultValue={issue.severity}
-                                    className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
-                                >
-                                    <option value="MINOR">Minor (1-5 affected)</option>
-                                    <option value="MAJOR">Major (6-20 affected)</option>
-                                    <option value="CRITICAL">Critical (21+ affected)</option>
-                                    <option value="BLOCKER">Blocker (Most/All affected)</option>
-                                </select>
-                                <select
-                                    name="status"
-                                    defaultValue={issue.status}
-                                    className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
-                                >
-                                    <option value="OPEN">Open</option>
-                                    <option value="IN_PROGRESS">In Progress</option>
-                                    <option value="REVIEW">Review</option>
-                                    <option value="DONE">Done</option>
-                                </select>
+                                <div className="space-y-1">
+                                    <label className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Severity</label>
+                                    <select
+                                        name="severity"
+                                        defaultValue={workflowSeverity}
+                                        className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                                    >
+                                        <option value="MINOR">Minor (1-5 affected)</option>
+                                        <option value="MAJOR">Major (6-20 affected)</option>
+                                        <option value="CRITICAL">Critical (21+ affected)</option>
+                                        <option value="BLOCKER">Blocker (Most/All affected)</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Status</label>
+                                    <select
+                                        name="status"
+                                        defaultValue={workflowStatus}
+                                        className="w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                                    >
+                                        <option value="OPEN">Open</option>
+                                        <option value="IN_PROGRESS">In Progress</option>
+                                        <option value="REVIEW">Review</option>
+                                        <option value="DONE">Done</option>
+                                    </select>
+                                </div>
                             </div>
                             <button type="submit" className="text-xs font-medium text-primary hover:underline">Save workflow fields</button>
                         </form>
