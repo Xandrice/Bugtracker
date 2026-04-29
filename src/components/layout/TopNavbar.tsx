@@ -68,7 +68,7 @@ export async function TopNavbar() {
                         </div>
                     </details>
                 ) : (
-                    <Link href="/api/auth/signin?provider=discord&callbackUrl=/issues">
+                    <Link href="/api/auth/signin?callbackUrl=/issues">
                         <UserCircle className="h-7 w-7 text-muted-foreground hover:text-primary transition-colors cursor-pointer" />
                     </Link>
                 )}

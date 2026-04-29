@@ -7,6 +7,8 @@ import { redirect } from "next/navigation";
 import { getAppBaseUrl, sendDiscordChannelMessage, sendDiscordDM } from "@/lib/discord";
 import { getStaffUsers } from "@/lib/staff";
 import { formatIssueRef } from "@/lib/issue-ids";
+import { normalizeNoteThreadCategory } from "@/lib/note-categories";
+import { canManageNote, getNotePermissionContext } from "@/lib/note-permissions";
 
 const ALLOWED_STATUS = ["OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const;
 const ALLOWED_PRIORITY = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
@@ -57,6 +59,38 @@ function parseDiscordPostInput(value: string | null): { postId: string | null; p
     const guildId = (process.env.DISCORD_GUILD_ID || "").trim();
     const postLink = guildId ? `https://discord.com/channels/${guildId}/${raw}` : null;
     return { postId: raw, postLink };
+}
+
+async function notifyMentionedUsers(input: {
+    content: string;
+    senderName: string;
+    targetLink: string;
+}) {
+    const mentions = input.content.match(/@([A-Za-z0-9_.-]+)/g);
+    if (!mentions || mentions.length === 0) return;
+
+    const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const mentionTokens = Array.from(
+        new Set(
+            mentions
+                .map((m) => normalize(m.slice(1).trim()))
+                .filter(Boolean)
+        )
+    );
+
+    const staffUsers = await getStaffUsers();
+    const targets = staffUsers.filter((u) => {
+        if (!u.name || !u.discordId) return false;
+        const normalizedName = normalize(u.name);
+        return mentionTokens.some((token) => normalizedName.includes(token));
+    });
+
+    for (const target of targets) {
+        if (!target.discordId) continue;
+        let msg = `You were tagged in BugTracker by **${input.senderName}**: \n${input.targetLink}`;
+        msg += `\n\n> ${input.content.replace(/\n/g, "\n> ")}`;
+        await sendDiscordDM(target.discordId, msg);
+    }
 }
 
 export async function createIssue(formData: FormData) {
@@ -369,60 +403,203 @@ export async function createTeamNote(formData: FormData) {
     const title = formData.get("title") as string | null;
     const content = formData.get("content") as string;
     const issueId = formData.get("issueId") as string | null;
+    const threadId = formData.get("threadId") as string | null;
+    const threadCategory = normalizeNoteThreadCategory(formData.get("category") as string | null);
 
     if (!content) throw new Error("Missing content");
 
-    const data: any = {
-        title,
-        content,
-        authorId: session.user.id,
-    };
+    const baseUrl = getAppBaseUrl();
+    const senderName = session.user.name || "Someone";
 
     if (issueId) {
-        data.issueId = issueId;
-    }
-
-    await db.note.create({ data });
-
-    // Handle Discord DMs for mentions
-    const mentions = content.match(/@([A-Za-z0-9_.-]+)/g);
-    if (mentions && mentions.length > 0) {
-        const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
-        const mentionTokens = Array.from(
-            new Set(
-                mentions
-                    .map((m) => normalize(m.slice(1).trim()))
-                    .filter(Boolean)
-            )
-        );
-
-        const staffUsers = await getStaffUsers();
-        const targets = staffUsers.filter((u) => {
-            if (!u.name || !u.discordId) return false;
-            const normalizedName = normalize(u.name);
-            return mentionTokens.some((token) => normalizedName.includes(token));
+        await db.note.create({
+            data: {
+                title,
+                content,
+                authorId: session.user.id,
+                issueId,
+            }
         });
 
-        for (const target of targets) {
-            if (!target.discordId) continue;
-            const baseUrl = getAppBaseUrl();
-            const issueRef = issueId ? await getIssuePublicRef(issueId) : null;
-            const targetLink = issueRef ? `${baseUrl}/issues/${issueRef}` : `${baseUrl}/notes`;
+        const issueRef = await getIssuePublicRef(issueId);
+        await notifyMentionedUsers({
+            content,
+            senderName,
+            targetLink: `${baseUrl}/issues/${issueRef}`,
+        });
 
-            const senderName = session.user.name || "Someone";
-            let msg = `You were tagged in a BugTracker comment by **${senderName}**: \n${targetLink}`;
-            msg += `\n\n> ${content.replace(/\n/g, '\n> ')}`;
-
-            await sendDiscordDM(target.discordId, msg);
-        }
+        revalidatePath(`/issues/${issueId}`);
+        return;
     }
+
+    if (threadId) {
+        const thread = await db.note.findFirst({
+            where: {
+                id: threadId,
+                issueId: null,
+                isThread: true,
+                parentId: null,
+            },
+            select: { id: true },
+        });
+        if (!thread) throw new Error("Thread not found");
+
+        await db.note.create({
+            data: {
+                content,
+                authorId: session.user.id,
+                parentId: threadId,
+                issueId: null,
+                isThread: false,
+            }
+        });
+
+        await notifyMentionedUsers({
+            content,
+            senderName,
+            targetLink: `${baseUrl}/notes/${threadId}`,
+        });
+
+        revalidatePath(`/notes/${threadId}`);
+        revalidatePath("/notes");
+        return;
+    }
+
+    if (!title || !title.trim()) throw new Error("Missing title");
+
+    const thread = await db.note.create({
+        data: {
+            title: title.trim(),
+            content,
+            authorId: session.user.id,
+            issueId: null,
+            isThread: true,
+            category: threadCategory,
+        }
+    });
+
+    await notifyMentionedUsers({
+        content,
+        senderName,
+        targetLink: `${baseUrl}/notes/${thread.id}`,
+    });
 
     revalidatePath("/notes");
-    if (!issueId) {
-        redirect("/notes");
-    } else {
-        revalidatePath(`/issues/${issueId}`);
+    redirect(`/notes/${thread.id}`);
+}
+
+export async function updateTeamThread(formData: FormData) {
+    const session = await auth();
+    if (!session?.user?.id) redirectToSignIn();
+
+    const threadId = (formData.get("threadId") as string | null)?.trim();
+    const title = (formData.get("title") as string | null)?.trim();
+    const content = (formData.get("content") as string | null)?.trim();
+    const category = normalizeNoteThreadCategory(formData.get("category") as string | null);
+
+    if (!threadId) throw new Error("Missing threadId");
+    if (!title) throw new Error("Missing title");
+    if (!content) throw new Error("Missing content");
+
+    const thread = await db.note.findFirst({
+        where: {
+            id: threadId,
+            issueId: null,
+            isThread: true,
+            parentId: null,
+        },
+        select: {
+            id: true,
+            authorId: true,
+        },
+    });
+    if (!thread) throw new Error("Thread not found");
+
+    const permissionContext = await getNotePermissionContext(session.user.id);
+    if (!canManageNote(permissionContext, thread.authorId)) {
+        throw new Error("You do not have permission to edit this thread.");
     }
+
+    await db.note.update({
+        where: { id: threadId },
+        data: {
+            title,
+            content,
+            category,
+        },
+    });
+
+    revalidatePath("/notes");
+    revalidatePath(`/notes/${threadId}`);
+    redirect(`/notes/${threadId}`);
+}
+
+export async function deleteTeamThread(formData: FormData) {
+    const session = await auth();
+    if (!session?.user?.id) redirectToSignIn();
+
+    const threadId = (formData.get("threadId") as string | null)?.trim();
+    if (!threadId) throw new Error("Missing threadId");
+
+    const thread = await db.note.findFirst({
+        where: {
+            id: threadId,
+            issueId: null,
+            isThread: true,
+            parentId: null,
+        },
+        select: {
+            id: true,
+            authorId: true,
+        },
+    });
+    if (!thread) throw new Error("Thread not found");
+
+    const permissionContext = await getNotePermissionContext(session.user.id);
+    if (!canManageNote(permissionContext, thread.authorId)) {
+        throw new Error("You do not have permission to delete this thread.");
+    }
+
+    await db.note.delete({
+        where: { id: threadId },
+    });
+
+    revalidatePath("/notes");
+    redirect("/notes");
+}
+
+export async function deleteTeamReply(formData: FormData) {
+    const session = await auth();
+    if (!session?.user?.id) redirectToSignIn();
+
+    const replyId = (formData.get("replyId") as string | null)?.trim();
+    const threadId = (formData.get("threadId") as string | null)?.trim();
+    if (!replyId || !threadId) throw new Error("Missing replyId or threadId");
+
+    const reply = await db.note.findFirst({
+        where: {
+            id: replyId,
+            parentId: threadId,
+            issueId: null,
+        },
+        select: {
+            id: true,
+            authorId: true,
+        },
+    });
+    if (!reply) throw new Error("Reply not found");
+
+    const permissionContext = await getNotePermissionContext(session.user.id);
+    if (!canManageNote(permissionContext, reply.authorId)) {
+        throw new Error("You do not have permission to delete this reply.");
+    }
+
+    await db.note.delete({
+        where: { id: replyId },
+    });
+
+    revalidatePath("/notes");
+    revalidatePath(`/notes/${threadId}`);
 }
 
 export async function addProjectMember(formData: FormData) {

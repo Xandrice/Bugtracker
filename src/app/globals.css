@@ -13,14 +13,14 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-success: var(--success);
   --color-warning: var(--warning);
-  --color-danger: var(--danger);
+  --color-danger: var(--danger); 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-display: var(--font-bebas-neue);
 }
 
 :root {
-  --background: #f3f5fb;
+  --background: #ececef;
   --foreground: #0c1220;
 
   --primary: #3ba9ff;
@@ -29,11 +29,11 @@
   --accent: #ff5a4f;
   --accent-foreground: #210706;
 
-  --muted: #dde3f2;
+  --muted: #dddfe4;
   --muted-foreground: #4d5a75;
 
-  --border: #cad4ea;
-  --input: #c1cee7;
+  --border: #c8ccd6;
+  --input: #c0c5d1;
 
   --success: #4fc3a8;
   --warning: #ffb64a;
@@ -41,8 +41,8 @@
 }
 
 .dark {
-  --background: #060b17;
-  --foreground: #e6edf9;
+  --background: #1a1a1c;
+  --foreground: #ececef;
 
   --primary: #3ca7ff;
   --primary-foreground: #04111f;
@@ -50,11 +50,11 @@
   --accent: #ff5a4f;
   --accent-foreground: #250908;
 
-  --muted: #0b1324;
-  --muted-foreground: #8d9dbb;
+  --muted: #1f1f22;
+  --muted-foreground: #a0a0a8;
 
-  --border: #1a2942;
-  --input: #17243a;
+  --border: #2a2a2e;
+  --input: #28282c;
 
   --success: #59d7b8;
   --warning: #ffc15a;
@@ -65,7 +65,7 @@ body {
   background: var(--background);
   color: var(--foreground);
   background-image:
-    linear-gradient(180deg, color-mix(in oklab, var(--background), #000 16%) 0%, var(--background) 26%, color-mix(in oklab, var(--background), #001b40 8%) 100%),
+    linear-gradient(180deg, color-mix(in oklab, var(--background), #000 16%) 0%, var(--background) 26%, color-mix(in oklab, var(--background), #000 8%) 100%),
     url("/ops-grid.svg"),
     url("/gta-noise.svg");
   background-attachment: fixed;
@@ -97,7 +97,7 @@ select option {
 .gta-hero {
   @apply relative overflow-visible rounded-lg border border-border/90 p-4;
   background:
-    linear-gradient(115deg, color-mix(in oklab, var(--muted), #000 30%) 0%, color-mix(in oklab, var(--background), #000 10%) 62%, color-mix(in oklab, var(--background), #00152e 20%) 100%),
+    linear-gradient(115deg, color-mix(in oklab, var(--muted), #000 30%) 0%, color-mix(in oklab, var(--background), #000 10%) 62%, color-mix(in oklab, var(--background), #000 20%) 100%),
     url("/gta-stripes.svg");
   background-size: cover;
   box-shadow: inset 0 1px 0 color-mix(in oklab, var(--foreground), transparent 88%), 0 20px 45px -30px color-mix(in oklab, var(--primary), #000 78%);

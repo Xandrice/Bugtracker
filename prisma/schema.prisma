@@ -99,12 +99,17 @@ model Note {
   id               String  @id @default(cuid())
   title            String?
   content          String
+  isThread         Boolean @default(false)
+  category         String?
+  parentId         String?
   source           String  @default("APP") // APP, DISCORD
   discordMessageId String? @unique
   discordAuthorId  String?
   discordAuthorTag String?
   authorId         String
   author           User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent           Note?   @relation("NoteReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies          Note[]  @relation("NoteReplies")
   issueId          String?
   issue            Issue?  @relation(fields: [issueId], references: [id], onDelete: Cascade)
 
