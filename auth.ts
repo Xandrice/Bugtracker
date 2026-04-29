@@ -1,4 +1,5 @@
 import NextAuth from "next-auth"
+import type { Session } from "next-auth"
 import Discord from "next-auth/providers/discord"
 import Credentials from "next-auth/providers/credentials"
 import { PrismaAdapter } from "@auth/prisma-adapter"
@@ -93,10 +94,8 @@ async function getOrCreateDevUser() {
     })
 }
 
-export const auth = async (
-    ...args: Parameters<typeof nextAuthAuth>
-): Promise<Awaited<ReturnType<typeof nextAuthAuth>>> => {
-    const session = await nextAuthAuth(...args)
+export const auth = async (): Promise<Session | null> => {
+    const session = await nextAuthAuth()
     if (session?.user?.id || !enableDevAutoAuth) return session
 
     let devUser: Awaited<ReturnType<typeof getOrCreateDevUser>> | null = null
@@ -119,5 +118,5 @@ export const auth = async (
         expires: session?.expires ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     }
 
-    return mergedSession as Awaited<ReturnType<typeof nextAuthAuth>>
+    return mergedSession as Session
 }
