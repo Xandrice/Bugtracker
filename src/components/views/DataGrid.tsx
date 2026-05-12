@@ -224,7 +224,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
     };
 
     const selectClasses =
-        "text-[11px] h-7 rounded-sm border-2 border-border bg-card px-2 uppercase tracking-[0.06em] text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40";
+        "text-[11px] h-7 rounded-sm border-2 border-border px-2 uppercase tracking-[0.06em] shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40";
 
     return (
         <div className="flex flex-col gap-4">
@@ -234,7 +234,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                     <select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
-                        className="text-[11px] bg-card text-foreground px-2.5 py-1.5 rounded-sm border-2 border-border shadow-sm transition-colors outline-none focus:ring-2 focus:ring-primary/40 appearance-none hover:bg-muted/80 uppercase tracking-[0.06em]"
+                        className="text-[11px] px-2.5 py-1.5 rounded-sm border-2 border-border shadow-sm transition-colors outline-none focus:ring-2 focus:ring-primary/40 appearance-none hover:opacity-90 uppercase tracking-[0.06em]"
                     >
                         <option value="ALL">Status: All</option>
                         <option value="OPEN">Open</option>
@@ -245,7 +245,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                     <select
                         value={typeFilter}
                         onChange={(e) => setTypeFilter(e.target.value)}
-                        className="text-[11px] bg-card text-foreground px-2.5 py-1.5 rounded-sm border-2 border-border shadow-sm transition-colors outline-none focus:ring-2 focus:ring-primary/40 appearance-none hover:bg-muted/80 uppercase tracking-[0.06em]"
+                        className="text-[11px] px-2.5 py-1.5 rounded-sm border-2 border-border shadow-sm transition-colors outline-none focus:ring-2 focus:ring-primary/40 appearance-none hover:opacity-90 uppercase tracking-[0.06em]"
                     >
                         <option value="ALL">Type: All</option>
                         <option value="BUG">Bug</option>
@@ -255,7 +255,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                     <select
                         value={assigneeFilter}
                         onChange={(e) => setAssigneeFilter(e.target.value)}
-                        className="text-[11px] bg-card text-foreground px-2.5 py-1.5 rounded-sm border-2 border-border shadow-sm transition-colors outline-none focus:ring-2 focus:ring-primary/40 appearance-none hover:bg-muted/80 uppercase tracking-[0.06em]"
+                        className="text-[11px] px-2.5 py-1.5 rounded-sm border-2 border-border shadow-sm transition-colors outline-none focus:ring-2 focus:ring-primary/40 appearance-none hover:opacity-90 uppercase tracking-[0.06em]"
                     >
                         <option value="ALL">Assignee: Anyone</option>
                         <option value="UNASSIGNED">Unassigned</option>

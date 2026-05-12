@@ -52,7 +52,7 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
                             id="edit-priority"
                             name="priority"
                             defaultValue={workflowPriority}
-                            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                            className="w-full rounded-lg border border-input px-3 py-2 text-sm"
                         >
                             <option value="URGENT">{priorityLabels.URGENT}</option>
                             <option value="HIGH">{priorityLabels.HIGH}</option>
@@ -68,7 +68,7 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
                             id="edit-severity"
                             name="severity"
                             defaultValue={workflowSeverity}
-                            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                            className="w-full rounded-lg border border-input px-3 py-2 text-sm"
                         >
                             <option value="MINOR">Minor (1–5 affected)</option>
                             <option value="MAJOR">Major (6–20 affected)</option>
@@ -127,7 +127,7 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
                             id="edit-label"
                             name="label"
                             defaultValue={issue.label ?? ""}
-                            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                            className="w-full rounded-lg border border-input px-3 py-2 text-sm"
                         >
                             <option value="">—</option>
                             <option value="SCRIPT">Script</option>

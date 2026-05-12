@@ -21,7 +21,7 @@
 }
 
 :root {
-  color-scheme: light;
+  /* color-scheme set on html below */
   /* Light: stronger separation — page chrome vs raised cards/panels */
   --background: #d3d8e3;
   --foreground: #111827;
@@ -46,7 +46,7 @@
 }
 
 .dark {
-  color-scheme: dark;
+  /* color-scheme set on html.dark below */
   --background: #1a1a1c;
   --foreground: #ececef;
 
@@ -69,6 +69,14 @@
   --danger: #ff7770;
 }
 
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -88,12 +96,13 @@ h3,
   letter-spacing: 0.04em;
 }
 
-/* Closed <select> appearance only — do not style `option`; OS paints the
-   dropdown list and forced fg/bg breaks highlight contrast (e.g. light blue
-   selection + light text on Windows). */
+/* Native <select> popup (esp. Windows + Chromium) uses system theming.
+   Use CSS UI Field colors so closed state + option list match color-scheme.
+   Avoid bg-* / text-* utilities on selects — they override this and can cause
+   dark option text on a dark popup. */
 select {
-  background-color: var(--card);
-  color: var(--foreground);
+  background-color: Field;
+  color: FieldText;
 }
 
 .gta-page {

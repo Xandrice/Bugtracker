@@ -223,7 +223,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                     <select
                                         name="type"
                                         defaultValue={workflowType}
-                                        className="w-full rounded-lg border border-input bg-card text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                                        className="w-full rounded-lg border border-input px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
                                     >
                                         <option value="BUG">Bug</option>
                                         <option value="FEATURE">Feature</option>
@@ -235,7 +235,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                     <select
                                         name="priority"
                                         defaultValue={workflowPriority}
-                                        className="w-full rounded-lg border border-input bg-card text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                                        className="w-full rounded-lg border border-input px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
                                     >
                                         <option value="URGENT">{priorityLabels.URGENT}</option>
                                         <option value="HIGH">{priorityLabels.HIGH}</option>
@@ -250,7 +250,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                     <select
                                         name="severity"
                                         defaultValue={workflowSeverity}
-                                        className="w-full rounded-lg border border-input bg-card text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                                        className="w-full rounded-lg border border-input px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
                                     >
                                         <option value="MINOR">Minor (1-5 affected)</option>
                                         <option value="MAJOR">Major (6-20 affected)</option>
@@ -263,7 +263,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                     <select
                                         name="status"
                                         defaultValue={workflowStatus}
-                                        className="w-full rounded-lg border border-input bg-card text-foreground px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                                        className="w-full rounded-lg border border-input px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
                                     >
                                         <option value="OPEN">Open</option>
                                         <option value="IN_PROGRESS">In Progress</option>
@@ -283,7 +283,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                             <select
                                 name="assigneeId"
                                 defaultValue={issue.assigneeId ?? "none"}
-                                className="w-full rounded-lg border border-input bg-card text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                className="w-full rounded-lg border border-input px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                             >
                                 <option value="none">Unassigned</option>
                                 {assignableUsers.map(u => (
@@ -385,7 +385,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                         type="text"
                                         name="discordPostId"
                                         defaultValue={issue.discordThreadId || ""}
-                                        className="w-full rounded-lg border border-input bg-card text-foreground px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                                        className="w-full rounded-lg border border-input px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary"
                                         placeholder="Paste post link or post ID"
                                     />
                                     <button type="submit" className="text-xs font-medium text-primary hover:underline">Save post link</button>

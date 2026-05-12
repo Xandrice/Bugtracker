@@ -70,7 +70,7 @@ export default function NewIssuePage() {
                         <select
                             id="type"
                             name="type"
-                            className="flex h-10 w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            className="flex h-10 w-full rounded-lg border border-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                         >
                             <option value="BUG">Bug</option>
                             <option value="FEATURE">Feature Request</option>
@@ -82,7 +82,7 @@ export default function NewIssuePage() {
                         <select
                             id="priority"
                             name="priority"
-                            className="flex h-10 w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            className="flex h-10 w-full rounded-lg border border-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                         >
                             <option value="URGENT">P0 (Immediate Attention)</option>
                             <option value="HIGH">P1 (High Impact)</option>
@@ -97,7 +97,7 @@ export default function NewIssuePage() {
                             name="severity"
                             value={severity}
                             onChange={(e) => setSeverity(e.target.value)}
-                            className="flex h-10 w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            className="flex h-10 w-full rounded-lg border border-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                         >
                             <option value="MINOR">Minor (1-5 affected)</option>
                             <option value="MAJOR">Major (6-20 affected)</option>
@@ -138,7 +138,7 @@ export default function NewIssuePage() {
                         <select
                             id="label"
                             name="label"
-                            className="flex h-10 w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            className="flex h-10 w-full rounded-lg border border-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                         >
                             <option value="">Select category</option>
                             <option value="SCRIPT">Script</option>
