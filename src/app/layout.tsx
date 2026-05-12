@@ -22,10 +22,11 @@ import { TopNavbar } from "@/components/layout/TopNavbar";
 import { LeftSidebar } from "@/components/layout/LeftSidebar";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { auth } from "@/../auth";
+import { SITE_METADATA_DESCRIPTION, SITE_METADATA_TITLE } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Renegade Roleplay Tracker",
-  description: "GTA V-inspired issue and operations tracker for server teams.",
+    title: SITE_METADATA_TITLE,
+    description: SITE_METADATA_DESCRIPTION,
 };
 
 export default async function RootLayout({

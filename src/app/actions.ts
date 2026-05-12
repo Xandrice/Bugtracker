@@ -314,41 +314,83 @@ export async function toggleIssueResolved(formData: FormData) {
     await redirectToIssue(issueId);
 }
 
-export async function updateIssue(issueId: string, formData: FormData) {
+export async function updateIssue(issueId: string, formData: FormData): Promise<{ error?: string } | void> {
     const session = await auth();
     if (!session?.user?.id) return { error: "Unauthorized" };
 
-    const title = formData.get("title") as string | null;
-    const description = formData.get("description") as string | null;
-    const priority = formData.get("priority") as string | null;
-    const severity = formData.get("severity") as string | null;
-    const assigneeId = formData.get("assigneeId") as string | null;
-    const dueDateRaw = formData.get("dueDate") as string | null;
-    const storyPointsRaw = formData.get("storyPoints") as string | null;
-    const resourceName = formData.get("resourceName") as string | null;
-    const serverVersion = formData.get("serverVersion") as string | null;
-    const reproductionSteps = formData.get("reproductionSteps") as string | null;
-    const expectedBehavior = formData.get("expectedBehavior") as string | null;
-    const tags = formData.get("tags") as string | null;
-    const label = formData.get("label") as string | null;
-    const discordPostRaw = (formData.get("discordPostId") as string | null)
-        ?? (formData.get("discordThreadId") as string | null);
-
     const data: Record<string, unknown> = {};
-    if (title != null) data.title = title;
-    if (description != null) data.description = description;
-    if (priority != null) data.priority = priority;
-    if (severity != null) data.severity = severity;
-    if (assigneeId !== undefined) data.assigneeId = assigneeId === "" || assigneeId === "none" ? null : assigneeId;
-    if (dueDateRaw !== undefined) data.dueDate = dueDateRaw ? new Date(dueDateRaw) : null;
-    if (storyPointsRaw !== undefined) data.storyPoints = storyPointsRaw ? parseInt(storyPointsRaw, 10) : null;
-    if (resourceName !== undefined) data.resourceName = resourceName || null;
-    if (serverVersion !== undefined) data.serverVersion = serverVersion || null;
-    if (reproductionSteps !== undefined) data.reproductionSteps = reproductionSteps || null;
-    if (expectedBehavior !== undefined) data.expectedBehavior = expectedBehavior || null;
-    if (tags !== undefined) data.tags = tags || null;
-    if (label !== undefined) data.label = label || null;
-    if (discordPostRaw !== undefined) {
+    if (formData.has("title")) {
+        const titleRaw = formData.get("title") as string | null;
+        const trimmed = (titleRaw || "").trim();
+        if (!trimmed) return { error: "Title cannot be empty" };
+        data.title = trimmed;
+    }
+    if (formData.has("description")) {
+        const descriptionVal = formData.get("description") as string | null;
+        data.description = descriptionVal;
+    }
+    if (formData.has("priority")) {
+        const priorityVal = formData.get("priority") as string | null;
+        if (!priorityVal || !(ALLOWED_PRIORITY as readonly string[]).includes(priorityVal)) {
+            return { error: "Invalid priority" };
+        }
+        data.priority = priorityVal;
+    }
+    if (formData.has("severity")) {
+        const severityVal = formData.get("severity") as string | null;
+        if (!severityVal || !(ALLOWED_SEVERITY as readonly string[]).includes(severityVal)) {
+            return { error: "Invalid severity" };
+        }
+        data.severity = severityVal;
+    }
+    if (formData.has("assigneeId")) {
+        const assigneeId = formData.get("assigneeId") as string | null;
+        data.assigneeId = !assigneeId || assigneeId === "none" ? null : assigneeId;
+    }
+    if (formData.has("dueDate")) {
+        const dueDateRaw = formData.get("dueDate") as string | null;
+        data.dueDate = dueDateRaw ? new Date(dueDateRaw) : null;
+    }
+    if (formData.has("storyPoints")) {
+        const storyPointsRaw = formData.get("storyPoints") as string | null;
+        if (!storyPointsRaw || !String(storyPointsRaw).trim()) {
+            data.storyPoints = null;
+        } else {
+            const n = parseInt(String(storyPointsRaw), 10);
+            data.storyPoints = Number.isFinite(n) ? n : null;
+        }
+    }
+    if (formData.has("resourceName")) {
+        const resourceNameVal = formData.get("resourceName") as string | null;
+        data.resourceName = resourceNameVal || null;
+    }
+    if (formData.has("serverVersion")) {
+        const serverVersionVal = formData.get("serverVersion") as string | null;
+        data.serverVersion = serverVersionVal || null;
+    }
+    if (formData.has("reproductionSteps")) {
+        const reproductionStepsVal = formData.get("reproductionSteps") as string | null;
+        data.reproductionSteps = reproductionStepsVal || null;
+    }
+    if (formData.has("expectedBehavior")) {
+        const expectedBehaviorVal = formData.get("expectedBehavior") as string | null;
+        data.expectedBehavior = expectedBehaviorVal || null;
+    }
+    if (formData.has("tags")) {
+        const tagsVal = formData.get("tags") as string | null;
+        data.tags = tagsVal || null;
+    }
+    if (formData.has("label")) {
+        const labelVal = formData.get("label") as string | null;
+        data.label = labelVal || null;
+    }
+    if (formData.has("environment")) {
+        const environment = formData.get("environment") as string | null;
+        data.environment = environment?.trim() || null;
+    }
+    if (formData.has("discordPostId") || formData.has("discordThreadId")) {
+        const discordPostRaw = (formData.get("discordPostId") as string | null)
+            ?? (formData.get("discordThreadId") as string | null);
         const parsed = parseDiscordPostInput(discordPostRaw);
         if (parsed.postId) {
             const existing = await db.issue.findFirst({
@@ -367,12 +409,27 @@ export async function updateIssue(issueId: string, formData: FormData) {
         data.discordChannelId = null;
     }
 
+    if (Object.keys(data).length === 0) {
+        return { error: "No updates provided" };
+    }
+
     await db.issue.update({
         where: { id: issueId },
         data: data as any
     });
 
     revalidateIssuePaths(issueId);
+}
+
+export async function saveIssueDetails(formData: FormData): Promise<void> {
+    const session = await auth();
+    if (!session?.user?.id) redirectToSignIn();
+    const issueId = formData.get("issueId") as string | null;
+    if (!issueId) throw new Error("Missing issue");
+    const result = await updateIssue(issueId, formData);
+    if (result?.error === "Unauthorized") redirectToSignIn();
+    if (result?.error) throw new Error(result.error);
+    await redirectToIssue(issueId);
 }
 
 export async function updateIssueAssignee(issueId: string, assigneeId: string | null) {

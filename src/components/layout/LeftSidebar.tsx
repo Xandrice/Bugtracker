@@ -6,6 +6,7 @@ import {
     Inbox,
     ListTodo,
     KanbanSquare,
+    LayoutDashboard,
     FileText,
     Users,
     Settings2
@@ -23,6 +24,7 @@ const navItems = [
     {
         title: "Boards",
         items: [
+            { name: "Main board", href: "/boards/main", icon: LayoutDashboard },
             { name: "Bug Triage", href: "/boards/triage", icon: KanbanSquare },
         ]
     },

@@ -13,34 +13,21 @@ export default function SettingsPage() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSavingForums, setIsSavingForums] = useState(false);
 
-    const [projectName, setProjectName] = useState("FiveM Tracker");
-    const [projectDesc, setProjectDesc] = useState("Bug & feature tracker for your FiveM server.");
     const [suggestionsForumId, setSuggestionsForumId] = useState("");
     const [bugsForumId, setBugsForumId] = useState("");
 
     useEffect(() => {
         setMounted(true);
-        const storedName = localStorage.getItem("bugtracker_name");
-        const storedDesc = localStorage.getItem("bugtracker_desc");
-        if (storedName) setProjectName(storedName);
-        if (storedDesc) setProjectDesc(storedDesc);
-
         (async () => {
             try {
                 const settings = await getDiscordForumSettings();
                 setSuggestionsForumId(settings.suggestionsForumId);
                 setBugsForumId(settings.bugsForumId);
             } catch {
-                // Ignore settings fetch failure on initial render.
+                // ignore
             }
         })();
     }, []);
-
-    const saveGeneralSettings = () => {
-        localStorage.setItem("bugtracker_name", projectName);
-        localStorage.setItem("bugtracker_desc", projectDesc);
-        alert("Settings saved locally!");
-    };
 
     const saveForumSettings = async () => {
         setIsSavingForums(true);
@@ -55,7 +42,7 @@ export default function SettingsPage() {
     };
 
     const tabs = [
-        { id: "general", label: "General", icon: Settings2 },
+        { id: "general", label: "Integrations", icon: Settings2 },
         { id: "appearance", label: "Appearance", icon: Palette },
         { id: "export", label: "Data Export", icon: Database },
     ];
@@ -118,7 +105,7 @@ export default function SettingsPage() {
                 <div>
                     <h1 className="gta-heading text-3xl">Control Center</h1>
                     <p className="gta-subheading mt-1">
-                        Manage your project preferences and integrations.
+                        Manage Discord integration and other preferences.
                     </p>
                 </div>
             </div>
@@ -149,43 +136,10 @@ export default function SettingsPage() {
                         <>
                             <div className="gta-surface overflow-hidden">
                                 <div className="px-6 py-4 border-b bg-muted/30">
-                                    <h3 className="font-semibold">Project Details</h3>
-                                    <p className="text-xs text-muted-foreground">Basic information about your project.</p>
-                                </div>
-                                <div className="p-6 space-y-4">
-                                    <div className="py-2 px-3 text-sm bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-900 rounded-md">
-                                        These settings are currently persisted locally while we wait for backend API support.
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Project Name</label>
-                                        <input
-                                            value={projectName}
-                                            onChange={(e) => setProjectName(e.target.value)}
-                                            className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Description</label>
-                                        <textarea
-                                            value={projectDesc}
-                                            onChange={(e) => setProjectDesc(e.target.value)}
-                                            className="w-full flex rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 min-h-[100px]"
-                                        />
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={saveGeneralSettings}
-                                        className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium inline-flex items-center gap-2 hover:bg-primary/90 transition-colors"
-                                    >
-                                        Save Changes
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="gta-surface overflow-hidden">
-                                <div className="px-6 py-4 border-b bg-muted/30">
                                     <h3 className="font-semibold">Discord Forums</h3>
-                                    <p className="text-xs text-muted-foreground">Configure forum parent IDs used by webhook filtering.</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        Configure forum parent IDs used by webhook filtering for Renegade Roleplay.
+                                    </p>
                                 </div>
                                 <div className="p-6 space-y-4">
                                     <div className="space-y-2">

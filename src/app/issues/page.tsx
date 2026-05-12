@@ -3,6 +3,7 @@ import { auth } from "@/../auth";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { db } from "@/lib/db";
+import { ALL_ISSUES_SUBTITLE } from "@/lib/site";
 
 export default async function AllIssuesPage() {
     const session = await auth();
@@ -33,7 +34,7 @@ export default async function AllIssuesPage() {
                 <div>
                     <h1 className="gta-heading">All Cases</h1>
                     <p className="gta-subheading">
-                        Bugs, features, and tasks for your FiveM server.
+                        {ALL_ISSUES_SUBTITLE}
                     </p>
                 </div>
 

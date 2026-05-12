@@ -3,6 +3,7 @@ import { auth } from "@/../auth"
 import Link from "next/link"
 import { Plus } from "lucide-react"
 import { db } from "@/lib/db"
+import { HOME_HERO_SUBTITLE } from "@/lib/site"
 
 export default async function Home() {
   const session = await auth()
@@ -31,7 +32,7 @@ export default async function Home() {
         <div>
           <h1 className="gta-heading">Reports</h1>
           <p className="gta-subheading">
-            Dispatch board for incoming incidents and development operations.
+            {HOME_HERO_SUBTITLE}
           </p>
         </div>
 

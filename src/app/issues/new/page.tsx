@@ -87,6 +87,7 @@ export default function NewIssuePage() {
                             <option value="URGENT">P0 (Immediate Attention)</option>
                             <option value="HIGH">P1 (High Impact)</option>
                             <option value="MEDIUM">P2 (Standard Impact)</option>
+                            <option value="LOW">P3 (Low Impact)</option>
                         </select>
                     </div>
                     <div className="space-y-2">

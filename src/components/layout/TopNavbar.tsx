@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Bug, Search, Bell, Settings, UserCircle, LogOut, ChevronDown } from "lucide-react";
 import { auth } from "@/../auth";
 import { ThemeToggle } from "./ThemeToggle";
+import { SITE_NAME } from "@/lib/site";
 
 export async function TopNavbar() {
     const session = await auth();
@@ -12,7 +13,7 @@ export async function TopNavbar() {
             <div className="flex items-center gap-4">
                 <Link href="/" className="relative z-10 flex items-center gap-2 font-bold text-foreground transition-opacity hover:opacity-90">
                     <Bug className="h-4 w-4 text-accent" />
-                    <span className="font-display text-base uppercase tracking-[0.16em] hidden sm:block">Renegade Roleplay</span>
+                    <span className="font-display text-base uppercase tracking-[0.16em] hidden sm:block">{SITE_NAME}</span>
                     <span className="gta-label hidden md:block">Issue Tracker</span>
                 </Link>
             </div>
