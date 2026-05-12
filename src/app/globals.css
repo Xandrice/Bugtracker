@@ -3,6 +3,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-muted: var(--muted);
@@ -20,8 +21,12 @@
 }
 
 :root {
-  --background: #ececef;
-  --foreground: #0c1220;
+  color-scheme: light;
+  /* Light: stronger separation — page chrome vs raised cards/panels */
+  --background: #d3d8e3;
+  --foreground: #111827;
+
+  --card: #f4f5f9;
 
   --primary: #3ba9ff;
   --primary-foreground: #04101e;
@@ -29,11 +34,11 @@
   --accent: #ff5a4f;
   --accent-foreground: #210706;
 
-  --muted: #dddfe4;
-  --muted-foreground: #4d5a75;
+  --muted: #c5cbd9;
+  --muted-foreground: #3f4a5c;
 
-  --border: #c8ccd6;
-  --input: #c0c5d1;
+  --border: #8993a8;
+  --input: #7a8498;
 
   --success: #4fc3a8;
   --warning: #ffb64a;
@@ -41,8 +46,11 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: #1a1a1c;
   --foreground: #ececef;
+
+  --card: #222226;
 
   --primary: #3ca7ff;
   --primary-foreground: #04111f;
@@ -80,13 +88,11 @@ h3,
   letter-spacing: 0.04em;
 }
 
-/* Improve dropdown contrast: use theme colors for select and options */
+/* Closed <select> appearance only — do not style `option`; OS paints the
+   dropdown list and forced fg/bg breaks highlight contrast (e.g. light blue
+   selection + light text on Windows). */
 select {
-  background-color: var(--background);
-  color: var(--foreground);
-}
-select option {
-  background-color: var(--background);
+  background-color: var(--card);
   color: var(--foreground);
 }
 
@@ -95,7 +101,7 @@ select option {
 }
 
 .gta-hero {
-  @apply relative overflow-visible rounded-lg border border-border/90 p-4;
+  @apply relative overflow-visible rounded-lg border-2 border-border p-4;
   background:
     linear-gradient(115deg, color-mix(in oklab, var(--muted), #000 30%) 0%, color-mix(in oklab, var(--background), #000 10%) 62%, color-mix(in oklab, var(--background), #000 20%) 100%),
     url("/gta-stripes.svg");
@@ -113,8 +119,10 @@ select option {
 }
 
 .gta-surface {
-  @apply rounded-md border border-border bg-background/80 shadow-lg shadow-black/25;
-  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--foreground), transparent 92%);
+  @apply rounded-md border-2 border-border bg-card shadow-md;
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--foreground), transparent 90%),
+    0 10px 28px -12px color-mix(in oklab, var(--foreground), transparent 82%);
 }
 
 .gta-action {

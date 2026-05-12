@@ -49,7 +49,7 @@ export function LeftSidebar({ isLoggedIn }: { isLoggedIn: boolean }) {
         ];
 
     return (
-        <aside className="w-56 border-r border-border/80 bg-background/92 backdrop-blur supports-[backdrop-filter]:bg-background/72 h-[calc(100vh-3rem)] overflow-hidden hidden md:block shrink-0 transition-colors duration-200 flex flex-col">
+        <aside className="w-56 border-r-2 border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85 h-[calc(100vh-3rem)] overflow-hidden hidden md:block shrink-0 transition-colors duration-200 flex flex-col">
             <div className="flex flex-col gap-4 py-4 px-3 min-h-0 overflow-hidden">
                 {groups.map((group, i) => (
                     <div key={i} className="flex flex-col gap-1 gta-surface p-2">
@@ -66,8 +66,8 @@ export function LeftSidebar({ isLoggedIn }: { isLoggedIn: boolean }) {
                                         className={clsx(
                                             "flex items-center gap-2.5 rounded-sm px-2 py-1.5 text-xs uppercase tracking-[0.08em] font-medium transition-all group relative overflow-hidden border",
                                             isActive
-                                                ? "bg-primary/20 text-foreground border-primary/40"
-                                                : "text-muted-foreground hover:bg-muted/70 hover:text-foreground border-border/40"
+                                                ? "bg-primary/20 text-foreground border-2 border-primary"
+                                                : "text-muted-foreground hover:bg-muted hover:text-foreground border-2 border-border"
                                         )}
                                     >
                                         {isActive && (
@@ -89,8 +89,8 @@ export function LeftSidebar({ isLoggedIn }: { isLoggedIn: boolean }) {
                             className={clsx(
                                 "flex items-center gap-2.5 rounded-sm px-2 py-1.5 text-xs uppercase tracking-[0.08em] font-medium transition-all group relative overflow-hidden gta-surface border",
                                 pathname === "/settings"
-                                    ? "bg-primary/20 text-foreground border-primary/40"
-                                    : "text-muted-foreground hover:bg-muted/70 hover:text-foreground border-border/40"
+                                    ? "bg-primary/20 text-foreground border-2 border-primary"
+                                    : "text-muted-foreground hover:bg-muted hover:text-foreground border-2 border-border"
                             )}
                         >
                             {pathname === "/settings" && (

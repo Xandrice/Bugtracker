@@ -8,7 +8,7 @@ export async function TopNavbar() {
     const session = await auth();
 
     return (
-        <header className="sticky top-0 z-50 flex h-12 items-center justify-between border-b border-border/90 bg-background/95 px-3 lg:px-4 shrink-0 shadow-lg shadow-black/30 transition-colors duration-200 backdrop-blur">
+        <header className="sticky top-0 z-50 flex h-12 items-center justify-between border-b-2 border-border bg-card/95 px-3 lg:px-4 shrink-0 shadow-md shadow-black/10 transition-colors duration-200 backdrop-blur">
             <div className="pointer-events-none absolute inset-0 opacity-20 bg-[url('/gta-stripes.svg')] bg-cover bg-center" />
             <div className="flex items-center gap-4">
                 <Link href="/" className="relative z-10 flex items-center gap-2 font-bold text-foreground transition-opacity hover:opacity-90">
@@ -24,23 +24,23 @@ export async function TopNavbar() {
                     <input
                         type="search"
                         placeholder="Scan reports, jobs, files..."
-                        className="w-full rounded-sm border border-border/80 bg-muted/35 px-8 py-1 text-xs uppercase tracking-[0.08em] shadow-inner shadow-black/20 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary h-7"
+                        className="w-full rounded-sm border-2 border-input bg-card px-8 py-1 text-xs uppercase tracking-[0.08em] text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary h-7"
                     />
                 </div>
             </div>
 
             <div className="relative z-10 flex items-center gap-2">
                 <ThemeToggle />
-                <button className="rounded-sm p-1.5 text-muted-foreground hover:bg-muted transition-colors border border-border/70">
+                <button className="rounded-sm p-1.5 text-foreground/80 hover:bg-muted transition-colors border-2 border-border">
                     <Bell className="h-3.5 w-3.5" />
                 </button>
-                <Link href="/settings" className="rounded-sm p-1.5 text-muted-foreground hover:bg-muted transition-colors hidden sm:block border border-border/70">
+                <Link href="/settings" className="rounded-sm p-1.5 text-foreground/80 hover:bg-muted transition-colors hidden sm:block border-2 border-border">
                     <Settings className="h-3.5 w-3.5" />
                 </Link>
 
                 {session?.user ? (
                     <details className="relative">
-                        <summary className="list-none flex items-center gap-1.5 cursor-pointer rounded-sm border border-border/70 px-1.5 py-1 hover:bg-muted transition-colors [&::-webkit-details-marker]:hidden">
+                        <summary className="list-none flex items-center gap-1.5 cursor-pointer rounded-sm border-2 border-border px-1.5 py-1 hover:bg-muted transition-colors [&::-webkit-details-marker]:hidden">
                             {session.user.image ? (
                                 <img
                                     src={session.user.image}
