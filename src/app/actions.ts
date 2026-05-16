@@ -451,6 +451,7 @@ export async function setAssignee(formData: FormData): Promise<void> {
     const result = await updateIssueAssignee(issueId, assigneeId === "none" || !assigneeId ? null : assigneeId);
     if (result?.error === "Unauthorized") redirectToSignIn();
     if (result?.error) throw new Error(result.error);
+    await redirectToIssue(issueId);
 }
 
 export async function createTeamNote(formData: FormData) {

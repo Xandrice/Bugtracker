@@ -232,16 +232,38 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Priority</label>
-                                    <select
-                                        name="priority"
-                                        defaultValue={workflowPriority}
-                                        className="w-full rounded-lg border border-input px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
-                                    >
-                                        <option value="URGENT">{priorityLabels.URGENT}</option>
-                                        <option value="HIGH">{priorityLabels.HIGH}</option>
-                                        <option value="MEDIUM">{priorityLabels.MEDIUM}</option>
-                                        <option value="LOW">{priorityLabels.LOW}</option>
-                                    </select>
+                                    <fieldset className="grid grid-cols-1 gap-1 rounded-lg border border-input p-1">
+                                        {([
+                                            { value: "URGENT", label: "P0" },
+                                            { value: "HIGH", label: "P1" },
+                                            { value: "MEDIUM", label: "P2" },
+                                            { value: "LOW", label: "P3" },
+                                        ] as const).map((option) => {
+                                            const checked = workflowPriority === option.value;
+                                            return (
+                                                <label
+                                                    key={option.value}
+                                                    className={`flex cursor-pointer items-center justify-between rounded-md border px-2 py-1 text-[11px] transition-colors ${
+                                                        checked
+                                                            ? "border-primary/50 bg-primary/15 text-foreground"
+                                                            : "border-border/60 bg-card/80 text-foreground/85 hover:bg-muted/70"
+                                                    }`}
+                                                >
+                                                    <span className="font-semibold tracking-[0.06em]">{option.label}</span>
+                                                    <span className="truncate text-[10px] text-muted-foreground">
+                                                        {priorityLabels[option.value]}
+                                                    </span>
+                                                    <input
+                                                        type="radio"
+                                                        name="priority"
+                                                        value={option.value}
+                                                        defaultChecked={checked}
+                                                        className="sr-only"
+                                                    />
+                                                </label>
+                                            );
+                                        })}
+                                    </fieldset>
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
