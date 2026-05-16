@@ -13,6 +13,7 @@ import remarkGfm from "remark-gfm"
 import { formatIssueRef, parseIssueRef } from "@/lib/issue-ids"
 import { SITE_NAME } from "@/lib/site"
 import { EditIssueDetailsForm } from "./components/EditIssueDetailsForm"
+import PriorityDropdown from "./components/PriorityDropdown"
 
 export default async function IssueDetailsPage({ params }: { params: Promise<{ id: string }> }) {
     const session = await auth();
@@ -232,38 +233,7 @@ export default async function IssueDetailsPage({ params }: { params: Promise<{ i
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Priority</label>
-                                    <fieldset className="grid grid-cols-1 gap-1 rounded-lg border border-input p-1">
-                                        {([
-                                            { value: "URGENT", label: "P0" },
-                                            { value: "HIGH", label: "P1" },
-                                            { value: "MEDIUM", label: "P2" },
-                                            { value: "LOW", label: "P3" },
-                                        ] as const).map((option) => {
-                                            const checked = workflowPriority === option.value;
-                                            return (
-                                                <label
-                                                    key={option.value}
-                                                    className={`flex cursor-pointer items-center justify-between rounded-md border px-2 py-1 text-[11px] transition-colors ${
-                                                        checked
-                                                            ? "border-primary/50 bg-primary/15 text-foreground"
-                                                            : "border-border/60 bg-card/80 text-foreground/85 hover:bg-muted/70"
-                                                    }`}
-                                                >
-                                                    <span className="font-semibold tracking-[0.06em]">{option.label}</span>
-                                                    <span className="truncate text-[10px] text-muted-foreground">
-                                                        {priorityLabels[option.value]}
-                                                    </span>
-                                                    <input
-                                                        type="radio"
-                                                        name="priority"
-                                                        value={option.value}
-                                                        defaultChecked={checked}
-                                                        className="sr-only"
-                                                    />
-                                                </label>
-                                            );
-                                        })}
-                                    </fieldset>
+                                    <PriorityDropdown defaultValue={workflowPriority} />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
