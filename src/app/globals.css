@@ -105,6 +105,16 @@ select {
   color: FieldText;
 }
 
+select option {
+  background-color: Canvas;
+  color: CanvasText;
+}
+
+select option:checked {
+  background-color: Highlight;
+  color: HighlightText;
+}
+
 .gta-page {
   @apply flex flex-col h-full p-5 max-w-[1800px] mx-auto space-y-4;
 }
