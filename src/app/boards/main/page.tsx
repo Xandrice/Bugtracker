@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { db } from "@/lib/db";
 import { auth } from "@/../auth";
 import { MainKanbanBoard, type KanbanIssue } from "./MainKanbanBoard";
+import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 
 export default async function MainBoardPage() {
     const session = await auth();
@@ -30,26 +31,26 @@ export default async function MainBoardPage() {
     const canDrag = !!session?.user?.id;
 
     return (
-        <div className="gta-page">
-            <div className="gta-hero flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                    <h1 className="gta-heading">Main board</h1>
-                    <p className="gta-subheading">
-                        Drag cards between columns to update status. Use the grip handle so links stay clickable.
-                    </p>
-                    {!canDrag && (
-                        <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
-                            Sign in to move cards on the board.
-                        </p>
-                    )}
-                </div>
-                <Link href="/issues/new" className="gta-action self-start">
-                    <Plus className="h-4 w-4" />
-                    New issue
-                </Link>
-            </div>
-
+        <PageContainer>
+            <PageHeader
+                title="Main board"
+                description="Drag cards between columns to update status."
+                actions={
+                    <Link
+                        href="/issues/new"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 h-8 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                        New issue
+                    </Link>
+                }
+            />
+            {!canDrag && (
+                <p className="text-xs text-warning">
+                    Sign in to move cards on the board.
+                </p>
+            )}
             <MainKanbanBoard issues={issues} interactive={canDrag} />
-        </div>
+        </PageContainer>
     );
 }

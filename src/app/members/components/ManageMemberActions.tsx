@@ -2,14 +2,18 @@
 
 import { useState, useRef, useEffect } from "react";
 import { updateProjectMemberRole, removeProjectMember } from "@/app/actions";
-import { MoreHorizontal, ShieldAlert, User, Trash2 } from "lucide-react";
+import { MoreHorizontal, ShieldAlert, User, Trash2, Loader2 } from "lucide-react";
+import { cn } from "@/components/ui/cn";
 
 interface ManageMemberActionsProps {
     memberId: string;
     currentRole: string;
 }
 
-export function ManageMemberActions({ memberId, currentRole }: ManageMemberActionsProps) {
+export function ManageMemberActions({
+    memberId,
+    currentRole,
+}: ManageMemberActionsProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -48,50 +52,56 @@ export function ManageMemberActions({ memberId, currentRole }: ManageMemberActio
     return (
         <div className="relative inline-block text-left" ref={dropdownRef}>
             <button
+                type="button"
                 onClick={() => setIsOpen(!isOpen)}
                 disabled={isUpdating}
-                className={`p-1.5 rounded-md transition-colors disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${isOpen
-                        ? 'bg-muted text-foreground'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                    }`}
+                className={cn(
+                    "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors disabled:opacity-50",
+                    isOpen
+                        ? "bg-muted text-foreground"
+                        : "hover:bg-muted hover:text-foreground"
+                )}
             >
-                {isUpdating ? <span className="text-xs">...</span> : <MoreHorizontal className="h-4 w-4" />}
+                {isUpdating ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                )}
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 top-full mt-2 w-48 rounded-md bg-background border shadow-lg z-10 py-1" role="menu">
-                    <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                        Change Role
+                <div className="absolute right-0 top-full mt-1 w-48 rounded-md border border-border bg-elevated p-1 shadow-pop z-10">
+                    <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-subtle-foreground">
+                        Change role
                     </div>
                     {currentRole !== "Admin" && (
                         <button
+                            type="button"
                             onClick={() => handleRoleChange("Admin")}
-                            className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2"
-                            role="menuitem"
+                            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted"
                         >
-                            <ShieldAlert className="h-4 w-4 text-red-500" />
-                            Make Admin
+                            <ShieldAlert className="h-3.5 w-3.5 text-danger" />
+                            Make admin
                         </button>
                     )}
                     {currentRole !== "Member" && (
                         <button
+                            type="button"
                             onClick={() => handleRoleChange("Member")}
-                            className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2"
-                            role="menuitem"
+                            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted"
                         >
-                            <User className="h-4 w-4" />
-                            Make Member
+                            <User className="h-3.5 w-3.5 text-muted-foreground" />
+                            Make member
                         </button>
                     )}
-
-                    <div className="h-px bg-border my-1"></div>
+                    <div className="my-1 h-px bg-border" />
                     <button
+                        type="button"
                         onClick={handleRemove}
-                        className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
-                        role="menuitem"
+                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs text-danger transition-colors hover:bg-danger/10"
                     >
-                        <Trash2 className="h-4 w-4" />
-                        Remove Member
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Remove member
                     </button>
                 </div>
             )}

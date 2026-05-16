@@ -14,6 +14,14 @@ const ALLOWED_STATUS = ["OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const;
 const ALLOWED_PRIORITY = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 const ALLOWED_TYPE = ["BUG", "FEATURE", "TASK"] as const;
 const ALLOWED_SEVERITY = ["MINOR", "MAJOR", "CRITICAL", "BLOCKER"] as const;
+const ALLOWED_LINK_TYPE = ["BLOCKS", "BLOCKED_BY", "RELATES_TO", "DUPLICATES"] as const;
+type LinkType = (typeof ALLOWED_LINK_TYPE)[number];
+const LINK_TYPE_INVERSE: Record<LinkType, LinkType> = {
+    BLOCKS: "BLOCKED_BY",
+    BLOCKED_BY: "BLOCKS",
+    RELATES_TO: "RELATES_TO",
+    DUPLICATES: "DUPLICATES",
+};
 
 function redirectToSignIn(): never {
     redirect("/api/auth/signin");
@@ -64,7 +72,10 @@ function parseDiscordPostInput(value: string | null): { postId: string | null; p
 async function notifyMentionedUsers(input: {
     content: string;
     senderName: string;
+    senderId?: string;
     targetLink: string;
+    issueId?: string | null;
+    pageTitle?: string;
 }) {
     const mentions = input.content.match(/@([A-Za-z0-9_.-]+)/g);
     if (!mentions || mentions.length === 0) return;
@@ -80,16 +91,65 @@ async function notifyMentionedUsers(input: {
 
     const staffUsers = await getStaffUsers();
     const targets = staffUsers.filter((u) => {
-        if (!u.name || !u.discordId) return false;
+        if (!u.name) return false;
         const normalizedName = normalize(u.name);
         return mentionTokens.some((token) => normalizedName.includes(token));
     });
 
+    const snippet = input.content.length > 180
+        ? input.content.slice(0, 177) + "…"
+        : input.content;
+
     for (const target of targets) {
-        if (!target.discordId) continue;
-        let msg = `You were tagged in BugTracker by **${input.senderName}**: \n${input.targetLink}`;
-        msg += `\n\n> ${input.content.replace(/\n/g, "\n> ")}`;
-        await sendDiscordDM(target.discordId, msg);
+        if (target.id === input.senderId) continue;
+        try {
+            await (db as any).notification.create({
+                data: {
+                    userId: target.id,
+                    actorId: input.senderId || null,
+                    type: "MENTION",
+                    title: `${input.senderName} mentioned you${input.pageTitle ? ` in ${input.pageTitle}` : ""}`,
+                    body: snippet,
+                    link: input.targetLink.replace(getAppBaseUrl(), "") || input.targetLink,
+                    issueId: input.issueId || null,
+                },
+            });
+        } catch (err) {
+            console.error("Failed to create mention notification", err);
+        }
+
+        if (target.discordId) {
+            let msg = `You were tagged in BugTracker by **${input.senderName}**: \n${input.targetLink}`;
+            msg += `\n\n> ${input.content.replace(/\n/g, "\n> ")}`;
+            await sendDiscordDM(target.discordId, msg);
+        }
+    }
+}
+
+async function createNotification(input: {
+    userId: string;
+    actorId?: string | null;
+    type: string;
+    title: string;
+    body?: string | null;
+    link?: string | null;
+    issueId?: string | null;
+}) {
+    if (input.actorId && input.actorId === input.userId) return;
+    try {
+        await (db as any).notification.create({
+            data: {
+                userId: input.userId,
+                actorId: input.actorId || null,
+                type: input.type,
+                title: input.title,
+                body: input.body || null,
+                link: input.link || null,
+                issueId: input.issueId || null,
+            },
+        });
+    } catch (err) {
+        console.error("Failed to create notification", err);
     }
 }
 
@@ -436,10 +496,28 @@ export async function updateIssueAssignee(issueId: string, assigneeId: string | 
     const session = await auth();
     if (!session?.user?.id) return { error: "Unauthorized" };
 
+    const previous = await db.issue.findUnique({
+        where: { id: issueId },
+        select: { assigneeId: true, title: true, issueNumber: true },
+    });
+
     await db.issue.update({
         where: { id: issueId },
         data: { assigneeId: assigneeId || null }
     });
+
+    if (assigneeId && assigneeId !== previous?.assigneeId) {
+        const issueRef = formatIssueRef(previous?.issueNumber, issueId);
+        await createNotification({
+            userId: assigneeId,
+            actorId: session.user.id,
+            type: "ASSIGNED",
+            title: `${session.user.name || "Someone"} assigned you ${issueRef}`,
+            body: previous?.title || null,
+            link: `/issues/${issueRef}`,
+            issueId,
+        });
+    }
 
     revalidateIssuePaths(issueId);
 }
@@ -480,11 +558,31 @@ export async function createTeamNote(formData: FormData) {
         });
 
         const issueRef = await getIssuePublicRef(issueId);
+        const issue = await db.issue.findUnique({
+            where: { id: issueId },
+            select: { title: true, assigneeId: true },
+        });
+
         await notifyMentionedUsers({
             content,
             senderName,
+            senderId: session.user.id,
             targetLink: `${baseUrl}/issues/${issueRef}`,
+            issueId,
+            pageTitle: issue?.title,
         });
+
+        if (issue?.assigneeId && issue.assigneeId !== session.user.id) {
+            await createNotification({
+                userId: issue.assigneeId,
+                actorId: session.user.id,
+                type: "COMMENT",
+                title: `${senderName} commented on ${issue.title}`,
+                body: content.length > 180 ? content.slice(0, 177) + "…" : content,
+                link: `/issues/${issueRef}`,
+                issueId,
+            });
+        }
 
         revalidatePath(`/issues/${issueId}`);
         return;
@@ -512,10 +610,17 @@ export async function createTeamNote(formData: FormData) {
             }
         });
 
+        const parentThread = await db.note.findUnique({
+            where: { id: threadId },
+            select: { title: true },
+        });
+
         await notifyMentionedUsers({
             content,
             senderName,
+            senderId: session.user.id,
             targetLink: `${baseUrl}/notes/${threadId}`,
+            pageTitle: parentThread?.title || undefined,
         });
 
         revalidatePath(`/notes/${threadId}`);
@@ -539,7 +644,9 @@ export async function createTeamNote(formData: FormData) {
     await notifyMentionedUsers({
         content,
         senderName,
+        senderId: session.user.id,
         targetLink: `${baseUrl}/notes/${thread.id}`,
+        pageTitle: thread.title || undefined,
     });
 
     revalidatePath("/notes");
@@ -837,11 +944,215 @@ export async function saveDiscordForumSettings(input: { suggestionsForumId?: str
     };
 }
 
+// ---------- Notifications ----------
+
+export async function getMyNotifications(limit = 20) {
+    const session = await auth();
+    if (!session?.user?.id) return [];
+    return (db as any).notification.findMany({
+        where: { userId: session.user.id },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+    });
+}
+
+export async function getMyUnreadNotificationCount() {
+    const session = await auth();
+    if (!session?.user?.id) return 0;
+    return (db as any).notification.count({
+        where: { userId: session.user.id, readAt: null },
+    });
+}
+
+export async function markNotificationRead(id: string) {
+    const session = await auth();
+    if (!session?.user?.id) return { error: "Unauthorized" };
+    await (db as any).notification.updateMany({
+        where: { id, userId: session.user.id, readAt: null },
+        data: { readAt: new Date() },
+    });
+    revalidatePath("/");
+}
+
+export async function markAllNotificationsRead() {
+    const session = await auth();
+    if (!session?.user?.id) return { error: "Unauthorized" };
+    await (db as any).notification.updateMany({
+        where: { userId: session.user.id, readAt: null },
+        data: { readAt: new Date() },
+    });
+    revalidatePath("/");
+}
+
+// ---------- Subtasks ----------
+
+export async function createSubtask(formData: FormData) {
+    const session = await auth();
+    if (!session?.user?.id) redirectToSignIn();
+    const reporterId = session.user.id;
+
+    const parentIssueId = formData.get("parentIssueId") as string | null;
+    const title = (formData.get("title") as string | null)?.trim();
+    const type = (formData.get("type") as string | null) || "TASK";
+    const priority = (formData.get("priority") as string | null) || "MEDIUM";
+
+    if (!parentIssueId) throw new Error("Missing parent");
+    if (!title) throw new Error("Missing title");
+
+    if (!(ALLOWED_TYPE as readonly string[]).includes(type)) throw new Error("Invalid type");
+    if (!(ALLOWED_PRIORITY as readonly string[]).includes(priority)) throw new Error("Invalid priority");
+
+    const parent = await db.issue.findUnique({
+        where: { id: parentIssueId },
+        select: { id: true, issueNumber: true, parentIssueId: true },
+    });
+    if (!parent) throw new Error("Parent issue not found");
+    if (parent.parentIssueId) {
+        throw new Error("Subtasks cannot themselves have subtasks");
+    }
+
+    let created = null;
+    for (let attempt = 0; attempt < 3 && !created; attempt += 1) {
+        try {
+            created = await db.$transaction(async (tx) => {
+                const lastIssue = await tx.issue.findFirst({
+                    where: { issueNumber: { not: null } },
+                    orderBy: { issueNumber: "desc" },
+                    select: { issueNumber: true },
+                });
+                const nextIssueNumber = (lastIssue?.issueNumber ?? 0) + 1;
+                return tx.issue.create({
+                    data: {
+                        issueNumber: nextIssueNumber,
+                        title,
+                        type,
+                        priority,
+                        severity: "MINOR",
+                        status: "OPEN",
+                        reporter: { connect: { id: reporterId } },
+                        parentIssue: { connect: { id: parentIssueId } },
+                    },
+                });
+            });
+        } catch (error: any) {
+            if (error?.code !== "P2002") throw error;
+        }
+    }
+    if (!created) throw new Error("Failed to create subtask");
+
+    revalidateIssuePaths(parentIssueId);
+    await redirectToIssue(parentIssueId);
+}
+
+export async function unlinkSubtask(formData: FormData) {
+    const session = await auth();
+    if (!session?.user?.id) redirectToSignIn();
+    const subtaskId = formData.get("subtaskId") as string | null;
+    const parentIssueId = formData.get("parentIssueId") as string | null;
+    if (!subtaskId || !parentIssueId) throw new Error("Missing fields");
+
+    await db.issue.updateMany({
+        where: { id: subtaskId, parentIssueId },
+        data: { parentIssueId: null },
+    });
+
+    revalidateIssuePaths(parentIssueId);
+    await redirectToIssue(parentIssueId);
+}
+
+// ---------- Issue Links ----------
+
+export async function createIssueLink(formData: FormData) {
+    const session = await auth();
+    if (!session?.user?.id) redirectToSignIn();
+
+    const sourceId = formData.get("sourceId") as string | null;
+    const targetRefRaw = (formData.get("targetRef") as string | null)?.trim();
+    const type = formData.get("linkType") as string | null;
+
+    if (!sourceId) throw new Error("Missing source");
+    if (!targetRefRaw) throw new Error("Provide a target issue reference (e.g. RR-12 or the ID)");
+    if (!type || !(ALLOWED_LINK_TYPE as readonly string[]).includes(type)) {
+        throw new Error("Invalid link type");
+    }
+
+    // Try to resolve target by issueNumber (numeric or RR-NNN) or by id.
+    let target = null as { id: string; issueNumber: number | null } | null;
+    const numberMatch = targetRefRaw.match(/(\d+)/);
+    if (numberMatch) {
+        const num = parseInt(numberMatch[1], 10);
+        target = await db.issue.findFirst({
+            where: { issueNumber: num },
+            select: { id: true, issueNumber: true },
+        });
+    }
+    if (!target) {
+        target = await db.issue.findUnique({
+            where: { id: targetRefRaw },
+            select: { id: true, issueNumber: true },
+        });
+    }
+    if (!target) throw new Error(`No issue found for "${targetRefRaw}"`);
+    if (target.id === sourceId) throw new Error("Cannot link an issue to itself");
+
+    const linkType = type as LinkType;
+    const inverse = LINK_TYPE_INVERSE[linkType];
+
+    await db.$transaction([
+        (db as any).issueLink.upsert({
+            where: { sourceId_targetId_type: { sourceId, targetId: target.id, type: linkType } },
+            create: { sourceId, targetId: target.id, type: linkType },
+            update: {},
+        }),
+        (db as any).issueLink.upsert({
+            where: { sourceId_targetId_type: { sourceId: target.id, targetId: sourceId, type: inverse } },
+            create: { sourceId: target.id, targetId: sourceId, type: inverse },
+            update: {},
+        }),
+    ]);
+
+    revalidateIssuePaths(sourceId);
+    revalidateIssuePaths(target.id);
+    await redirectToIssue(sourceId);
+}
+
+export async function deleteIssueLink(formData: FormData) {
+    const session = await auth();
+    if (!session?.user?.id) redirectToSignIn();
+
+    const linkId = formData.get("linkId") as string | null;
+    const sourceId = formData.get("sourceId") as string | null;
+    if (!linkId || !sourceId) throw new Error("Missing fields");
+
+    const link = await (db as any).issueLink.findUnique({ where: { id: linkId } });
+    if (!link) {
+        await redirectToIssue(sourceId);
+    }
+
+    const inverse = LINK_TYPE_INVERSE[link.type as LinkType];
+    await db.$transaction([
+        (db as any).issueLink.delete({ where: { id: linkId } }),
+        (db as any).issueLink.deleteMany({
+            where: {
+                sourceId: link.targetId,
+                targetId: link.sourceId,
+                type: inverse,
+            },
+        }),
+    ]);
+
+    revalidateIssuePaths(sourceId);
+    revalidateIssuePaths(link.targetId);
+    await redirectToIssue(sourceId);
+}
+
 export async function deleteAllProjectData() {
     const session = await auth();
     if (!session?.user?.id) redirectToSignIn();
 
     // Clear all DB relations
+    await (db as any).notification.deleteMany({});
+    await (db as any).issueLink.deleteMany({});
     await db.note.deleteMany({});
     await db.issue.deleteMany({});
     // Depending on schema, we might not have cascading on all, but Prisma handles normal deleteMany

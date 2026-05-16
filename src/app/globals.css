@@ -3,155 +3,175 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-card: var(--card);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-card: var(--surface);
+  --color-elevated: var(--elevated);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-input: var(--input);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
+  --color-ring: var(--ring);
+  --color-accent: var(--primary);
+  --color-accent-foreground: var(--primary-foreground);
   --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
-  --color-danger: var(--danger); 
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-bebas-neue);
 }
 
+/* ---------- Light theme (dim, not stark white) ---------- */
 :root {
-  /* color-scheme set on html below */
-  /* Light: stronger separation — page chrome vs raised cards/panels */
-  --background: #d3d8e3;
-  --foreground: #111827;
+  color-scheme: light;
 
-  --card: #f4f5f9;
+  --background: #e6e8ec;
+  --surface: #f1f2f5;
+  --surface-2: #e9ebef;
+  --elevated: #fafbfc;
 
-  --primary: #3ba9ff;
-  --primary-foreground: #04101e;
+  --foreground: #1b1d22;
+  --muted-foreground: #5b6271;
+  --subtle-foreground: #7a8190;
 
-  --accent: #ff5a4f;
-  --accent-foreground: #210706;
+  --muted: #dde0e6;
+  --border: #cbd0d8;
+  --border-strong: #b1b8c2;
+  --input: #d6dae1;
+  --ring: #2563eb;
 
-  --muted: #c5cbd9;
-  --muted-foreground: #3f4a5c;
+  /* Single restrained accent: blue */
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
 
-  --border: #8993a8;
-  --input: #7a8498;
-
-  --success: #4fc3a8;
-  --warning: #ffb64a;
-  --danger: #ef4444;
+  --success: #15a972;
+  --success-foreground: #ffffff;
+  --warning: #c2841a;
+  --warning-foreground: #ffffff;
+  --danger: #d6443c;
+  --danger-foreground: #ffffff;
+  --info: #0891b2;
+  --info-foreground: #ffffff;
 }
 
+/* ---------- Dark theme (deep, dim, low contrast chrome) ---------- */
 .dark {
-  /* color-scheme set on html.dark below */
-  --background: #1a1a1c;
+  color-scheme: dark;
+
+  --background: #0d0e10;
+  --surface: #14161a;
+  --surface-2: #181a1f;
+  --elevated: #1d2026;
+
   --foreground: #ececef;
+  --muted-foreground: #9aa0ac;
+  --subtle-foreground: #6b7280;
 
-  --card: #222226;
+  --muted: #1a1d22;
+  --border: #24272d;
+  --border-strong: #353941;
+  --input: #1d2026;
+  --ring: #60a5fa;
 
-  --primary: #3ca7ff;
-  --primary-foreground: #04111f;
+  --primary: #60a5fa;
+  --primary-foreground: #06122a;
 
-  --accent: #ff5a4f;
-  --accent-foreground: #250908;
-
-  --muted: #1f1f22;
-  --muted-foreground: #a0a0a8;
-
-  --border: #2a2a2e;
-  --input: #28282c;
-
-  --success: #59d7b8;
-  --warning: #ffc15a;
-  --danger: #ff7770;
+  --success: #34d399;
+  --success-foreground: #052e1a;
+  --warning: #f5b545;
+  --warning-foreground: #2a1a02;
+  --danger: #f47373;
+  --danger-foreground: #2a0808;
+  --info: #22d3ee;
+  --info-foreground: #042029;
 }
 
 html {
-  color-scheme: light;
-}
-
-html.dark {
-  color-scheme: dark;
+  height: 100%;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  background-image:
-    linear-gradient(180deg, color-mix(in oklab, var(--background), #000 16%) 0%, var(--background) 26%, color-mix(in oklab, var(--background), #000 8%) 100%),
-    url("/ops-grid.svg"),
-    url("/gta-noise.svg");
-  background-attachment: fixed;
-  background-size: cover, 100% 22px, 280px 280px;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-h1,
-h2,
-h3,
-.font-display {
-  font-family: var(--font-display), var(--font-sans), sans-serif;
-  letter-spacing: 0.04em;
+/* Unified native form control theming so the system popups don't pop with
+   wildly different colors on Windows/Linux. We still recommend the Select
+   primitive in src/components/ui/Select.tsx for app-controlled dropdowns. */
+select, input, textarea, button {
+  font-family: inherit;
 }
 
-/* Native <select> popup (esp. Windows + Chromium) uses system theming.
-   Use CSS UI Field colors so closed state + option list match color-scheme.
-   Avoid bg-* / text-* utilities on selects — they override this and can cause
-   dark option text on a dark popup. */
 select {
-  background-color: Field;
-  color: FieldText;
+  background-color: var(--input);
+  color: var(--foreground);
 }
 
 select option {
-  background-color: Canvas;
-  color: CanvasText;
+  background-color: var(--surface);
+  color: var(--foreground);
 }
 
-select option:checked {
-  background-color: Highlight;
-  color: HighlightText;
+/* Scrollbar polish (Webkit + Firefox) */
+* {
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--border-strong);
+  background-clip: content-box;
+  border: 2px solid transparent;
 }
 
-.gta-page {
-  @apply flex flex-col h-full p-5 max-w-[1800px] mx-auto space-y-4;
+/* Focus ring helper used by primitives */
+.focus-ring {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
 }
 
-.gta-hero {
-  @apply relative overflow-visible rounded-lg border-2 border-border p-4;
-  background:
-    linear-gradient(115deg, color-mix(in oklab, var(--muted), #000 30%) 0%, color-mix(in oklab, var(--background), #000 10%) 62%, color-mix(in oklab, var(--background), #000 20%) 100%),
-    url("/gta-stripes.svg");
-  background-size: cover;
-  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--foreground), transparent 88%), 0 20px 45px -30px color-mix(in oklab, var(--primary), #000 78%);
-}
-
-.gta-heading {
-  @apply text-2xl md:text-3xl leading-none uppercase;
-  text-shadow: 0 2px 12px color-mix(in oklab, var(--primary), transparent 80%);
-}
-
-.gta-subheading {
-  @apply text-xs text-muted-foreground mt-1 max-w-2xl uppercase tracking-[0.12em];
-}
-
-.gta-surface {
-  @apply rounded-md border-2 border-border bg-card shadow-md;
+/* Subtle elevation for floating panels */
+.shadow-pop {
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, var(--foreground), transparent 90%),
-    0 10px 28px -12px color-mix(in oklab, var(--foreground), transparent 82%);
+    0 1px 0 rgb(0 0 0 / 0.04),
+    0 10px 30px -12px rgb(0 0 0 / 0.45),
+    0 4px 12px -4px rgb(0 0 0 / 0.25);
 }
 
-.gta-action {
-  @apply inline-flex items-center gap-2 rounded-sm border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] transition-all;
-  border-color: color-mix(in oklab, var(--accent), #000 24%);
-  background: linear-gradient(180deg, color-mix(in oklab, var(--accent), #fff 4%) 0%, color-mix(in oklab, var(--accent), #000 10%) 100%);
-  color: #fff6f6;
-  box-shadow: 0 10px 25px -18px color-mix(in oklab, var(--accent), #000 42%);
-}
-
-.gta-label {
-  @apply text-[10px] uppercase tracking-[0.18em] text-muted-foreground;
+/* Header glass blur */
+.chrome-blur {
+  backdrop-filter: saturate(150%) blur(8px);
+  -webkit-backdrop-filter: saturate(150%) blur(8px);
 }

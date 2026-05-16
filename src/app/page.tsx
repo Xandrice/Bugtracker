@@ -1,51 +1,57 @@
-import { DataGrid, IssueSnippet } from "@/components/views/DataGrid"
-import { auth } from "@/../auth"
-import Link from "next/link"
-import { Plus } from "lucide-react"
-import { db } from "@/lib/db"
-import { HOME_HERO_SUBTITLE } from "@/lib/site"
+import { DataGrid, IssueSnippet } from "@/components/views/DataGrid";
+import { auth } from "@/../auth";
+import Link from "next/link";
+import { Plus } from "lucide-react";
+import { db } from "@/lib/db";
+import { HOME_HERO_SUBTITLE } from "@/lib/site";
+import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
+import { formatIssueRef } from "@/lib/issue-ids";
 
 export default async function Home() {
-  const session = await auth()
+    const rawIssues = await db.issue.findMany({
+        include: {
+            assignee: true,
+            parentIssue: { select: { id: true, issueNumber: true } },
+            _count: { select: { subtasks: true } },
+        },
+        orderBy: { updatedAt: "desc" },
+    });
 
-  const rawIssues = await db.issue.findMany({
-    include: { assignee: true },
-    orderBy: { updatedAt: 'desc' }
-  })
+    const issues: IssueSnippet[] = rawIssues.map((i: any) => ({
+        id: i.id,
+        issueNumber: i.issueNumber ?? null,
+        title: i.title,
+        type: i.type,
+        status: i.status,
+        priority: i.priority,
+        severity: i.severity,
+        assignee: i.assignee
+            ? { id: i.assignee.id, name: i.assignee.name, image: i.assignee.image }
+            : null,
+        updatedAt: i.updatedAt,
+        dueDate: i.dueDate ?? undefined,
+        parentIssueRef: i.parentIssue
+            ? formatIssueRef(i.parentIssue.issueNumber, i.parentIssue.id)
+            : null,
+        subtaskCount: i._count?.subtasks ?? 0,
+    }));
 
-  // Format explicitly as IssueSnippet types
-  const issues: IssueSnippet[] = rawIssues.map((i: any) => ({
-    id: i.id,
-    issueNumber: i.issueNumber ?? null,
-    title: i.title,
-    type: i.type as any,
-    status: i.status as any,
-    priority: i.priority as any,
-    severity: i.severity as any,
-    assignee: i.assignee ? { id: i.assignee.id, name: i.assignee.name, image: i.assignee.image } : null,
-    updatedAt: i.updatedAt
-  }));
-
-  return (
-    <div className="gta-page">
-      <div className="gta-hero flex items-center justify-between gap-4">
-        <div>
-          <h1 className="gta-heading">Reports</h1>
-          <p className="gta-subheading">
-            {HOME_HERO_SUBTITLE}
-          </p>
-        </div>
-
-        <Link
-          href="/issues/new"
-          className="gta-action"
-        >
-          <Plus className="h-4 w-4" />
-          File Incident
-        </Link>
-      </div>
-
-      <DataGrid issues={issues} />
-    </div>
-  )
+    return (
+        <PageContainer>
+            <PageHeader
+                title="Reports"
+                description={HOME_HERO_SUBTITLE}
+                actions={
+                    <Link
+                        href="/issues/new"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 h-8 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                        New issue
+                    </Link>
+                }
+            />
+            <DataGrid issues={issues} />
+        </PageContainer>
+    );
 }

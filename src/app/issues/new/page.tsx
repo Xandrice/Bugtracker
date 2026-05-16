@@ -1,196 +1,182 @@
 "use client";
 
-import { ArrowLeft, Save, Loader2, Calendar, Target } from "lucide-react";
+import { ArrowLeft, Save, Loader2, Calendar } from "lucide-react";
 import Link from "next/link";
 import { createIssue } from "@/app/actions";
 import { useFormStatus } from "react-dom";
 import { useState } from "react";
+import { PageContainer } from "@/components/ui/PageHeader";
+import { Card, CardBody, CardFooter, CardHeader, CardTitle } from "@/components/ui/Card";
+import { FieldRow, Input, Textarea } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
+import {
+    PRIORITY_OPTIONS,
+    SEVERITY_OPTIONS,
+    TYPE_OPTIONS,
+} from "@/lib/issue-tokens";
 
 function SubmitButton() {
     const { pending } = useFormStatus();
-
     return (
-        <button
-            type="submit"
-            disabled={pending}
-            className="inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all bg-primary text-primary-foreground hover:opacity-90 shadow-md hover:shadow-lg h-10 px-5 py-2 gap-2 disabled:opacity-50"
-        >
-            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {pending ? "Creating..." : "Create Issue"}
-        </button>
+        <Button type="submit" variant="primary" size="md" disabled={pending}>
+            {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            {pending ? "Creating…" : "Create issue"}
+        </Button>
     );
 }
 
+const LABEL_OPTIONS = [
+    { value: "", label: "—" },
+    { value: "SCRIPT", label: "Script" },
+    { value: "MAP", label: "Map" },
+    { value: "CAR", label: "Car" },
+    { value: "CLOTHES", label: "Clothes" },
+    { value: "OTHER", label: "Other / misc" },
+];
+
+const SEVERITY_HINT: Record<string, string> = {
+    MINOR: "Affects a few players (1–5) with a workaround available.",
+    MAJOR: "Affects multiple players (6–20) and disrupts normal play.",
+    CRITICAL: "Affects many players (21+) and blocks core gameplay loops.",
+    BLOCKER: "Affects nearly everyone and prevents the server or feature from being used.",
+};
+
 export default function NewIssuePage() {
     const [severity, setSeverity] = useState("MINOR");
-    const severityImpactCopy: Record<string, string> = {
-        MINOR: "Affects a few players (1-5) with a workaround available.",
-        MAJOR: "Affects multiple players (6-20) and disrupts normal play.",
-        CRITICAL: "Affects many players (21+) and blocks core gameplay loops.",
-        BLOCKER: "Affects nearly everyone and prevents the server or feature from being used.",
-    };
+    const [type, setType] = useState("BUG");
+    const [priority, setPriority] = useState("MEDIUM");
+    const [label, setLabel] = useState("");
 
     return (
-        <div className="gta-page max-w-3xl">
-            <div className="gta-hero flex flex-col gap-2">
-                <Link
-                    href="/issues"
-                    className="relative z-10 inline-flex items-center gap-1.5 w-fit rounded-sm border border-border/70 bg-muted/45 px-2.5 py-1.5 leading-none text-[11px] font-semibold uppercase tracking-[0.08em] text-white/95 hover:text-white hover:border-primary/50 transition-colors"
-                >
-                    <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
-                    Back to issues
-                </Link>
-                <h1 className="gta-heading mt-2">
-                    New Dispatch Ticket
-                </h1>
-                <p className="gta-subheading">
-                    Submit a bug, feature request, or task for your FiveM server. Include resource name and steps to reproduce when relevant.
-                </p>
-            </div>
+        <PageContainer className="max-w-3xl">
+            <Link
+                href="/issues"
+                className="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to issues
+            </Link>
 
-            <form action={createIssue} className="space-y-6 gta-surface p-6 lg:p-8">
-                <div className="space-y-2">
-                    <label htmlFor="title" className="text-sm font-medium leading-none">
-                        Title <span className="text-danger">*</span>
-                    </label>
-                    <input
-                        id="title"
-                        name="title"
-                        className="flex h-10 w-full rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                        placeholder="E.g. Police MDT fails to load when off duty"
-                        required
-                    />
-                </div>
+            <form action={createIssue}>
+                <Card>
+                    <CardHeader>
+                        <div className="space-y-1">
+                            <CardTitle>New issue</CardTitle>
+                            <p className="text-xs text-muted-foreground">
+                                Submit a bug, feature request, or task. Include resource name and steps to
+                                reproduce when relevant.
+                            </p>
+                        </div>
+                    </CardHeader>
+                    <CardBody className="space-y-5">
+                        <FieldRow label="Title" htmlFor="title">
+                            <Input
+                                id="title"
+                                name="title"
+                                placeholder="E.g. Police MDT fails to load when off duty"
+                                required
+                            />
+                        </FieldRow>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                        <label htmlFor="type" className="text-sm font-medium leading-none flex items-center gap-1.5">
-                            <Target className="h-4 w-4 text-primary" /> Type <span className="text-danger">*</span>
-                        </label>
-                        <select
-                            id="type"
-                            name="type"
-                            className="flex h-10 w-full rounded-lg border border-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <FieldRow label="Type" htmlFor="type">
+                                <Select
+                                    name="type"
+                                    value={type}
+                                    onChange={setType}
+                                    options={TYPE_OPTIONS}
+                                    size="md"
+                                />
+                            </FieldRow>
+                            <FieldRow label="Priority" htmlFor="priority">
+                                <Select
+                                    name="priority"
+                                    value={priority}
+                                    onChange={setPriority}
+                                    options={PRIORITY_OPTIONS}
+                                    size="md"
+                                />
+                            </FieldRow>
+                            <FieldRow label="Severity" htmlFor="severity" hint={SEVERITY_HINT[severity]}>
+                                <Select
+                                    name="severity"
+                                    value={severity}
+                                    onChange={setSeverity}
+                                    options={SEVERITY_OPTIONS}
+                                    size="md"
+                                />
+                            </FieldRow>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <FieldRow label="Tags" htmlFor="tags">
+                                <Input
+                                    id="tags"
+                                    name="tags"
+                                    placeholder="resource:police-mdt, ui, lua"
+                                />
+                            </FieldRow>
+                            <FieldRow label="Label / category" htmlFor="label">
+                                <Select
+                                    name="label"
+                                    value={label}
+                                    onChange={setLabel}
+                                    options={LABEL_OPTIONS}
+                                    size="md"
+                                />
+                            </FieldRow>
+                        </div>
+
+                        <FieldRow label="Due date" htmlFor="dueDate">
+                            <div className="relative">
+                                <Calendar className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-subtle-foreground" />
+                                <Input id="dueDate" name="dueDate" type="date" className="pl-8" />
+                            </div>
+                        </FieldRow>
+
+                        <FieldRow
+                            label="Discord forum post (optional)"
+                            htmlFor="discordPostId"
+                            hint="Paste a Discord post link or post ID — the bot will add a tracker notice."
                         >
-                            <option value="BUG">Bug</option>
-                            <option value="FEATURE">Feature Request</option>
-                            <option value="TASK">Task</option>
-                        </select>
-                    </div>
-                    <div className="space-y-2">
-                        <label htmlFor="priority" className="text-sm font-medium leading-none">Priority <span className="text-danger">*</span></label>
-                        <select
-                            id="priority"
-                            name="priority"
-                            className="flex h-10 w-full rounded-lg border border-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            <Input
+                                id="discordPostId"
+                                name="discordPostId"
+                                className="font-mono"
+                                placeholder="https://discord.com/channels/.../1489040926197289083"
+                            />
+                        </FieldRow>
+
+                        <FieldRow label="Description" htmlFor="description">
+                            <Textarea
+                                id="description"
+                                name="description"
+                                rows={5}
+                                placeholder="What happened or what do you want? Be specific."
+                            />
+                        </FieldRow>
+
+                        <FieldRow label="Steps to reproduce (bugs)" htmlFor="reproductionSteps">
+                            <Textarea
+                                id="reproductionSteps"
+                                name="reproductionSteps"
+                                rows={4}
+                                placeholder="1. Go to… 2. Click… 3. See error"
+                            />
+                        </FieldRow>
+                    </CardBody>
+                    <CardFooter>
+                        <Link
+                            href="/issues"
+                            className="inline-flex items-center justify-center rounded-md border border-border bg-transparent px-3 h-9 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                         >
-                            <option value="URGENT">P0 (Immediate Attention)</option>
-                            <option value="HIGH">P1 (High Impact)</option>
-                            <option value="MEDIUM">P2 (Standard Impact)</option>
-                            <option value="LOW">P3 (Low Impact)</option>
-                        </select>
-                    </div>
-                    <div className="space-y-2">
-                        <label htmlFor="severity" className="text-sm font-medium leading-none">Severity</label>
-                        <select
-                            id="severity"
-                            name="severity"
-                            value={severity}
-                            onChange={(e) => setSeverity(e.target.value)}
-                            className="flex h-10 w-full rounded-lg border border-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                        >
-                            <option value="MINOR">Minor (1-5 affected)</option>
-                            <option value="MAJOR">Major (6-20 affected)</option>
-                            <option value="CRITICAL">Critical (21+ affected)</option>
-                            <option value="BLOCKER">Blocker (Most/All affected)</option>
-                        </select>
-                        <p className="text-xs text-muted-foreground">{severityImpactCopy[severity]}</p>
-                    </div>
-                </div>
-
-                <div className="space-y-2 p-4 rounded-lg bg-muted/40 border border-border">
-                    <label htmlFor="discordPostId" className="text-sm font-medium leading-none">
-                        Discord forum post (optional)
-                    </label>
-                    <input
-                        id="discordPostId"
-                        name="discordPostId"
-                        className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                        placeholder="Paste post link or post ID"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                        Example: https://discord.com/channels/1083964697532973157/1489040926197289083 or 1489040926197289083
-                    </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <label htmlFor="tags" className="text-sm font-medium leading-none">Tags</label>
-                        <input
-                            id="tags"
-                            name="tags"
-                            className="flex h-10 w-full rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                            placeholder="resource:police-mdt, ui, lua..."
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label htmlFor="label" className="text-sm font-medium leading-none">Label / category</label>
-                        <select
-                            id="label"
-                            name="label"
-                            className="flex h-10 w-full rounded-lg border border-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                        >
-                            <option value="">Select category</option>
-                            <option value="SCRIPT">Script</option>
-                            <option value="MAP">Map</option>
-                            <option value="CAR">Car</option>
-                            <option value="CLOTHES">Clothes</option>
-                            <option value="OTHER">Other / Misc</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4">
-                    <div className="space-y-2">
-                        <label htmlFor="dueDate" className="text-sm font-medium leading-none flex items-center gap-1.5">
-                            <Calendar className="h-4 w-4 text-muted-foreground" /> Due date
-                        </label>
-                        <input
-                            id="dueDate"
-                            name="dueDate"
-                            type="date"
-                            className="flex h-10 w-full rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                        />
-                    </div>
-                </div>
-
-                <div className="space-y-2">
-                    <label htmlFor="description" className="text-sm font-medium leading-none">Description</label>
-                    <textarea
-                        id="description"
-                        name="description"
-                        className="flex min-h-[120px] w-full rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary resize-y"
-                        placeholder="What happened or what do you want? Be specific."
-                    />
-                </div>
-
-                <div className="space-y-2">
-                    <label htmlFor="reproductionSteps" className="text-sm font-medium leading-none">Steps to reproduce (bugs)</label>
-                    <textarea
-                        id="reproductionSteps"
-                        name="reproductionSteps"
-                        className="flex min-h-[80px] w-full rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary resize-y"
-                        placeholder="1. Go to... 2. Click... 3. See error"
-                    />
-                </div>
-
-                <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                    <Link href="/issues" className="inline-flex items-center justify-center rounded-lg text-sm font-medium transition-colors hover:bg-muted h-10 px-4 py-2 border text-muted-foreground">
-                        Cancel
-                    </Link>
-                    <SubmitButton />
-                </div>
+                            Cancel
+                        </Link>
+                        <SubmitButton />
+                    </CardFooter>
+                </Card>
             </form>
-        </div>
+        </PageContainer>
     );
 }

@@ -113,7 +113,7 @@ export function MentionTextarea({ wrapperClassName = "", ...props }: MentionText
     return (
         <div className={`relative ${wrapperClassName}`}>
             {showMentions && filteredUsers.length > 0 && (
-                <div className="absolute left-0 top-full mt-1 w-64 bg-background border border-border rounded-xl shadow-lg z-50 overflow-hidden flex flex-col max-h-[200px] overflow-y-auto p-1">
+                <div className="absolute left-0 top-full z-50 mt-1 flex max-h-[200px] w-64 flex-col overflow-y-auto rounded-md border border-border bg-elevated p-1 shadow-pop">
                     {filteredUsers.map((user, idx) => (
                         <button
                             type="button"
@@ -122,13 +122,21 @@ export function MentionTextarea({ wrapperClassName = "", ...props }: MentionText
                                 e.preventDefault();
                                 insertMention(user.name!);
                             }}
-                            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition-colors cursor-pointer w-full ${idx === selectedIndex ? "bg-primary text-primary-foreground" : "hover:bg-muted text-foreground"}`}
                             onMouseEnter={() => setSelectedIndex(idx)}
+                            className={`flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors ${
+                                idx === selectedIndex
+                                    ? "bg-primary text-primary-foreground"
+                                    : "text-foreground hover:bg-muted"
+                            }`}
                         >
                             {user.image ? (
-                                <img src={user.image} alt={user.name || "User"} className="w-5 h-5 rounded-full bg-background" />
+                                <img
+                                    src={user.image}
+                                    alt={user.name || "User"}
+                                    className="h-5 w-5 rounded-full border border-border bg-muted object-cover"
+                                />
                             ) : (
-                                <UserCircle2 className="w-5 h-5 opacity-70" />
+                                <UserCircle2 className="h-5 w-5 opacity-70" />
                             )}
                             <span className="truncate">{user.name}</span>
                         </button>

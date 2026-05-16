@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -9,32 +9,33 @@ import {
     LayoutDashboard,
     FileText,
     Users,
-    Settings2
+    Settings2,
+    Plus,
 } from "lucide-react";
-import clsx from "clsx";
+import { cn } from "@/components/ui/cn";
 
 const navItems = [
     {
-        title: "Issues",
+        title: "Work",
         items: [
-            { name: "My Issues", href: "/issues/me", icon: Inbox },
-            { name: "All Issues", href: "/issues", icon: ListTodo },
-        ]
+            { name: "My issues", href: "/issues/me", icon: Inbox },
+            { name: "All issues", href: "/issues", icon: ListTodo },
+        ],
     },
     {
         title: "Boards",
         items: [
             { name: "Main board", href: "/boards/main", icon: LayoutDashboard },
-            { name: "Bug Triage", href: "/boards/triage", icon: KanbanSquare },
-        ]
+            { name: "Triage", href: "/boards/triage", icon: KanbanSquare },
+        ],
     },
     {
-        title: "Team & Docs",
+        title: "Team",
         items: [
-            { name: "Team Notes", href: "/notes", icon: FileText },
+            { name: "Notes", href: "/notes", icon: FileText },
             { name: "Members", href: "/members", icon: Users },
-        ]
-    }
+        ],
+    },
 ];
 
 export function LeftSidebar({ isLoggedIn }: { isLoggedIn: boolean }) {
@@ -42,66 +43,75 @@ export function LeftSidebar({ isLoggedIn }: { isLoggedIn: boolean }) {
     const groups = isLoggedIn
         ? navItems
         : [
-            {
-                title: "Issues",
-                items: [{ name: "All Issues", href: "/issues", icon: ListTodo }],
-            }
-        ];
+              {
+                  title: "Work",
+                  items: [{ name: "All issues", href: "/issues", icon: ListTodo }],
+              },
+          ];
 
     return (
-        <aside className="w-56 border-r-2 border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85 h-[calc(100vh-3rem)] overflow-hidden hidden md:block shrink-0 transition-colors duration-200 flex flex-col">
-            <div className="flex flex-col gap-4 py-4 px-3 min-h-0 overflow-hidden">
-                {groups.map((group, i) => (
-                    <div key={i} className="flex flex-col gap-1 gta-surface p-2">
-                        <h4 className="text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase px-2 mb-1">
+        <aside className="hidden md:flex w-52 shrink-0 flex-col border-r border-border bg-surface/40 h-full overflow-hidden">
+            <div className="px-3 pt-3 pb-2">
+                <Link
+                    href="/issues/new"
+                    className="flex w-full items-center justify-center gap-1.5 rounded-md bg-primary px-2 h-8 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                    <Plus className="h-3.5 w-3.5" />
+                    New issue
+                </Link>
+            </div>
+
+            <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-4">
+                {groups.map((group) => (
+                    <div key={group.title} className="space-y-0.5">
+                        <h4 className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-subtle-foreground">
                             {group.title}
                         </h4>
-                        <nav className="flex flex-col gap-1">
-                            {group.items.map((item) => {
-                                const isActive = pathname === item.href;
-                                return (
-                                    <Link
-                                        key={item.href}
-                                        href={item.href}
-                                        className={clsx(
-                                            "flex items-center gap-2.5 rounded-sm px-2 py-1.5 text-xs uppercase tracking-[0.08em] font-medium transition-all group relative overflow-hidden border",
+                        {group.items.map((item) => {
+                            const isActive = pathname === item.href;
+                            return (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    className={cn(
+                                        "group flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                                        isActive
+                                            ? "bg-primary/12 text-primary"
+                                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    )}
+                                >
+                                    <item.icon
+                                        className={cn(
+                                            "h-3.5 w-3.5 shrink-0",
                                             isActive
-                                                ? "bg-primary/20 text-foreground border-2 border-primary"
-                                                : "text-muted-foreground hover:bg-muted hover:text-foreground border-2 border-border"
+                                                ? "text-primary"
+                                                : "text-subtle-foreground group-hover:text-foreground"
                                         )}
-                                    >
-                                        {isActive && (
-                                            <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-accent" />
-                                        )}
-                                        <item.icon className={clsx("h-3.5 w-3.5", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
-                                        {item.name}
-                                    </Link>
-                                );
-                            })}
-                        </nav>
+                                    />
+                                    {item.name}
+                                </Link>
+                            );
+                        })}
                     </div>
                 ))}
+            </nav>
 
-                {isLoggedIn && (
-                    <div className="mt-auto">
-                        <Link
-                            href="/settings"
-                            className={clsx(
-                                "flex items-center gap-2.5 rounded-sm px-2 py-1.5 text-xs uppercase tracking-[0.08em] font-medium transition-all group relative overflow-hidden gta-surface border",
-                                pathname === "/settings"
-                                    ? "bg-primary/20 text-foreground border-2 border-primary"
-                                    : "text-muted-foreground hover:bg-muted hover:text-foreground border-2 border-border"
-                            )}
-                        >
-                            {pathname === "/settings" && (
-                                <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-accent" />
-                            )}
-                            <Settings2 className={clsx("h-3.5 w-3.5", pathname === "/settings" ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
-                            Project Settings
-                        </Link>
-                    </div>
-                )}
-            </div>
+            {isLoggedIn && (
+                <div className="border-t border-border px-2 py-2">
+                    <Link
+                        href="/settings"
+                        className={cn(
+                            "flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                            pathname === "/settings"
+                                ? "bg-primary/12 text-primary"
+                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        )}
+                    >
+                        <Settings2 className="h-3.5 w-3.5 shrink-0" />
+                        Settings
+                    </Link>
+                </div>
+            )}
         </aside>
     );
 }

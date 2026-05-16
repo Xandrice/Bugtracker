@@ -1,53 +1,66 @@
 import { DataGrid, IssueSnippet } from "@/components/views/DataGrid";
 import { db } from "@/lib/db";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, AlertTriangle } from "lucide-react";
+import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
+import { Card, CardBody } from "@/components/ui/Card";
+import { formatIssueRef } from "@/lib/issue-ids";
 
 export default async function BugTriagePage() {
     const rawIssues = await db.issue.findMany({
         where: { assigneeId: null, status: "OPEN" },
-        include: { assignee: true },
-        orderBy: { updatedAt: 'desc' }
+        include: {
+            parentIssue: { select: { id: true, issueNumber: true } },
+            _count: { select: { subtasks: true } },
+        },
+        orderBy: { updatedAt: "desc" },
     });
 
     const issues: IssueSnippet[] = rawIssues.map((i: any) => ({
         id: i.id,
         issueNumber: i.issueNumber ?? null,
         title: i.title,
-        type: i.type as any,
-        status: i.status as any,
-        priority: i.priority as any,
-        severity: i.severity as any,
+        type: i.type,
+        status: i.status,
+        priority: i.priority,
+        severity: i.severity,
         assignee: null,
         updatedAt: i.updatedAt,
         dueDate: i.dueDate ?? undefined,
-        resourceName: i.resourceName ?? undefined,
-        storyPoints: i.storyPoints ?? undefined,
+        parentIssueRef: i.parentIssue
+            ? formatIssueRef(i.parentIssue.issueNumber, i.parentIssue.id)
+            : null,
+        subtaskCount: i._count?.subtasks ?? 0,
     }));
 
     return (
-        <div className="gta-page">
-            <div className="gta-hero flex items-center justify-between gap-4">
-                <div className="flex flex-col gap-2">
-                    <h1 className="gta-heading">Triage Board</h1>
-                    <p className="gta-subheading">
-                        Review and categorize newly reported bugs before assignment.
-                    </p>
-                </div>
-                <Link
-                    href="/issues/new"
-                    className="gta-action"
-                >
-                    <Plus className="h-4 w-4" />
-                    New Issue
-                </Link>
-            </div>
-
-            <div className="gta-surface bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300 p-4 text-sm">
-                <strong>Triage Goals:</strong> Priority assignment, severity validation, finding duplicates, and component tagging.
-            </div>
-
+        <PageContainer>
+            <PageHeader
+                title="Triage"
+                description="Review and categorize newly reported bugs before assignment."
+                actions={
+                    <Link
+                        href="/issues/new"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 h-8 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                        New issue
+                    </Link>
+                }
+            />
+            <Card className="border-warning/30 bg-warning/8">
+                <CardBody className="flex items-start gap-2.5 text-xs">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                    <div>
+                        <div className="font-semibold text-foreground">Triage goals</div>
+                        <p className="text-muted-foreground">
+                            Priority assignment, severity validation, finding duplicates, and component
+                            tagging.
+                        </p>
+                    </div>
+                </CardBody>
+            </Card>
             <DataGrid issues={issues} />
-        </div>
+        </PageContainer>
     );
 }

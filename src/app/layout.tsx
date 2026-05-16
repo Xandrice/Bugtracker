@@ -1,21 +1,15 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Bebas_Neue } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+    variable: "--font-geist-sans",
+    subsets: ["latin"],
 });
 
 const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const bebasNeue = Bebas_Neue({
-  variable: "--font-bebas-neue",
-  subsets: ["latin"],
-  weight: "400",
+    variable: "--font-geist-mono",
+    subsets: ["latin"],
 });
 
 import { TopNavbar } from "@/components/layout/TopNavbar";
@@ -30,27 +24,44 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({
-  children,
+    children,
 }: Readonly<{
-  children: React.ReactNode;
+    children: React.ReactNode;
 }>) {
-  const session = await auth();
+    const session = await auth();
 
-  return (
-    <html lang="en" suppressHydrationWarning className="h-full">
-      <body suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} ${bebasNeue.variable} antialiased h-full min-h-screen bg-background text-foreground overflow-hidden`}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <div className="flex flex-col h-screen overflow-hidden">
-            <TopNavbar />
-            <div className="flex flex-1 min-h-0 overflow-hidden">
-              <LeftSidebar isLoggedIn={!!session?.user?.id} />
-              <main className="flex-1 overflow-y-auto bg-transparent">
-                {children}
-              </main>
-            </div>
-          </div>
-        </ThemeProvider>
-      </body>
-    </html>
-  );
+    return (
+        <html lang="en" suppressHydrationWarning className="h-full">
+            <head>
+                {/*
+                  We ship our own dark mode, so ask Dark Reader / similar extensions
+                  to leave the page alone. Without this they inject inline styles
+                  into every SVG and trigger React hydration warnings.
+                */}
+                <meta name="darkreader-lock" />
+                <meta name="color-scheme" content="light dark" />
+            </head>
+            <body
+                suppressHydrationWarning
+                className={`${geistSans.variable} ${geistMono.variable} antialiased h-full min-h-screen bg-background text-foreground overflow-hidden`}
+            >
+                <ThemeProvider
+                    attribute="class"
+                    defaultTheme="system"
+                    enableSystem
+                    disableTransitionOnChange
+                >
+                    <div className="flex h-screen flex-col overflow-hidden">
+                        <TopNavbar />
+                        <div className="flex flex-1 min-h-0 overflow-hidden">
+                            <LeftSidebar isLoggedIn={!!session?.user?.id} />
+                            <main className="flex-1 min-h-0 overflow-y-auto bg-background">
+                                {children}
+                            </main>
+                        </div>
+                    </div>
+                </ThemeProvider>
+            </body>
+        </html>
+    );
 }

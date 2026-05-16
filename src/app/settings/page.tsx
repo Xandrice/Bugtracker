@@ -3,7 +3,17 @@
 import { useState, useEffect } from "react";
 import { Settings2, Database, Palette, Check, Loader2 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { exportProjectData, deleteAllProjectData, getDiscordForumSettings, saveDiscordForumSettings } from "@/app/actions";
+import {
+    exportProjectData,
+    deleteAllProjectData,
+    getDiscordForumSettings,
+    saveDiscordForumSettings,
+} from "@/app/actions";
+import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
+import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { FieldRow, Input } from "@/components/ui/Input";
+import { cn } from "@/components/ui/cn";
 
 export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState("general");
@@ -23,9 +33,7 @@ export default function SettingsPage() {
                 const settings = await getDiscordForumSettings();
                 setSuggestionsForumId(settings.suggestionsForumId);
                 setBugsForumId(settings.bugsForumId);
-            } catch {
-                // ignore
-            }
+            } catch {}
         })();
     }, []);
 
@@ -44,21 +52,23 @@ export default function SettingsPage() {
     const tabs = [
         { id: "general", label: "Integrations", icon: Settings2 },
         { id: "appearance", label: "Appearance", icon: Palette },
-        { id: "export", label: "Data Export", icon: Database },
+        { id: "export", label: "Data export", icon: Database },
     ];
 
     const handleExportJSON = async () => {
         setIsExporting("json");
         try {
             const data = await exportProjectData();
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+            const blob = new Blob([JSON.stringify(data, null, 2)], {
+                type: "application/json",
+            });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `bugtracker-export-${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `bugtracker-export-${new Date().toISOString().split("T")[0]}.json`;
             a.click();
             URL.revokeObjectURL(url);
-        } catch (error) {
+        } catch {
             alert("Failed to export data");
         }
         setIsExporting(false);
@@ -68,8 +78,6 @@ export default function SettingsPage() {
         setIsExporting("csv");
         try {
             const data = await exportProjectData();
-
-            // Basic CSV of issues
             const headers = ["ID", "Title", "Type", "Priority", "Status", "Reporter", "Assignee", "Created At"];
             const rows = data.issues.map((issue: any) => [
                 issue.id,
@@ -79,39 +87,32 @@ export default function SettingsPage() {
                 issue.status,
                 `"${(issue.reporter?.name || "Unknown").replace(/"/g, '""')}"`,
                 `"${(issue.assignee?.name || "Unassigned").replace(/"/g, '""')}"`,
-                new Date(issue.createdAt).toISOString()
+                new Date(issue.createdAt).toISOString(),
             ]);
-
             const csvContent = [headers.join(","), ...rows.map((r: any[]) => r.join(","))].join("\n");
             const blob = new Blob([csvContent], { type: "text/csv" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `bugtracker-issues-${new Date().toISOString().split('T')[0]}.csv`;
+            a.download = `bugtracker-issues-${new Date().toISOString().split("T")[0]}.csv`;
             a.click();
             URL.revokeObjectURL(url);
-        } catch (error) {
+        } catch {
             alert("Failed to export data");
         }
         setIsExporting(false);
     };
 
     return (
-        <div className="gta-page max-w-[1200px]">
-            <div className="gta-hero flex items-center gap-3">
-                <div className="p-2 bg-primary/20 text-primary rounded-lg border border-primary/30">
-                    <Settings2 className="h-6 w-6" />
-                </div>
-                <div>
-                    <h1 className="gta-heading text-3xl">Control Center</h1>
-                    <p className="gta-subheading mt-1">
-                        Manage Discord integration and other preferences.
-                    </p>
-                </div>
-            </div>
+        <PageContainer className="max-w-[1200px]">
+            <PageHeader
+                title="Settings"
+                description="Manage Discord integration, appearance, and project data."
+                icon={<Settings2 className="h-4 w-4" />}
+            />
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="col-span-1 border-r border-border/70 pr-6 space-y-1">
+            <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-5">
+                <nav className="space-y-0.5">
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
                         const isActive = activeTab === tab.id;
@@ -119,163 +120,204 @@ export default function SettingsPage() {
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`w-full flex items-center gap-3 px-3 py-2 rounded-r-md text-sm font-medium transition-colors border-l-2 ${isActive
-                                    ? "bg-primary/15 text-foreground border-primary"
-                                    : "text-muted-foreground hover:bg-muted/60 border-transparent"
-                                    }`}
+                                className={cn(
+                                    "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                                    isActive
+                                        ? "bg-primary/12 text-primary"
+                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                )}
                             >
-                                <Icon className="h-4 w-4" />
+                                <Icon className="h-3.5 w-3.5" />
                                 {tab.label}
                             </button>
                         );
                     })}
-                </div>
+                </nav>
 
-                <div className="md:col-span-3 space-y-6">
+                <div className="space-y-5">
                     {activeTab === "general" && (
-                        <>
-                            <div className="gta-surface overflow-hidden">
-                                <div className="px-6 py-4 border-b bg-muted/30">
-                                    <h3 className="font-semibold">Discord Forums</h3>
+                        <Card>
+                            <CardHeader>
+                                <div className="space-y-1">
+                                    <CardTitle>Discord forums</CardTitle>
                                     <p className="text-xs text-muted-foreground">
-                                        Configure forum parent IDs used by webhook filtering for Renegade Roleplay.
+                                        Configure forum parent IDs used by webhook filtering.
                                     </p>
                                 </div>
-                                <div className="p-6 space-y-4">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Suggestions forum ID</label>
-                                        <input
-                                            value={suggestionsForumId}
-                                            onChange={(e) => setSuggestionsForumId(e.target.value)}
-                                            className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                            placeholder="e.g. 123456789012345678"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Bugs forum ID</label>
-                                        <input
-                                            value={bugsForumId}
-                                            onChange={(e) => setBugsForumId(e.target.value)}
-                                            className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                            placeholder="e.g. 987654321098765432"
-                                        />
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={saveForumSettings}
-                                        disabled={isSavingForums}
-                                        className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium inline-flex items-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
-                                    >
-                                        {isSavingForums ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                                        {isSavingForums ? "Saving..." : "Save Discord Forums"}
-                                    </button>
-                                </div>
-                            </div>
-                        </>
+                            </CardHeader>
+                            <CardBody className="space-y-4">
+                                <FieldRow label="Suggestions forum ID">
+                                    <Input
+                                        value={suggestionsForumId}
+                                        onChange={(e) => setSuggestionsForumId(e.target.value)}
+                                        className="font-mono"
+                                        placeholder="e.g. 123456789012345678"
+                                    />
+                                </FieldRow>
+                                <FieldRow label="Bugs forum ID">
+                                    <Input
+                                        value={bugsForumId}
+                                        onChange={(e) => setBugsForumId(e.target.value)}
+                                        className="font-mono"
+                                        placeholder="e.g. 987654321098765432"
+                                    />
+                                </FieldRow>
+                                <Button
+                                    type="button"
+                                    onClick={saveForumSettings}
+                                    disabled={isSavingForums}
+                                    variant="primary"
+                                    size="md"
+                                >
+                                    {isSavingForums && (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    )}
+                                    {isSavingForums ? "Saving…" : "Save Discord forums"}
+                                </Button>
+                            </CardBody>
+                        </Card>
                     )}
 
                     {activeTab === "appearance" && (
-                        <div className="gta-surface overflow-hidden">
-                            <div className="px-6 py-4 border-b bg-muted/30">
-                                <h3 className="font-semibold">Appearance Settings</h3>
-                                <p className="text-xs text-muted-foreground">Customize the look and feel of the application.</p>
-                            </div>
-                            <div className="p-6 space-y-6">
-                                <div className="space-y-3">
-                                    <label className="text-sm font-medium block">Theme Options</label>
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                        <div
-                                            onClick={() => setTheme('light')}
-                                            className={`border rounded-md p-4 text-center cursor-pointer hover:border-primary shadow-sm relative ${mounted && theme === 'light' ? 'border-primary ring-1 ring-primary bg-primary/5' : 'bg-background'}`}
-                                        >
-                                            {mounted && theme === 'light' && <Check className="absolute top-2 right-2 text-primary w-4 h-4" />}
-                                            <div className="w-8 h-8 rounded-full bg-slate-100 mx-auto mb-2 border shadow-inner"></div>
-                                            <span className="text-sm font-medium">Light</span>
-                                        </div>
-                                        <div
-                                            onClick={() => setTheme('dark')}
-                                            className={`border rounded-md p-4 text-center cursor-pointer hover:border-primary shadow-sm relative ${mounted && theme === 'dark' ? 'border-primary ring-1 ring-primary bg-primary/5' : 'bg-background'}`}
-                                        >
-                                            {mounted && theme === 'dark' && <Check className="absolute top-2 right-2 text-primary w-4 h-4" />}
-                                            <div className="w-8 h-8 rounded-full bg-slate-900 mx-auto mb-2 border border-slate-700 shadow-inner"></div>
-                                            <span className="text-sm font-medium">Dark</span>
-                                        </div>
-                                        <div
-                                            onClick={() => setTheme('system')}
-                                            className={`border rounded-md p-4 text-center cursor-pointer hover:border-primary shadow-sm relative ${mounted && theme === 'system' ? 'border-primary ring-1 ring-primary bg-primary/5' : 'bg-background'}`}
-                                        >
-                                            {mounted && theme === 'system' && <Check className="absolute top-2 right-2 text-primary w-4 h-4" />}
-                                            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-slate-100 to-slate-900 mx-auto mb-2 border shadow-inner"></div>
-                                            <span className="text-sm font-medium">System Default</span>
-                                        </div>
-                                    </div>
+                        <Card>
+                            <CardHeader>
+                                <div className="space-y-1">
+                                    <CardTitle>Appearance</CardTitle>
+                                    <p className="text-xs text-muted-foreground">
+                                        Customize the look and feel of the application.
+                                    </p>
                                 </div>
-                            </div>
-                        </div>
+                            </CardHeader>
+                            <CardBody className="space-y-3">
+                                <p className="text-xs font-medium text-muted-foreground">Theme</p>
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                    {(["light", "dark", "system"] as const).map((opt) => {
+                                        const active = mounted && theme === opt;
+                                        const swatch =
+                                            opt === "light"
+                                                ? "bg-[#e6e8ec] border-[#cbd0d8]"
+                                                : opt === "dark"
+                                                    ? "bg-[#0d0e10] border-[#24272d]"
+                                                    : "bg-gradient-to-r from-[#e6e8ec] to-[#0d0e10] border-border";
+                                        return (
+                                            <button
+                                                key={opt}
+                                                type="button"
+                                                onClick={() => setTheme(opt)}
+                                                className={cn(
+                                                    "relative flex flex-col items-center gap-2 rounded-md border p-4 text-center text-xs transition-colors",
+                                                    active
+                                                        ? "border-primary bg-primary/8"
+                                                        : "border-border hover:border-border-strong"
+                                                )}
+                                            >
+                                                {active && (
+                                                    <Check className="absolute right-2 top-2 h-3.5 w-3.5 text-primary" />
+                                                )}
+                                                <span
+                                                    className={cn(
+                                                        "h-7 w-7 rounded-full border",
+                                                        swatch
+                                                    )}
+                                                />
+                                                <span className="font-medium capitalize text-foreground">
+                                                    {opt}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </CardBody>
+                        </Card>
                     )}
 
                     {activeTab === "export" && (
-                        <div className="space-y-6">
-                            <div className="gta-surface overflow-hidden">
-                                <div className="px-6 py-4 border-b bg-muted/30">
-                                    <h3 className="font-semibold">Data Export</h3>
-                                    <p className="text-xs text-muted-foreground">Export your project data indefinitely.</p>
-                                </div>
-                                <div className="p-6 space-y-4">
-                                    <p className="text-sm text-muted-foreground">
-                                        You can export all your project data, including issues, users, and notes, into a JSON or CSV format. The generation process might take a few minutes depending on the size of your project.
+                        <div className="space-y-5">
+                            <Card>
+                                <CardHeader>
+                                    <div className="space-y-1">
+                                        <CardTitle>Data export</CardTitle>
+                                        <p className="text-xs text-muted-foreground">
+                                            Export all your project data as JSON or CSV.
+                                        </p>
+                                    </div>
+                                </CardHeader>
+                                <CardBody className="space-y-3">
+                                    <p className="text-xs text-muted-foreground">
+                                        Includes issues, users, and notes. The generation process may
+                                        take a moment depending on project size.
                                     </p>
-                                    <div className="flex gap-3">
-                                        <button
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button
                                             onClick={handleExportCSV}
                                             disabled={isExporting !== false}
-                                            className="border px-4 py-2 rounded-md text-sm font-medium hover:bg-muted transition-colors flex items-center gap-2 disabled:opacity-50"
+                                            variant="outline"
+                                            size="sm"
                                         >
-                                            {isExporting === "csv" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
-                                            {isExporting === "csv" ? "Exporting..." : "Export as CSV"}
-                                        </button>
-                                        <button
+                                            {isExporting === "csv" ? (
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            ) : (
+                                                <Database className="h-3.5 w-3.5" />
+                                            )}
+                                            {isExporting === "csv" ? "Exporting…" : "Export CSV"}
+                                        </Button>
+                                        <Button
                                             onClick={handleExportJSON}
                                             disabled={isExporting !== false}
-                                            className="border px-4 py-2 rounded-md text-sm font-medium hover:bg-muted transition-colors flex items-center gap-2 disabled:opacity-50"
+                                            variant="outline"
+                                            size="sm"
                                         >
-                                            {isExporting === "json" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
-                                            {isExporting === "json" ? "Exporting..." : "Export as JSON"}
-                                        </button>
+                                            {isExporting === "json" ? (
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            ) : (
+                                                <Database className="h-3.5 w-3.5" />
+                                            )}
+                                            {isExporting === "json" ? "Exporting…" : "Export JSON"}
+                                        </Button>
                                     </div>
-                                </div>
-                            </div>
+                                </CardBody>
+                            </Card>
 
-                            <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-xl overflow-hidden shadow-sm">
-                                <div className="px-6 py-4 border-b border-red-200 dark:border-red-900 bg-red-100/50 dark:bg-red-900/20 relative">
-                                    <h3 className="font-semibold text-red-800 dark:text-red-400">Danger Zone</h3>
-                                </div>
-                                <div className="p-6">
-                                    <p className="text-sm text-red-800 dark:text-red-400 mb-4">Once you delete project data, there is no going back. All issues, notes, and activity will be cleared.</p>
-                                    <button
+                            <Card className="border-danger/30">
+                                <CardHeader className="border-danger/20 bg-danger/5">
+                                    <CardTitle className="text-danger">Danger zone</CardTitle>
+                                </CardHeader>
+                                <CardBody className="space-y-3">
+                                    <p className="text-xs text-muted-foreground">
+                                        Once you delete project data there is no going back. All issues,
+                                        notes, links, and notifications will be cleared.
+                                    </p>
+                                    <Button
+                                        variant="danger"
+                                        size="sm"
+                                        disabled={isDeleting}
                                         onClick={async () => {
-                                            if (confirm("Are you absolutely sure you want to delete all project data? This cannot be undone.")) {
+                                            if (
+                                                confirm(
+                                                    "Are you absolutely sure you want to delete all project data? This cannot be undone."
+                                                )
+                                            ) {
                                                 setIsDeleting(true);
                                                 try {
                                                     await deleteAllProjectData();
-                                                } catch (e) {
+                                                } catch {
                                                     alert("Failed to delete project data");
                                                     setIsDeleting(false);
                                                 }
                                             }
                                         }}
-                                        disabled={isDeleting}
-                                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-50 inline-flex items-center gap-2"
                                     >
-                                        {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                                        {isDeleting ? "Deleting..." : "Delete All Project Data"}
-                                    </button>
-                                </div>
-                            </div>
+                                        {isDeleting && (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        )}
+                                        {isDeleting ? "Deleting…" : "Delete all project data"}
+                                    </Button>
+                                </CardBody>
+                            </Card>
                         </div>
                     )}
                 </div>
             </div>
-        </div>
+        </PageContainer>
     );
 }

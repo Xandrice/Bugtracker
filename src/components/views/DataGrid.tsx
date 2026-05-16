@@ -1,115 +1,115 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react"
-import Link from "next/link"
+import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import {
-    AlertCircle,
     ArrowDown,
     ArrowUp,
-    Bug as BugIcon,
-    CheckCircle2,
-    CircleDashed,
-    MoreHorizontal,
-    Lightbulb,
-    KanbanSquare,
-    Loader2
-} from "lucide-react"
-import clsx from "clsx"
-import { updateIssueWorkflow } from "@/app/actions"
-import { formatIssueRef } from "@/lib/issue-ids"
+    Filter,
+    Loader2,
+    Search,
+    X,
+} from "lucide-react";
+import { updateIssueWorkflow } from "@/app/actions";
+import { formatIssueRef } from "@/lib/issue-ids";
+import {
+    PRIORITY_META,
+    PRIORITY_OPTIONS,
+    SEVERITY_META,
+    SEVERITY_OPTIONS,
+    STATUS_META,
+    STATUS_OPTIONS,
+    TYPE_META,
+    TYPE_OPTIONS,
+    type IssuePriority,
+    type IssueSeverity,
+    type IssueStatus,
+    type IssueType,
+    normalizePriority,
+    normalizeSeverity,
+    normalizeStatus,
+    normalizeType,
+} from "@/lib/issue-tokens";
+import { Select } from "@/components/ui/Select";
+import { Badge } from "@/components/ui/Badge";
+import { Avatar } from "@/components/ui/Avatar";
+import { cn } from "@/components/ui/cn";
 
-export type IssueStatus = "OPEN" | "IN_PROGRESS" | "REVIEW" | "DONE"
-export type IssuePriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT"
-export type IssueType = "BUG" | "FEATURE" | "TASK"
-export type IssueSeverity = "MINOR" | "MAJOR" | "CRITICAL" | "BLOCKER"
+// ---- Backwards-compat re-exports for any page still importing these ----
+export type { IssueStatus, IssuePriority, IssueType, IssueSeverity } from "@/lib/issue-tokens";
+
+export const statusStyles: Record<IssueStatus, string> = {
+    OPEN: "bg-info/12 text-info border-info/30",
+    IN_PROGRESS: "bg-warning/12 text-warning border-warning/30",
+    REVIEW: "bg-primary/12 text-primary border-primary/30",
+    DONE: "bg-success/12 text-success border-success/30",
+};
+
+export const typeStyles: Record<IssueType, string> = {
+    BUG: "bg-danger/12 text-danger border-danger/30",
+    FEATURE: "bg-info/12 text-info border-info/30",
+    TASK: "bg-muted text-muted-foreground border-border",
+};
+
+export const priorityLabels: Record<IssuePriority, string> = {
+    URGENT: "P0 · Urgent",
+    HIGH: "P1 · High",
+    MEDIUM: "P2 · Medium",
+    LOW: "P3 · Low",
+};
+
+export const StatusIcon = ({ status }: { status: IssueStatus }) => (
+    <>{STATUS_META[status].icon}</>
+);
+export const PriorityIcon = ({ priority }: { priority: IssuePriority }) => (
+    <>{PRIORITY_META[priority].icon}</>
+);
+export const TypeIcon = ({ type }: { type: IssueType }) => (
+    <>{TYPE_META[type].icon}</>
+);
+
+// ---- Snippet shape ----
 
 export interface UserSnippet {
-    id: string
-    name: string | null
-    image: string | null
+    id: string;
+    name: string | null;
+    image: string | null;
 }
 
 export interface IssueSnippet {
-    id: string
-    issueNumber?: number | null
-    title: string
-    status: IssueStatus
-    priority: IssuePriority
-    type: IssueType
-    assignee: UserSnippet | null
-    updatedAt: Date
-    severity?: IssueSeverity
-    environment?: string | null
-    tags?: string | null
-    dueDate?: Date | null
-    resourceName?: string | null
-    storyPoints?: number | null
-}
-
-export const statusStyles: Record<IssueStatus, string> = {
-    OPEN: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30",
-    IN_PROGRESS: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30",
-    REVIEW: "bg-primary/15 text-blue-700 dark:text-blue-300 border-primary/40",
-    DONE: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
-}
-
-export const typeStyles: Record<IssueType, string> = {
-    BUG: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30",
-    FEATURE: "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30",
-    TASK: "bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30",
-}
-
-const priorityStyles: Record<IssuePriority, string> = {
-    LOW: "text-slate-500",
-    MEDIUM: "text-amber-500",
-    HIGH: "text-orange-500",
-    URGENT: "text-red-500",
-}
-
-export const priorityLabels: Record<IssuePriority, string> = {
-    URGENT: "P0 (Immediate Attention)",
-    HIGH: "P1 (High Impact)",
-    MEDIUM: "P2 (Standard Impact)",
-    LOW: "P2 (Low Impact)",
-}
-
-export const StatusIcon = ({ status }: { status: IssueStatus }) => {
-    switch (status) {
-        case "OPEN": return <CircleDashed className="h-4 w-4 text-sky-500" />
-        case "IN_PROGRESS": return <KanbanSquare className="h-4 w-4 text-amber-500" />
-        case "REVIEW": return <AlertCircle className="h-4 w-4 text-primary" />
-        case "DONE": return <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-    }
-}
-
-export const PriorityIcon = ({ priority }: { priority: IssuePriority }) => {
-    switch (priority) {
-        case "LOW": return <ArrowDown className={clsx("h-4 w-4", priorityStyles.LOW)} />
-        case "MEDIUM": return <MoreHorizontal className={clsx("h-4 w-4", priorityStyles.MEDIUM)} />
-        case "HIGH": return <ArrowUp className={clsx("h-4 w-4", priorityStyles.HIGH)} />
-        case "URGENT": return <AlertCircle className={clsx("h-4 w-4", priorityStyles.URGENT)} />
-    }
-}
-
-export const TypeIcon = ({ type }: { type: IssueType }) => {
-    switch (type) {
-        case "BUG": return <BugIcon className="h-4 w-4 text-red-500" />
-        case "FEATURE": return <Lightbulb className="h-4 w-4 text-blue-500" />
-        case "TASK": return <CheckCircle2 className="h-4 w-4 text-slate-500" />
-    }
+    id: string;
+    issueNumber?: number | null;
+    title: string;
+    status: IssueStatus;
+    priority: IssuePriority;
+    type: IssueType;
+    assignee: UserSnippet | null;
+    updatedAt: Date;
+    severity?: IssueSeverity;
+    environment?: string | null;
+    tags?: string | null;
+    dueDate?: Date | null;
+    resourceName?: string | null;
+    storyPoints?: number | null;
+    parentIssueRef?: string | null;
+    subtaskCount?: number;
 }
 
 interface DataGridProps {
-    issues: IssueSnippet[]
-    hideFilters?: boolean
+    issues: IssueSnippet[];
+    hideFilters?: boolean;
 }
 
 export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
     const [localIssues, setLocalIssues] = useState(issues);
-    const [sortConfig, setSortConfig] = useState<{ key: keyof IssueSnippet, direction: "asc" | "desc" } | null>(null);
+    const [sortConfig, setSortConfig] = useState<{
+        key: keyof IssueSnippet;
+        direction: "asc" | "desc";
+    } | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>("ALL");
     const [typeFilter, setTypeFilter] = useState<string>("ALL");
     const [assigneeFilter, setAssigneeFilter] = useState<string>("ALL");
+    const [search, setSearch] = useState("");
     const [pendingIssueId, setPendingIssueId] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
 
@@ -118,8 +118,8 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
     }, [issues]);
 
     const assignees = useMemo(() => {
-        const unique = new Map();
-        localIssues.forEach(i => {
+        const unique = new Map<string, UserSnippet>();
+        localIssues.forEach((i) => {
             if (i.assignee) unique.set(i.assignee.id, i.assignee);
         });
         return Array.from(unique.values());
@@ -135,50 +135,62 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
 
     const getSortIndicator = (key: keyof IssueSnippet) => {
         if (!sortConfig || sortConfig.key !== key) return null;
-        return sortConfig.direction === "asc" ? <ArrowUp className="w-3 h-3 inline ml-1 text-primary" /> : <ArrowDown className="w-3 h-3 inline ml-1 text-primary" />;
+        return sortConfig.direction === "asc" ? (
+            <ArrowUp className="w-3 h-3 inline ml-1 text-primary" />
+        ) : (
+            <ArrowDown className="w-3 h-3 inline ml-1 text-primary" />
+        );
     };
 
     const sortedAndFilteredIssues = useMemo(() => {
         let filtered = localIssues;
 
-        if (statusFilter !== "ALL") {
-            filtered = filtered.filter(i => i.status === statusFilter);
-        }
-        if (typeFilter !== "ALL") {
-            filtered = filtered.filter(i => i.type === typeFilter);
-        }
+        if (statusFilter !== "ALL") filtered = filtered.filter((i) => i.status === statusFilter);
+        if (typeFilter !== "ALL") filtered = filtered.filter((i) => i.type === typeFilter);
         if (assigneeFilter !== "ALL") {
-            if (assigneeFilter === "UNASSIGNED") {
-                filtered = filtered.filter(i => !i.assignee);
-            } else {
-                filtered = filtered.filter(i => i.assignee?.id === assigneeFilter);
-            }
+            if (assigneeFilter === "UNASSIGNED") filtered = filtered.filter((i) => !i.assignee);
+            else filtered = filtered.filter((i) => i.assignee?.id === assigneeFilter);
+        }
+        if (search.trim()) {
+            const q = search.trim().toLowerCase();
+            filtered = filtered.filter(
+                (i) =>
+                    i.title.toLowerCase().includes(q) ||
+                    formatIssueRef(i.issueNumber, i.id).toLowerCase().includes(q)
+            );
         }
 
         if (!sortConfig) return filtered;
 
-        const priorityOrder: Record<IssuePriority, number> = { LOW: 1, MEDIUM: 2, HIGH: 3, URGENT: 4 };
+        const priorityOrder: Record<IssuePriority, number> = {
+            LOW: 1,
+            MEDIUM: 2,
+            HIGH: 3,
+            URGENT: 4,
+        };
 
         return [...filtered].sort((a, b) => {
-            if (sortConfig.key === 'priority') {
-                const aVal = priorityOrder[a.priority as IssuePriority] || 0;
-                const bVal = priorityOrder[b.priority as IssuePriority] || 0;
-                return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+            if (sortConfig.key === "priority") {
+                const aVal = priorityOrder[a.priority] || 0;
+                const bVal = priorityOrder[b.priority] || 0;
+                return sortConfig.direction === "asc" ? aVal - bVal : bVal - aVal;
             }
-            if (sortConfig.key === 'updatedAt') {
+            if (sortConfig.key === "updatedAt") {
                 const aTime = new Date(a.updatedAt).getTime();
                 const bTime = new Date(b.updatedAt).getTime();
-                return sortConfig.direction === 'asc' ? aTime - bTime : bTime - aTime;
+                return sortConfig.direction === "asc" ? aTime - bTime : bTime - aTime;
             }
-            if (sortConfig.key === 'dueDate') {
+            if (sortConfig.key === "dueDate") {
                 const aTime = a.dueDate ? new Date(a.dueDate).getTime() : 0;
                 const bTime = b.dueDate ? new Date(b.dueDate).getTime() : 0;
-                return sortConfig.direction === 'asc' ? aTime - bTime : bTime - aTime;
+                return sortConfig.direction === "asc" ? aTime - bTime : bTime - aTime;
             }
-            if (sortConfig.key === 'assignee') {
+            if (sortConfig.key === "assignee") {
                 const aName = a.assignee?.name || "";
                 const bName = b.assignee?.name || "";
-                return sortConfig.direction === 'asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
+                return sortConfig.direction === "asc"
+                    ? aName.localeCompare(bName)
+                    : bName.localeCompare(aName);
             }
 
             const aVal = a[sortConfig.key];
@@ -187,34 +199,32 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
             if (aVal == null && bVal == null) return 0;
             if (aVal == null) return 1;
             if (bVal == null) return -1;
-
-            if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-            if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+            if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
+            if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
             return 0;
         });
-    }, [localIssues, sortConfig, statusFilter, typeFilter, assigneeFilter]);
+    }, [localIssues, sortConfig, statusFilter, typeFilter, assigneeFilter, search]);
 
     const runWorkflowUpdate = (
         issueId: string,
-        updates: Partial<{ type: IssueType; priority: IssuePriority; severity: IssueSeverity; status: IssueStatus }>
+        updates: Partial<{
+            type: IssueType;
+            priority: IssuePriority;
+            severity: IssueSeverity;
+            status: IssueStatus;
+        }>
     ) => {
         const previous = localIssues;
 
-        setLocalIssues(prev => prev.map(issue => {
-            if (issue.id !== issueId) return issue;
-            return {
-                ...issue,
-                ...updates,
-            };
-        }));
+        setLocalIssues((prev) =>
+            prev.map((issue) => (issue.id !== issueId ? issue : { ...issue, ...updates }))
+        );
         setPendingIssueId(issueId);
 
         startTransition(async () => {
             try {
                 const result = await updateIssueWorkflow(issueId, updates);
-                if (result?.error) {
-                    setLocalIssues(previous);
-                }
+                if (result?.error) setLocalIssues(previous);
             } catch {
                 setLocalIssues(previous);
             } finally {
@@ -223,217 +233,322 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
         });
     };
 
-    const selectClasses =
-        "text-[11px] h-7 rounded-sm border-2 border-border px-2 uppercase tracking-[0.06em] shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40";
+    const hasActiveFilters =
+        statusFilter !== "ALL" ||
+        typeFilter !== "ALL" ||
+        assigneeFilter !== "ALL" ||
+        search.trim() !== "";
 
     return (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
             {!hideFilters && (
-                <div className="flex flex-wrap items-center gap-2.5 gta-surface p-2.5">
-                    <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.2em] px-1">Filters</div>
-                    <select
+                <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface p-2">
+                    <div className="flex items-center gap-1.5 px-1.5 text-[11px] uppercase tracking-wider text-subtle-foreground">
+                        <Filter className="h-3 w-3" />
+                        Filter
+                    </div>
+
+                    <div className="relative flex-1 min-w-[160px] max-w-xs">
+                        <Search className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-subtle-foreground" />
+                        <input
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search…"
+                            className="h-7 w-full rounded-md border border-input bg-elevated pl-7 pr-2 text-xs focus-ring transition-colors hover:border-border-strong"
+                        />
+                    </div>
+
+                    <Select
+                        size="xs"
                         value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="text-[11px] px-2.5 py-1.5 rounded-sm border-2 border-border shadow-sm transition-colors outline-none focus:ring-2 focus:ring-primary/40 appearance-none hover:opacity-90 uppercase tracking-[0.06em]"
-                    >
-                        <option value="ALL">Status: All</option>
-                        <option value="OPEN">Open</option>
-                        <option value="IN_PROGRESS">In Progress</option>
-                        <option value="REVIEW">Review</option>
-                        <option value="DONE">Done</option>
-                    </select>
-                    <select
+                        onChange={setStatusFilter}
+                        options={[
+                            { value: "ALL", label: "Status · All" },
+                            ...STATUS_OPTIONS,
+                        ]}
+                        className="w-auto min-w-[120px]"
+                        fullWidth={false}
+                    />
+                    <Select
+                        size="xs"
                         value={typeFilter}
-                        onChange={(e) => setTypeFilter(e.target.value)}
-                        className="text-[11px] px-2.5 py-1.5 rounded-sm border-2 border-border shadow-sm transition-colors outline-none focus:ring-2 focus:ring-primary/40 appearance-none hover:opacity-90 uppercase tracking-[0.06em]"
-                    >
-                        <option value="ALL">Type: All</option>
-                        <option value="BUG">Bug</option>
-                        <option value="FEATURE">Feature</option>
-                        <option value="TASK">Task</option>
-                    </select>
-                    <select
+                        onChange={setTypeFilter}
+                        options={[
+                            { value: "ALL", label: "Type · All" },
+                            ...TYPE_OPTIONS,
+                        ]}
+                        className="w-auto min-w-[120px]"
+                        fullWidth={false}
+                    />
+                    <Select
+                        size="xs"
                         value={assigneeFilter}
-                        onChange={(e) => setAssigneeFilter(e.target.value)}
-                        className="text-[11px] px-2.5 py-1.5 rounded-sm border-2 border-border shadow-sm transition-colors outline-none focus:ring-2 focus:ring-primary/40 appearance-none hover:opacity-90 uppercase tracking-[0.06em]"
-                    >
-                        <option value="ALL">Assignee: Anyone</option>
-                        <option value="UNASSIGNED">Unassigned</option>
-                        {assignees.map(a => (
-                            <option key={a.id} value={a.id}>{a.name}</option>
-                        ))}
-                    </select>
+                        onChange={setAssigneeFilter}
+                        options={[
+                            { value: "ALL", label: "Assignee · Anyone" },
+                            { value: "UNASSIGNED", label: "Unassigned" },
+                            ...assignees.map((a) => ({
+                                value: a.id,
+                                label: a.name || "Unnamed",
+                            })),
+                        ]}
+                        className="w-auto min-w-[150px]"
+                        fullWidth={false}
+                        maxVisibleItems={5}
+                    />
+
+                    {hasActiveFilters && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setStatusFilter("ALL");
+                                setTypeFilter("ALL");
+                                setAssigneeFilter("ALL");
+                                setSearch("");
+                            }}
+                            className="ml-auto inline-flex items-center gap-1 rounded-md px-2 h-7 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        >
+                            <X className="h-3 w-3" />
+                            Clear
+                        </button>
+                    )}
+
+                    <div className={cn("text-[11px] text-subtle-foreground", !hasActiveFilters && "ml-auto")}>
+                        {sortedAndFilteredIssues.length} of {localIssues.length}
+                    </div>
                 </div>
             )}
 
-            <div className="w-full gta-surface overflow-hidden text-sm">
+            <div className="overflow-hidden rounded-md border border-border bg-surface">
                 <div className="overflow-x-auto">
-                    <table className="w-full whitespace-nowrap text-left border-collapse">
+                    <table className="w-full whitespace-nowrap text-left text-sm">
                         <thead>
-                            <tr className="border-b-2 border-border bg-muted/90 text-foreground font-semibold text-[10px] tracking-[0.16em] uppercase select-none">
-                                <th onClick={() => handleSort('id')} className="px-3 py-2 font-medium w-12 text-center cursor-pointer hover:text-foreground">
-                                    ID {getSortIndicator('id')}
+                            <tr className="border-b border-border bg-surface-2 text-[10px] uppercase tracking-wider text-subtle-foreground">
+                                <th
+                                    onClick={() => handleSort("id")}
+                                    className="w-16 px-3 py-2 font-medium cursor-pointer hover:text-foreground"
+                                >
+                                    ID {getSortIndicator("id")}
                                 </th>
-                                <th onClick={() => handleSort('type')} className="px-3 py-2 font-medium w-32 cursor-pointer hover:text-foreground">
-                                    Type {getSortIndicator('type')}
+                                <th
+                                    onClick={() => handleSort("type")}
+                                    className="w-28 px-2 py-2 font-medium cursor-pointer hover:text-foreground"
+                                >
+                                    Type {getSortIndicator("type")}
                                 </th>
-                                <th onClick={() => handleSort('title')} className="px-3 py-2 font-medium cursor-pointer hover:text-foreground">
-                                    Title {getSortIndicator('title')}
+                                <th
+                                    onClick={() => handleSort("title")}
+                                    className="px-3 py-2 font-medium cursor-pointer hover:text-foreground"
+                                >
+                                    Title {getSortIndicator("title")}
                                 </th>
-                                <th onClick={() => handleSort('status')} className="px-3 py-2 font-medium w-32 cursor-pointer hover:text-foreground">
-                                    Status {getSortIndicator('status')}
+                                <th
+                                    onClick={() => handleSort("status")}
+                                    className="w-32 px-2 py-2 font-medium cursor-pointer hover:text-foreground"
+                                >
+                                    Status {getSortIndicator("status")}
                                 </th>
-                                <th onClick={() => handleSort('priority')} className="px-3 py-2 font-medium w-24 cursor-pointer hover:text-foreground">
-                                    Priority {getSortIndicator('priority')}
+                                <th
+                                    onClick={() => handleSort("priority")}
+                                    className="w-24 px-2 py-2 font-medium cursor-pointer hover:text-foreground"
+                                >
+                                    Priority {getSortIndicator("priority")}
                                 </th>
-                                <th className="px-3 py-2 font-medium w-32">Severity</th>
-                                <th onClick={() => handleSort('assignee')} className="px-3 py-2 font-medium w-40 cursor-pointer hover:text-foreground">
-                                    Assignee {getSortIndicator('assignee')}
+                                <th className="w-28 px-2 py-2 font-medium">Severity</th>
+                                <th
+                                    onClick={() => handleSort("assignee")}
+                                    className="w-36 px-3 py-2 font-medium cursor-pointer hover:text-foreground"
+                                >
+                                    Assignee {getSortIndicator("assignee")}
                                 </th>
-                                <th onClick={() => handleSort('dueDate')} className="px-3 py-2 font-medium w-28 cursor-pointer hover:text-foreground">
-                                    Due {getSortIndicator('dueDate')}
+                                <th
+                                    onClick={() => handleSort("dueDate")}
+                                    className="w-24 px-3 py-2 font-medium cursor-pointer hover:text-foreground"
+                                >
+                                    Due {getSortIndicator("dueDate")}
                                 </th>
-                                <th onClick={() => handleSort('updatedAt')} className="px-3 py-2 font-medium w-32 text-right cursor-pointer hover:text-foreground">
-                                    Updated {getSortIndicator('updatedAt')}
+                                <th
+                                    onClick={() => handleSort("updatedAt")}
+                                    className="w-28 px-3 py-2 font-medium cursor-pointer hover:text-foreground text-right"
+                                >
+                                    Updated {getSortIndicator("updatedAt")}
                                 </th>
-                                <th className="px-3 py-2 font-medium w-32 text-right">Resolve</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y-2 divide-border bg-card">
+                        <tbody>
                             {sortedAndFilteredIssues.length === 0 ? (
                                 <tr>
-                                    <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
+                                    <td
+                                        colSpan={9}
+                                        className="px-4 py-12 text-center text-xs text-muted-foreground"
+                                    >
                                         No issues found matching your criteria.
                                     </td>
                                 </tr>
                             ) : (
-                                sortedAndFilteredIssues.map((issue) => (
-                                    <tr
-                                        key={issue.id}
-                                        className="hover:bg-muted/70 transition-colors group even:bg-muted/35"
-                                    >
-                                        <td className="px-3 text-center">
-                                            <Link href={`/issues/${formatIssueRef(issue.issueNumber, issue.id)}`} className="block py-1.5 text-foreground/80 hover:text-primary transition-colors font-mono text-xs uppercase">
-                                                {formatIssueRef(issue.issueNumber, issue.id)}
-                                            </Link>
-                                        </td>
-                                        <td className="px-3 py-1">
-                                            <select
-                                                value={issue.type}
-                                                className={selectClasses}
-                                                disabled={isPending && pendingIssueId === issue.id}
-                                                onChange={(e) => runWorkflowUpdate(issue.id, { type: e.target.value as IssueType })}
-                                            >
-                                                <option value="BUG">Bug</option>
-                                                <option value="FEATURE">Feature</option>
-                                                <option value="TASK">Task</option>
-                                            </select>
-                                        </td>
-                                        <td className="px-3 py-1 font-medium text-foreground group-hover:text-primary text-sm">
-                                            <Link href={`/issues/${formatIssueRef(issue.issueNumber, issue.id)}`} className="block py-2 truncate max-w-[500px]">
-                                                {issue.title}
-                                            </Link>
-                                        </td>
-                                        <td className="px-3 py-1">
-                                            <select
-                                                value={issue.status}
-                                                className={selectClasses}
-                                                disabled={isPending && pendingIssueId === issue.id}
-                                                onChange={(e) => runWorkflowUpdate(issue.id, { status: e.target.value as IssueStatus })}
-                                            >
-                                                <option value="OPEN">Open</option>
-                                                <option value="IN_PROGRESS">In Progress</option>
-                                                <option value="REVIEW">Review</option>
-                                                <option value="DONE">Done</option>
-                                            </select>
-                                        </td>
-                                        <td className="px-3 py-1">
-                                            <select
-                                                value={issue.priority}
-                                                className={selectClasses}
-                                                disabled={isPending && pendingIssueId === issue.id}
-                                                onChange={(e) => runWorkflowUpdate(issue.id, { priority: e.target.value as IssuePriority })}
-                                            >
-                                                <option value="URGENT">{priorityLabels.URGENT}</option>
-                                                <option value="HIGH">{priorityLabels.HIGH}</option>
-                                                <option value="MEDIUM">{priorityLabels.MEDIUM}</option>
-                                                <option value="LOW">{priorityLabels.LOW}</option>
-                                            </select>
-                                        </td>
-                                        <td className="px-3 py-1">
-                                            <select
-                                                value={issue.severity ?? "MINOR"}
-                                                className={selectClasses}
-                                                disabled={isPending && pendingIssueId === issue.id}
-                                                onChange={(e) => runWorkflowUpdate(issue.id, { severity: e.target.value as IssueSeverity })}
-                                            >
-                                                <option value="MINOR">Minor</option>
-                                                <option value="MAJOR">Major</option>
-                                                <option value="CRITICAL">Critical</option>
-                                                <option value="BLOCKER">Blocker</option>
-                                            </select>
-                                        </td>
-                                        <td className="px-3 py-1">
-                                            {issue.assignee ? (
-                                                <div className="flex items-center gap-2">
-                                                    {issue.assignee.image ? (
-                                                        <img
-                                                            src={issue.assignee.image}
-                                                            alt={issue.assignee.name || "Assignee"}
-                                                            className="w-6 h-6 rounded-full border border-border object-cover shrink-0"
-                                                        />
-                                                    ) : (
-                                                        <div className="w-6 h-6 rounded-full border border-border bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                                                            {issue.assignee.name?.charAt(0).toUpperCase() || "A"}
-                                                        </div>
+                                sortedAndFilteredIssues.map((issue) => {
+                                    const issueRef = formatIssueRef(issue.issueNumber, issue.id);
+                                    const updating = isPending && pendingIssueId === issue.id;
+                                    return (
+                                        <tr
+                                            key={issue.id}
+                                            className="group border-b border-border last:border-b-0 hover:bg-muted/40 transition-colors"
+                                        >
+                                            <td className="px-3 py-1.5">
+                                                <Link
+                                                    href={`/issues/${issueRef}`}
+                                                    className="font-mono text-[11px] text-muted-foreground hover:text-primary transition-colors"
+                                                >
+                                                    {issueRef}
+                                                </Link>
+                                            </td>
+                                            <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                                <Select
+                                                    size="xs"
+                                                    value={normalizeType(issue.type)}
+                                                    options={TYPE_OPTIONS}
+                                                    onChange={(v) =>
+                                                        runWorkflowUpdate(issue.id, {
+                                                            type: v as IssueType,
+                                                        })
+                                                    }
+                                                    disabled={updating}
+                                                />
+                                            </td>
+                                            <td className="px-3 py-1.5">
+                                                <Link
+                                                    href={`/issues/${issueRef}`}
+                                                    className="block truncate max-w-[520px] text-sm font-medium text-foreground transition-colors group-hover:text-primary"
+                                                >
+                                                    {issue.parentIssueRef && (
+                                                        <span className="mr-1.5 text-[10px] font-mono text-subtle-foreground">
+                                                            ↳ {issue.parentIssueRef}
+                                                        </span>
                                                     )}
-                                                <span className="text-xs text-foreground/80 font-medium truncate w-24">{issue.assignee.name}</span>
+                                                    {issue.title}
+                                                    {!!issue.subtaskCount && issue.subtaskCount > 0 && (
+                                                        <span className="ml-2 inline-flex items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground align-middle">
+                                                            {issue.subtaskCount} subtask
+                                                            {issue.subtaskCount === 1 ? "" : "s"}
+                                                        </span>
+                                                    )}
+                                                </Link>
+                                            </td>
+                                            <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                                <Select
+                                                    size="xs"
+                                                    value={normalizeStatus(issue.status)}
+                                                    options={STATUS_OPTIONS}
+                                                    onChange={(v) =>
+                                                        runWorkflowUpdate(issue.id, {
+                                                            status: v as IssueStatus,
+                                                        })
+                                                    }
+                                                    disabled={updating}
+                                                />
+                                            </td>
+                                            <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                                <Select
+                                                    size="xs"
+                                                    value={normalizePriority(issue.priority)}
+                                                    options={PRIORITY_OPTIONS}
+                                                    onChange={(v) =>
+                                                        runWorkflowUpdate(issue.id, {
+                                                            priority: v as IssuePriority,
+                                                        })
+                                                    }
+                                                    disabled={updating}
+                                                />
+                                            </td>
+                                            <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                                <Select
+                                                    size="xs"
+                                                    value={normalizeSeverity(issue.severity ?? "MINOR")}
+                                                    options={SEVERITY_OPTIONS}
+                                                    onChange={(v) =>
+                                                        runWorkflowUpdate(issue.id, {
+                                                            severity: v as IssueSeverity,
+                                                        })
+                                                    }
+                                                    disabled={updating}
+                                                />
+                                            </td>
+                                            <td className="px-3 py-1.5">
+                                                {issue.assignee ? (
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <Avatar
+                                                            src={issue.assignee.image}
+                                                            name={issue.assignee.name}
+                                                            size="xs"
+                                                        />
+                                                        <span className="truncate text-xs text-foreground">
+                                                            {issue.assignee.name}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-subtle-foreground">
+                                                        Unassigned
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-3 py-1.5 text-xs text-muted-foreground">
+                                                {issue.dueDate
+                                                    ? new Intl.DateTimeFormat("en-US", {
+                                                          month: "short",
+                                                          day: "numeric",
+                                                      }).format(new Date(issue.dueDate))
+                                                    : "—"}
+                                            </td>
+                                            <td className="px-3 py-1.5 text-right text-xs font-mono text-muted-foreground">
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    {updating && (
+                                                        <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                                    )}
+                                                    {new Intl.DateTimeFormat("en-US", {
+                                                        month: "short",
+                                                        day: "numeric",
+                                                    }).format(new Date(issue.updatedAt))}
                                                 </div>
-                                            ) : (
-                                                <span className="text-xs text-foreground/80 font-medium">Unassigned</span>
-                                            )}
-                                        </td>
-                                        <td className="px-3 py-1 text-foreground/75 text-xs">
-                                            {issue.dueDate
-                                                ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(issue.dueDate))
-                                                : "—"}
-                                        </td>
-                                        <td className="px-3 py-1 text-right text-foreground/75 text-xs font-mono">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <span>
-                                                    {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(issue.updatedAt))}
-                                                </span>
-                                                {pendingIssueId === issue.id && isPending && (
-                                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-3 py-1 text-right">
-                                            <button
-                                                type="button"
-                                                disabled={isPending && pendingIssueId === issue.id}
-                                                onClick={() =>
-                                                    runWorkflowUpdate(issue.id, {
-                                                        status: issue.status === "DONE" ? "OPEN" : "DONE"
-                                                    })
-                                                }
-                                                className={clsx(
-                                                    "text-xs rounded-md px-2.5 py-1.5 border transition-colors",
-                                                    issue.status === "DONE"
-                                                        ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
-                                                        : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
-                                                )}
-                                            >
-                                                {issue.status === "DONE" ? "Reopen" : "Resolve"}
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
-    )
+    );
+}
+
+// ---- Inline badges used elsewhere (issue detail page, kanban) ----
+
+export function StatusBadge({ status }: { status: IssueStatus }) {
+    const meta = STATUS_META[status];
+    return (
+        <Badge tone={meta.tone}>
+            {meta.icon} {meta.label}
+        </Badge>
+    );
+}
+export function PriorityBadge({ priority }: { priority: IssuePriority }) {
+    const meta = PRIORITY_META[priority];
+    return (
+        <Badge tone={meta.tone}>
+            {meta.icon} {meta.label}
+        </Badge>
+    );
+}
+export function TypeBadge({ type }: { type: IssueType }) {
+    const meta = TYPE_META[type];
+    return (
+        <Badge tone={meta.tone}>
+            {meta.icon} {meta.label}
+        </Badge>
+    );
+}
+export function SeverityBadge({ severity }: { severity: IssueSeverity }) {
+    const meta = SEVERITY_META[severity];
+    return <Badge tone={meta.tone}>{meta.label}</Badge>;
 }

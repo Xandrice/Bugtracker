@@ -4,55 +4,58 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
+import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
+import { formatIssueRef } from "@/lib/issue-ids";
 
 export default async function MyIssuesPage() {
     const session = await auth();
-
-    if (!session?.user?.id) {
-        redirect("/api/auth/signin?callbackUrl=/issues/me");
-    }
+    if (!session?.user?.id) redirect("/api/auth/signin?callbackUrl=/issues/me");
 
     const rawIssues = await db.issue.findMany({
         where: { assigneeId: session.user.id },
-        include: { assignee: true },
-        orderBy: { updatedAt: 'desc' }
+        include: {
+            assignee: true,
+            parentIssue: { select: { id: true, issueNumber: true } },
+            _count: { select: { subtasks: true } },
+        },
+        orderBy: { updatedAt: "desc" },
     });
 
     const issues: IssueSnippet[] = rawIssues.map((i: any) => ({
         id: i.id,
         issueNumber: i.issueNumber ?? null,
         title: i.title,
-        type: i.type as any,
-        status: i.status as any,
-        priority: i.priority as any,
-        severity: i.severity as any,
-        assignee: i.assignee ? { id: i.assignee.id, name: i.assignee.name, image: i.assignee.image } : null,
+        type: i.type,
+        status: i.status,
+        priority: i.priority,
+        severity: i.severity,
+        assignee: i.assignee
+            ? { id: i.assignee.id, name: i.assignee.name, image: i.assignee.image }
+            : null,
         updatedAt: i.updatedAt,
         dueDate: i.dueDate ?? undefined,
-        resourceName: i.resourceName ?? undefined,
-        storyPoints: i.storyPoints ?? undefined,
+        parentIssueRef: i.parentIssue
+            ? formatIssueRef(i.parentIssue.issueNumber, i.parentIssue.id)
+            : null,
+        subtaskCount: i._count?.subtasks ?? 0,
     }));
 
     return (
-        <div className="gta-page">
-            <div className="gta-hero flex items-center justify-between gap-4">
-                <div>
-                    <h1 className="gta-heading">My Assignments</h1>
-                    <p className="gta-subheading">
-                        Issues assigned to you.
-                    </p>
-                </div>
-
-                <Link
-                    href="/issues/new"
-                    className="gta-action"
-                >
-                    <Plus className="h-4 w-4" />
-                    New Issue
-                </Link>
-            </div>
-
+        <PageContainer>
+            <PageHeader
+                title="My issues"
+                description="Issues assigned to you."
+                actions={
+                    <Link
+                        href="/issues/new"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 h-8 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                        New issue
+                    </Link>
+                }
+            />
             <DataGrid issues={issues} />
-        </div>
+        </PageContainer>
     );
 }

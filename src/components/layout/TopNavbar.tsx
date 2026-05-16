@@ -1,46 +1,72 @@
 import Link from "next/link";
-import { Bug, Search, Bell, Settings, UserCircle, LogOut, ChevronDown } from "lucide-react";
+import { Bug, Search, UserCircle, Settings, LogOut } from "lucide-react";
 import { auth } from "@/../auth";
+import { db } from "@/lib/db";
 import { ThemeToggle } from "./ThemeToggle";
 import { SITE_NAME } from "@/lib/site";
+import { NotificationBell } from "./NotificationBell";
+
+async function getUnreadCount(userId: string | undefined) {
+    if (!userId) return 0;
+    try {
+        return await (db as any).notification.count({
+            where: { userId, readAt: null },
+        });
+    } catch {
+        return 0;
+    }
+}
 
 export async function TopNavbar() {
     const session = await auth();
+    const unread = await getUnreadCount(session?.user?.id);
 
     return (
-        <header className="sticky top-0 z-50 flex h-12 items-center justify-between border-b-2 border-border bg-card/95 px-3 lg:px-4 shrink-0 shadow-md shadow-black/10 transition-colors duration-200 backdrop-blur">
-            <div className="pointer-events-none absolute inset-0 opacity-20 bg-[url('/gta-stripes.svg')] bg-cover bg-center" />
-            <div className="flex items-center gap-4">
-                <Link href="/" className="relative z-10 flex items-center gap-2 font-bold text-foreground transition-opacity hover:opacity-90">
-                    <Bug className="h-4 w-4 text-accent" />
-                    <span className="font-display text-base uppercase tracking-[0.16em] hidden sm:block">{SITE_NAME}</span>
-                    <span className="gta-label hidden md:block">Issue Tracker</span>
+        <header className="sticky top-0 z-50 flex h-12 shrink-0 items-center justify-between border-b border-border bg-surface/85 chrome-blur px-3 lg:px-4">
+            <div className="flex items-center gap-3 min-w-0">
+                <Link
+                    href="/"
+                    className="flex items-center gap-2 text-foreground transition-opacity hover:opacity-90"
+                >
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/15 text-primary">
+                        <Bug className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="text-sm font-semibold hidden sm:block whitespace-nowrap">
+                        {SITE_NAME}
+                    </span>
+                    <span className="hidden md:block text-[11px] text-muted-foreground border-l border-border pl-2 ml-1">
+                        Tracker
+                    </span>
                 </Link>
             </div>
 
-            <div className="relative z-10 flex flex-1 items-center justify-center px-4 max-w-2xl hidden md:flex">
+            <div className="hidden flex-1 items-center justify-center px-4 max-w-xl md:flex">
                 <div className="relative w-full">
-                    <Search className="absolute left-2.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-subtle-foreground pointer-events-none" />
                     <input
                         type="search"
-                        placeholder="Scan reports, jobs, files..."
-                        className="w-full rounded-sm border-2 border-input bg-card px-8 py-1 text-xs uppercase tracking-[0.08em] text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary h-7"
+                        placeholder="Search issues, notes, members…"
+                        className="h-7 w-full rounded-md border border-input bg-elevated pl-8 pr-2 text-xs text-foreground placeholder:text-subtle-foreground focus-ring transition-colors hover:border-border-strong"
                     />
+                    <kbd className="absolute right-1.5 top-1/2 -translate-y-1/2 hidden h-5 select-none items-center rounded border border-border bg-surface-2 px-1 text-[10px] font-medium text-subtle-foreground sm:inline-flex">
+                        ⌘K
+                    </kbd>
                 </div>
             </div>
 
-            <div className="relative z-10 flex items-center gap-2">
+            <div className="flex items-center gap-1">
                 <ThemeToggle />
-                <button className="rounded-sm p-1.5 text-foreground/80 hover:bg-muted transition-colors border-2 border-border">
-                    <Bell className="h-3.5 w-3.5" />
-                </button>
-                <Link href="/settings" className="rounded-sm p-1.5 text-foreground/80 hover:bg-muted transition-colors hidden sm:block border-2 border-border">
+                {session?.user?.id && <NotificationBell unread={unread} />}
+                <Link
+                    href="/settings"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
                     <Settings className="h-3.5 w-3.5" />
                 </Link>
 
                 {session?.user ? (
                     <details className="relative">
-                        <summary className="list-none flex items-center gap-1.5 cursor-pointer rounded-sm border-2 border-border px-1.5 py-1 hover:bg-muted transition-colors [&::-webkit-details-marker]:hidden">
+                        <summary className="list-none flex items-center gap-1.5 cursor-pointer rounded-md px-1.5 py-1 hover:bg-muted transition-colors [&::-webkit-details-marker]:hidden">
                             {session.user.image ? (
                                 <img
                                     src={session.user.image}
@@ -48,29 +74,38 @@ export async function TopNavbar() {
                                     className="h-6 w-6 rounded-full border border-border object-cover"
                                 />
                             ) : (
-                                <div className="h-6 w-6 rounded-full border border-border bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px]">
+                                <div className="h-6 w-6 rounded-full border border-border bg-primary/10 text-primary flex items-center justify-center font-semibold text-[10px]">
                                     {session.user.name?.charAt(0).toUpperCase() || "U"}
                                 </div>
                             )}
-                            <ChevronDown className="h-3 w-3 text-muted-foreground" />
                         </summary>
-                        <div className="absolute right-0 mt-2 w-44 rounded-md border border-border bg-background/95 p-1 shadow-lg shadow-black/35 backdrop-blur">
-                            <div className="px-2 py-1.5 text-[11px] uppercase tracking-[0.08em] text-muted-foreground border-b border-border/70">
+                        <div className="absolute right-0 mt-1.5 w-48 rounded-md border border-border bg-elevated p-1 shadow-pop">
+                            <div className="px-2 py-1.5 text-xs text-muted-foreground border-b border-border mb-1 truncate">
                                 {session.user.name || "Signed in"}
                             </div>
-                            <Link href="/settings" className="mt-1 flex items-center gap-2 rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-muted transition-colors">
-                                <Settings className="h-3.5 w-3.5" />
+                            <Link
+                                href="/settings"
+                                className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"
+                            >
+                                <Settings className="h-3.5 w-3.5 text-muted-foreground" />
                                 Settings
                             </Link>
-                            <Link href="/api/auth/signout?callbackUrl=/" className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-xs text-rose-300 hover:bg-rose-500/10 transition-colors">
+                            <Link
+                                href="/api/auth/signout?callbackUrl=/"
+                                className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-xs text-danger hover:bg-danger/10 transition-colors"
+                            >
                                 <LogOut className="h-3.5 w-3.5" />
-                                Log out
+                                Sign out
                             </Link>
                         </div>
                     </details>
                 ) : (
-                    <Link href="/api/auth/signin?callbackUrl=/issues">
-                        <UserCircle className="h-7 w-7 text-muted-foreground hover:text-primary transition-colors cursor-pointer" />
+                    <Link
+                        href="/api/auth/signin?callbackUrl=/issues"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 h-7 text-xs font-medium text-foreground hover:bg-muted"
+                    >
+                        <UserCircle className="h-3.5 w-3.5" />
+                        Sign in
                     </Link>
                 )}
             </div>

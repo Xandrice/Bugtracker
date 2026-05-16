@@ -7,6 +7,10 @@ import {
     getNoteThreadCategoryLabel,
     normalizeNoteThreadCategory,
 } from "@/lib/note-categories";
+import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
+import { Avatar } from "@/components/ui/Avatar";
+import { EmptyState } from "@/components/ui/Section";
+import { cn } from "@/components/ui/cn";
 
 type NotesPageProps = {
     searchParams: Promise<{ category?: string }>;
@@ -20,11 +24,7 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
         : null;
 
     const threads = await db.note.findMany({
-        where: {
-            issueId: null,
-            isThread: true,
-            parentId: null,
-        },
+        where: { issueId: null, isThread: true, parentId: null },
         include: {
             author: true,
             _count: { select: { replies: true } },
@@ -43,7 +43,7 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
     }, {});
 
     const filteredThreads = activeCategory
-        ? threads.filter((thread) => normalizeNoteThreadCategory(thread.category) === activeCategory)
+        ? threads.filter((t) => normalizeNoteThreadCategory(t.category) === activeCategory)
         : threads;
 
     const groupedThreads = NOTE_THREAD_CATEGORIES.map((category) => ({
@@ -54,116 +54,118 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
     })).filter((group) => group.threads.length > 0);
 
     return (
-        <div className="gta-page max-w-[1200px]">
-            <div className="gta-hero flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/20 text-primary rounded-lg border border-primary/30">
-                        <BookOpen className="h-6 w-6" />
-                    </div>
-                    <div>
-                        <h1 className="gta-heading text-3xl">Crew Notes</h1>
-                        <p className="gta-subheading mt-1">
-                            Shared documentation and team discussions.
-                        </p>
-                    </div>
-                </div>
+        <PageContainer>
+            <PageHeader
+                title="Notes"
+                description="Shared documentation and team discussions."
+                icon={<BookOpen className="h-4 w-4" />}
+                actions={
+                    <Link
+                        href="/notes/new"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 h-8 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                        New thread
+                    </Link>
+                }
+            />
 
-                <Link
-                    href="/notes/new"
-                    className="gta-action"
-                >
-                    <Plus className="h-4 w-4" />
-                    New Thread
-                </Link>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="md:col-span-2 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_240px] gap-5">
+                <div className="space-y-5 min-w-0">
                     {filteredThreads.length === 0 ? (
-                        <div className="text-sm text-muted-foreground text-center py-10">
-                            {activeCategory
-                                ? "No threads in this folder yet."
-                                : "No threads yet. Create the first thread to start the team forum."}
-                        </div>
+                        <EmptyState
+                            icon={<BookOpen className="h-5 w-5" />}
+                            title={activeCategory ? "No threads in this folder yet" : "No threads yet"}
+                            description={
+                                activeCategory
+                                    ? "Switch folders or start a new thread to get going."
+                                    : "Create the first thread to start the team forum."
+                            }
+                        />
                     ) : (
                         groupedThreads.map((group) => (
-                            <section key={group.id} className="space-y-3">
+                            <section key={group.id} className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <h2 className="font-display text-xl uppercase tracking-[0.14em]">
+                                    <h2 className="text-sm font-semibold text-foreground">
                                         {group.label}
                                     </h2>
-                                    <span className="text-xs text-muted-foreground">
-                                        {group.threads.length} thread{group.threads.length === 1 ? "" : "s"}
+                                    <span className="text-[11px] text-muted-foreground">
+                                        {group.threads.length} thread
+                                        {group.threads.length === 1 ? "" : "s"}
                                     </span>
                                 </div>
-                                {group.threads.map((thread) => (
-                                    <Link
-                                        key={thread.id}
-                                        href={`/notes/${thread.id}`}
-                                        className="block gta-surface p-5 space-y-4 hover:border-primary/40 transition-colors"
-                                    >
-                                        <div className="flex items-start gap-4">
-                                            {thread.author.image ? (
-                                                <img src={thread.author.image} className="w-10 h-10 rounded-full border" alt="Avatar" />
-                                            ) : (
-                                                <div className="w-10 h-10 rounded-full border bg-primary/10 flex items-center justify-center text-primary font-bold">
-                                                    {thread.author.name?.charAt(0).toUpperCase() || "A"}
-                                                </div>
-                                            )}
-                                            <div className="flex-1 space-y-2">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-semibold text-sm">{thread.author.name}</span>
-                                                        <span className="text-xs text-muted-foreground" title={thread.createdAt.toISOString()}>
-                                                            {new Intl.DateTimeFormat("en-US", {
-                                                                dateStyle: "medium",
-                                                                timeStyle: "short",
-                                                            }).format(thread.createdAt)}
-                                                        </span>
-                                                    </div>
-                                                    <span className="text-[10px] uppercase tracking-[0.12em] border border-border px-2 py-0.5 rounded text-muted-foreground">
+                                <div className="overflow-hidden rounded-md border border-border bg-surface divide-y divide-border">
+                                    {group.threads.map((thread) => (
+                                        <Link
+                                            key={thread.id}
+                                            href={`/notes/${thread.id}`}
+                                            className="flex items-start gap-3 p-3 transition-colors hover:bg-muted/40"
+                                        >
+                                            <Avatar
+                                                src={thread.author.image}
+                                                name={thread.author.name}
+                                                size="md"
+                                            />
+                                            <div className="min-w-0 flex-1 space-y-1">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <h3 className="text-sm font-semibold text-foreground truncate">
+                                                        {thread.title}
+                                                    </h3>
+                                                    <span className="shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                                                         {getNoteThreadCategoryLabel(thread.category)}
                                                     </span>
                                                 </div>
-                                                <h3 className="font-bold text-lg leading-tight tracking-tight text-foreground">
-                                                    {thread.title}
-                                                </h3>
-                                                <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                                                <p className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-wrap">
                                                     {thread.content}
-                                                </div>
-                                                <div className="flex items-center justify-between mt-2 pt-3 border-t">
-                                                    <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                                        <MessageSquare className="h-3.5 w-3.5" />
-                                                        {thread._count?.replies ?? 0} replies
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                                        <Clock3 className="h-3.5 w-3.5" />
+                                                </p>
+                                                <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-subtle-foreground">
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="text-foreground/80">
+                                                            {thread.author.name || "Unknown"}
+                                                        </span>
+                                                        ·{" "}
+                                                        {new Intl.DateTimeFormat("en-US", {
+                                                            dateStyle: "medium",
+                                                        }).format(thread.createdAt)}
+                                                    </span>
+                                                    <span className="flex items-center gap-1">
+                                                        <MessageSquare className="h-3 w-3" />
+                                                        {thread._count?.replies ?? 0}
+                                                    </span>
+                                                    <span className="flex items-center gap-1">
+                                                        <Clock3 className="h-3 w-3" />
                                                         Last activity{" "}
                                                         {new Intl.DateTimeFormat("en-US", {
                                                             dateStyle: "medium",
-                                                            timeStyle: "short",
-                                                        }).format(thread.replies?.[0]?.createdAt ?? thread.updatedAt)}
-                                                    </div>
+                                                        }).format(
+                                                            thread.replies?.[0]?.createdAt ??
+                                                                thread.updatedAt
+                                                        )}
+                                                    </span>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </Link>
-                                ))}
+                                        </Link>
+                                    ))}
+                                </div>
                             </section>
                         ))
                     )}
                 </div>
 
-                <div className="space-y-4">
-                    <div className="gta-surface p-5">
-                        <h3 className="font-display text-xl mb-3 uppercase tracking-[0.18em]">Folders</h3>
-                        <div className="space-y-2 mb-5">
+                <div className="space-y-3">
+                    <div className="rounded-md border border-border bg-surface p-3">
+                        <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Folders
+                        </h3>
+                        <div className="space-y-0.5">
                             <Link
                                 href="/notes"
-                                className={`flex items-center justify-between rounded border px-2.5 py-2 text-xs uppercase tracking-[0.1em] transition-colors ${activeCategory === null
-                                    ? "border-primary/45 bg-primary/15 text-foreground"
-                                    : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                                    }`}
+                                className={cn(
+                                    "flex items-center justify-between rounded-sm px-2 py-1.5 text-xs transition-colors",
+                                    activeCategory === null
+                                        ? "bg-primary/12 text-primary"
+                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                )}
                             >
                                 <span>All</span>
                                 <span>{threads.length}</span>
@@ -172,30 +174,36 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
                                 <Link
                                     key={category.id}
                                     href={`/notes?category=${category.id}`}
-                                    className={`flex items-center justify-between rounded border px-2.5 py-2 text-xs uppercase tracking-[0.1em] transition-colors ${activeCategory === category.id
-                                        ? "border-primary/45 bg-primary/15 text-foreground"
-                                        : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                                        }`}
+                                    className={cn(
+                                        "flex items-center justify-between rounded-sm px-2 py-1.5 text-xs transition-colors",
+                                        activeCategory === category.id
+                                            ? "bg-primary/12 text-primary"
+                                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    )}
                                 >
                                     <span>{category.label}</span>
                                     <span>{folderCounts[category.id] || 0}</span>
                                 </Link>
                             ))}
                         </div>
+                    </div>
 
-                        <h3 className="font-display text-xl mb-3 uppercase tracking-[0.18em]">Forum Guide</h3>
-                        <p className="text-sm text-muted-foreground leading-relaxed">
-                            Use folders to organize threads by topic. Pick a folder when creating
-                            a thread so your team can find discussions faster.
+                    <div className="rounded-md border border-border bg-surface p-3 text-xs text-muted-foreground space-y-2">
+                        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Forum guide
+                        </h3>
+                        <p>
+                            Use folders to organize threads by topic. Pick a folder when creating a
+                            thread so your team can find discussions faster.
                         </p>
                         {!session?.user?.id && (
-                            <p className="text-xs text-muted-foreground mt-4 border-t border-border pt-3">
+                            <p className="border-t border-border pt-2">
                                 Sign in to create threads and replies.
                             </p>
                         )}
                     </div>
                 </div>
             </div>
-        </div>
+        </PageContainer>
     );
 }

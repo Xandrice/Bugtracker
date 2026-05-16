@@ -45,9 +45,11 @@ model User {
   sessions      Session[]
 
   // BugTracker Relations
-  reportedIssues Issue[] @relation("Reporter")
-  assignedIssues Issue[] @relation("Assignee")
+  reportedIssues Issue[]        @relation("Reporter")
+  assignedIssues Issue[]        @relation("Assignee")
   notes          Note[]
+  notifications  Notification[] @relation("NotificationRecipient")
+  notificationsCreated Notification[] @relation("NotificationActor")
 }
 
 model VerificationToken {
@@ -91,8 +93,57 @@ model Issue {
   assigneeId String?
   assignee   User?    @relation("Assignee", fields: [assigneeId], references: [id])
   notes      Note[]
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+
+  // Subtasks (parent/child relationship)
+  parentIssueId String?
+  parentIssue   Issue?  @relation("IssueSubtasks", fields: [parentIssueId], references: [id], onDelete: SetNull)
+  subtasks      Issue[] @relation("IssueSubtasks")
+
+  // Linked issues (blocks / blocked by / relates to / duplicates)
+  outgoingLinks IssueLink[] @relation("IssueLinkSource")
+  incomingLinks IssueLink[] @relation("IssueLinkTarget")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentIssueId])
+}
+
+model IssueLink {
+  id        String   @id @default(cuid())
+  // BLOCKS, BLOCKED_BY, RELATES_TO, DUPLICATES
+  type      String
+  sourceId  String
+  targetId  String
+  source    Issue    @relation("IssueLinkSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  target    Issue    @relation("IssueLinkTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([sourceId, targetId, type])
+  @@index([sourceId])
+  @@index([targetId])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  // MENTION, ASSIGNED, STATUS_CHANGE, COMMENT, LINKED, SUBTASK
+  type      String
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  userId String
+  user   User   @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+
+  actorId String?
+  actor   User?   @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  issueId String?
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
 }
 
 model Note {

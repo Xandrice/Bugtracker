@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { UserCircle2, Paperclip, Link as LinkIcon, Send } from "lucide-react";
+import { useState, useRef } from "react";
+import { Send, Loader2 } from "lucide-react";
 import { createTeamNote } from "@/app/actions";
+import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
+import { cn } from "@/components/ui/cn";
 
 interface User {
     id: string;
@@ -13,7 +16,7 @@ interface User {
 export default function CommentForm({
     issueId,
     currentUserImage,
-    users
+    users,
 }: {
     issueId: string;
     currentUserImage: string | null;
@@ -27,18 +30,18 @@ export default function CommentForm({
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    const filteredUsers = users.filter(u =>
-        u.name && u.name.toLowerCase().includes(mentionFilter.toLowerCase())
+    const filteredUsers = users.filter(
+        (u) => u.name && u.name.toLowerCase().includes(mentionFilter.toLowerCase())
     );
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (showMentions && filteredUsers.length > 0) {
             if (e.key === "ArrowDown") {
                 e.preventDefault();
-                setSelectedIndex(i => (i + 1) % filteredUsers.length);
+                setSelectedIndex((i) => (i + 1) % filteredUsers.length);
             } else if (e.key === "ArrowUp") {
                 e.preventDefault();
-                setSelectedIndex(i => (i - 1 + filteredUsers.length) % filteredUsers.length);
+                setSelectedIndex((i) => (i - 1 + filteredUsers.length) % filteredUsers.length);
             } else if (e.key === "Enter" || e.key === "Tab") {
                 e.preventDefault();
                 insertMention(filteredUsers[selectedIndex].name!);
@@ -46,10 +49,6 @@ export default function CommentForm({
                 setShowMentions(false);
                 e.preventDefault();
             }
-        } else if (e.key === "Enter" && !e.shiftKey) {
-            // Optional: submit on Enter without shift
-            // e.preventDefault();
-            // textareaRef.current?.form?.requestSubmit();
         }
     };
 
@@ -57,7 +56,6 @@ export default function CommentForm({
         const val = e.target.value;
         setContent(val);
 
-        // Check for active mention at cursor
         const cursor = e.target.selectionEnd || 0;
         const textBeforeCursor = val.slice(0, cursor);
         const match = textBeforeCursor.match(/@([\w]*)$/);
@@ -78,17 +76,11 @@ export default function CommentForm({
 
         const match = textBeforeCursor.match(/@([\w]*)$/);
         if (match) {
-            // we use the actual name but replace spaces with underscores or just strip it.
-            // But BugTracker might not handle spaces in tags properly with `@` currently since the regex was /@(\w+)/g
-            // Let's ensure the tag format matches (safe alphanumeric). Wait, \w allows letters, numbers, underscores.
-            // If the user's name has spaces, we should format the name to match \w or fix the regex.
-            // Let's format it for safe tagging, removing spaces.
             const safeName = name.replace(/\s+/g, "");
-
-            const newTextBefore = textBeforeCursor.slice(0, match.index) + `@${safeName} `;
+            const newTextBefore =
+                textBeforeCursor.slice(0, match.index) + `@${safeName} `;
             setContent(newTextBefore + textAfterCursor);
 
-            // Move cursor to after the inserted mention
             const newCursor = newTextBefore.length;
             setTimeout(() => {
                 if (textareaRef.current) {
@@ -115,20 +107,12 @@ export default function CommentForm({
     };
 
     return (
-        <form action={handleAction} className="flex gap-4 mt-6 items-start pt-6 border-t border-border">
+        <form action={handleAction} className="flex items-start gap-3 pt-3">
             <input type="hidden" name="issueId" value={issueId} />
-            <div className="shrink-0 mt-1">
-                {currentUserImage ? (
-                    <img src={currentUserImage} alt="You" className="w-8 h-8 rounded-full border object-cover" />
-                ) : (
-                    <UserCircle2 className="w-8 h-8 text-muted-foreground" />
-                )}
-            </div>
-            <div className="flex-1 border border-border rounded-xl shadow-sm bg-background overflow-visible focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 relative">
-
-                {/* Mentions Dropdown */}
+            <Avatar src={currentUserImage} size="md" name="You" />
+            <div className="relative flex-1 min-w-0 overflow-visible rounded-md border border-input bg-elevated focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30 transition-colors">
                 {showMentions && filteredUsers.length > 0 && (
-                    <div className="absolute left-0 bottom-full mb-2 w-64 bg-background border border-border rounded-xl shadow-lg z-50 overflow-hidden flex flex-col max-h-[200px] overflow-y-auto p-1">
+                    <div className="absolute bottom-full left-0 z-50 mb-1 flex max-h-[200px] w-64 flex-col overflow-y-auto rounded-md border border-border bg-elevated p-1 shadow-pop">
                         {filteredUsers.map((user, idx) => (
                             <button
                                 type="button"
@@ -137,14 +121,15 @@ export default function CommentForm({
                                     e.preventDefault();
                                     insertMention(user.name!);
                                 }}
-                                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition-colors cursor-pointer w-full ${idx === selectedIndex ? "bg-primary text-primary-foreground" : "hover:bg-muted text-foreground"}`}
                                 onMouseEnter={() => setSelectedIndex(idx)}
-                            >
-                                {user.image ? (
-                                    <img src={user.image} alt={user.name || "User"} className="w-5 h-5 rounded-full bg-background" />
-                                ) : (
-                                    <UserCircle2 className="w-5 h-5 opacity-70" />
+                                className={cn(
+                                    "flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors",
+                                    idx === selectedIndex
+                                        ? "bg-primary text-primary-foreground"
+                                        : "text-foreground hover:bg-muted"
                                 )}
+                            >
+                                <Avatar src={user.image} name={user.name} size="xs" />
                                 <span className="truncate">{user.name}</span>
                             </button>
                         ))}
@@ -158,18 +143,23 @@ export default function CommentForm({
                     value={content}
                     onChange={handleChange}
                     onKeyDown={handleKeyDown}
-                    placeholder="Add a note... Markdown supported (bold, lists, links, code). Use @ to tag people."
-                    className="w-full min-h-[100px] p-4 text-sm resize-y focus:outline-none bg-transparent"
+                    placeholder="Add a comment… Markdown supported. Use @ to mention people."
+                    className="block w-full resize-y bg-transparent p-3 text-sm text-foreground placeholder:text-subtle-foreground focus:outline-none min-h-[90px]"
                     disabled={isPending}
                 />
-                <div className="bg-muted/50 px-3 py-2 border-t border-border flex items-center justify-between">
-                    <div className="flex gap-2">
-                        <button type="button" className="p-1.5 text-muted-foreground hover:bg-muted rounded text-xs transition-colors"><Paperclip className="h-4 w-4" /></button>
-                        <button type="button" className="p-1.5 text-muted-foreground hover:bg-muted rounded text-xs transition-colors"><LinkIcon className="h-4 w-4" /></button>
-                    </div>
-                    <button type="submit" disabled={isPending || !content.trim()} className="bg-primary hover:opacity-90 disabled:opacity-50 text-primary-foreground px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors">
-                        <Send className="h-3.5 w-3.5" /> {isPending ? "Sending..." : "Comment"}
-                    </button>
+                <div className="flex items-center justify-between border-t border-border bg-surface-2 px-2 py-1.5">
+                    <span className="px-1 text-[10px] text-subtle-foreground">
+                        Tip: <kbd className="rounded border border-border bg-surface px-1">@</kbd> to mention
+                    </span>
+                    <Button
+                        type="submit"
+                        variant="primary"
+                        size="xs"
+                        disabled={isPending || !content.trim()}
+                    >
+                        {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                        {isPending ? "Sending…" : "Comment"}
+                    </Button>
                 </div>
             </div>
         </form>
