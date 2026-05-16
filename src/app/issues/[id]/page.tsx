@@ -24,11 +24,11 @@ import DeleteIssueForm from "./components/DeleteIssueForm";
 import { EditIssueDetailsForm } from "./components/EditIssueDetailsForm";
 import { SubtasksPanel, type SubtaskRow } from "./components/SubtasksPanel";
 import { IssueLinksPanel, type LinkedIssueRow } from "./components/IssueLinksPanel";
+import { IssueCommentCard } from "./components/IssueCommentCard";
 import { getStaffUsers } from "@/lib/staff";
+import { canManageNote, getNotePermissionContext } from "@/lib/note-permissions";
 import { syncIssueNotesFromDiscord } from "@/lib/discordSync";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { formatIssueRef, parseIssueRef } from "@/lib/issue-ids";
+import { formatIssueRef } from "@/lib/issue-ids";
 import { SITE_NAME } from "@/lib/site";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -58,20 +58,20 @@ export default async function IssueDetailsPage({
 }) {
     const session = await auth();
     const resolvedParams = await params;
-    const parsedIssueNumber = parseIssueRef(resolvedParams.id);
+    const rawRef = resolvedParams.id;
+    const normalizedRef = rawRef.replace(/^#/, "").toLowerCase();
 
-    const issue = await db.issue.findUnique({
-        where: parsedIssueNumber
-            ? { issueNumber: parsedIssueNumber }
-            : { id: resolvedParams.id },
+    // Match either the short publicKey or the internal cuid so direct DB links still work.
+    const issue = await db.issue.findFirst({
+        where: { OR: [{ publicKey: normalizedRef }, { id: rawRef }] },
         include: {
             reporter: true,
             assignee: true,
-            parentIssue: { select: { id: true, issueNumber: true, title: true } },
+            parentIssue: { select: { id: true, publicKey: true, title: true } },
             subtasks: {
                 select: {
                     id: true,
-                    issueNumber: true,
+                    publicKey: true,
                     title: true,
                     status: true,
                     priority: true,
@@ -82,7 +82,7 @@ export default async function IssueDetailsPage({
             outgoingLinks: {
                 include: {
                     target: {
-                        select: { id: true, issueNumber: true, title: true, status: true },
+                        select: { id: true, publicKey: true, title: true, status: true },
                     },
                 },
             },
@@ -95,8 +95,8 @@ export default async function IssueDetailsPage({
 
     if (!issue) notFound();
 
-    const publicIssueRef = formatIssueRef(issue.issueNumber, issue.id);
-    if (resolvedParams.id.toLowerCase() !== publicIssueRef.toLowerCase()) {
+    const publicIssueRef = formatIssueRef(issue.publicKey, issue.id);
+    if (rawRef !== publicIssueRef) {
         redirect(`/issues/${publicIssueRef}`);
     }
 
@@ -107,6 +107,7 @@ export default async function IssueDetailsPage({
     }
 
     const assignableUsers = await getStaffUsers();
+    const permissionContext = await getNotePermissionContext(session?.user?.id);
     const workflowType = normalizeType(issue.type);
     const workflowPriority = normalizePriority(issue.priority);
     const workflowSeverity = normalizeSeverity(issue.severity);
@@ -114,7 +115,7 @@ export default async function IssueDetailsPage({
 
     const subtasks: SubtaskRow[] = (issue as any).subtasks.map((s: any) => ({
         id: s.id,
-        issueRef: formatIssueRef(s.issueNumber, s.id),
+        issueRef: formatIssueRef(s.publicKey, s.id),
         title: s.title,
         status: normalizeStatus(s.status),
         priority: normalizePriority(s.priority),
@@ -125,7 +126,7 @@ export default async function IssueDetailsPage({
         linkId: l.id,
         type: l.type as IssueLinkType,
         targetId: l.target.id,
-        targetIssueRef: formatIssueRef(l.target.issueNumber, l.target.id),
+        targetIssueRef: formatIssueRef(l.target.publicKey, l.target.id),
         targetTitle: l.target.title,
         targetStatus: normalizeStatus(l.target.status) as IssueStatus,
     }));
@@ -133,7 +134,7 @@ export default async function IssueDetailsPage({
     const canEdit = !!session?.user?.id;
     const parentRef = (issue as any).parentIssue
         ? formatIssueRef(
-              (issue as any).parentIssue.issueNumber,
+              (issue as any).parentIssue.publicKey,
               (issue as any).parentIssue.id
           )
         : null;
@@ -270,37 +271,22 @@ export default async function IssueDetailsPage({
 
                         <div className="space-y-3">
                             {issue.notes.map((note: any) => (
-                                <div key={note.id} className="flex gap-3">
-                                    <Avatar src={note.author.image} name={note.author.name} size="md" />
-                                    <div className="min-w-0 flex-1 rounded-md border border-border bg-surface">
-                                        <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <span className="text-xs font-semibold text-foreground truncate">
-                                                    {note.author.name || "Unknown"}
-                                                </span>
-                                                {note.source === "DISCORD" && (
-                                                    <span className="rounded border border-info/30 bg-info/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-info">
-                                                        Discord
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <span
-                                                className="text-[11px] text-muted-foreground shrink-0"
-                                                title={note.createdAt.toISOString()}
-                                            >
-                                                {new Intl.DateTimeFormat("en-US", {
-                                                    dateStyle: "medium",
-                                                    timeStyle: "short",
-                                                }).format(note.createdAt)}
-                                            </span>
-                                        </div>
-                                        <div className="prose prose-sm dark:prose-invert max-w-none px-3 py-2 text-sm prose-p:my-1 prose-pre:my-2 prose-code:before:content-[''] prose-code:after:content-['']">
-                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                                {note.content}
-                                            </ReactMarkdown>
-                                        </div>
-                                    </div>
-                                </div>
+                                <IssueCommentCard
+                                    key={note.id}
+                                    issueId={issue.id}
+                                    canManage={canManageNote(permissionContext, note.authorId)}
+                                    note={{
+                                        id: note.id,
+                                        content: note.content,
+                                        createdAt: note.createdAt.toISOString(),
+                                        source: note.source,
+                                        author: {
+                                            id: note.author.id,
+                                            name: note.author.name,
+                                            image: note.author.image,
+                                        },
+                                    }}
+                                />
                             ))}
                             {issue.notes.length === 0 && (
                                 <EmptyState

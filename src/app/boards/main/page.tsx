@@ -11,7 +11,7 @@ export default async function MainBoardPage() {
         orderBy: { updatedAt: "desc" },
         select: {
             id: true,
-            issueNumber: true,
+            publicKey: true,
             title: true,
             status: true,
             priority: true,
@@ -21,7 +21,7 @@ export default async function MainBoardPage() {
 
     const issues: KanbanIssue[] = rawIssues.map((i) => ({
         id: i.id,
-        issueNumber: i.issueNumber ?? null,
+        publicKey: i.publicKey ?? null,
         title: i.title,
         status: i.status as KanbanIssue["status"],
         priority: i.priority as KanbanIssue["priority"],

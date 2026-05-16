@@ -28,7 +28,7 @@ import {
 
 export type KanbanIssue = {
     id: string;
-    issueNumber: number | null;
+    publicKey: string | null;
     title: string;
     status: IssueStatus;
     priority: IssuePriority;
@@ -49,7 +49,7 @@ function KanbanCard({
     issue: KanbanIssue;
     interactive: boolean;
 }) {
-    const issueRef = formatIssueRef(issue.issueNumber, issue.id);
+    const issueRef = formatIssueRef(issue.publicKey, issue.id);
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
         id: issue.id,
         data: { issue },

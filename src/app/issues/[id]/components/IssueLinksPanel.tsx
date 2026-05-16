@@ -143,7 +143,7 @@ export function IssueLinksPanel({
                         name="targetRef"
                         value={targetRef}
                         onChange={(e) => setTargetRef(e.target.value)}
-                        placeholder="Issue ref or # (e.g. RR-12)"
+                        placeholder="Issue key (e.g. k7m3qp2a)"
                         autoFocus
                         required
                     />

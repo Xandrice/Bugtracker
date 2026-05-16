@@ -10,7 +10,7 @@ export default async function BugTriagePage() {
     const rawIssues = await db.issue.findMany({
         where: { assigneeId: null, status: "OPEN" },
         include: {
-            parentIssue: { select: { id: true, issueNumber: true } },
+            parentIssue: { select: { id: true, publicKey: true } },
             _count: { select: { subtasks: true } },
         },
         orderBy: { updatedAt: "desc" },
@@ -18,7 +18,7 @@ export default async function BugTriagePage() {
 
     const issues: IssueSnippet[] = rawIssues.map((i: any) => ({
         id: i.id,
-        issueNumber: i.issueNumber ?? null,
+        publicKey: i.publicKey ?? null,
         title: i.title,
         type: i.type,
         status: i.status,
@@ -28,7 +28,7 @@ export default async function BugTriagePage() {
         updatedAt: i.updatedAt,
         dueDate: i.dueDate ?? undefined,
         parentIssueRef: i.parentIssue
-            ? formatIssueRef(i.parentIssue.issueNumber, i.parentIssue.id)
+            ? formatIssueRef(i.parentIssue.publicKey, i.parentIssue.id)
             : null,
         subtaskCount: i._count?.subtasks ?? 0,
     }));

@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAppBaseUrl, sendDiscordChannelMessage, sendDiscordDM } from "@/lib/discord";
 import { getStaffUsers } from "@/lib/staff";
-import { formatIssueRef } from "@/lib/issue-ids";
+import { formatIssueRef, generateIssuePublicKey } from "@/lib/issue-ids";
 import { normalizeNoteThreadCategory } from "@/lib/note-categories";
 import { canManageNote, getNotePermissionContext } from "@/lib/note-permissions";
 
@@ -30,9 +30,9 @@ function redirectToSignIn(): never {
 async function getIssuePublicRef(issueId: string) {
     const issue = await db.issue.findUnique({
         where: { id: issueId },
-        select: { issueNumber: true },
+        select: { publicKey: true },
     });
-    return formatIssueRef(issue?.issueNumber, issueId);
+    return formatIssueRef(issue?.publicKey, issueId);
 }
 
 async function redirectToIssue(issueId: string): Promise<never> {
@@ -69,6 +69,57 @@ function parseDiscordPostInput(value: string | null): { postId: string | null; p
     return { postId: raw, postLink };
 }
 
+async function getUserDiscordId(userId: string): Promise<string | null> {
+    const account = await db.account.findFirst({
+        where: { userId, provider: "discord" },
+        select: { providerAccountId: true },
+    });
+    return account?.providerAccountId || null;
+}
+
+/**
+ * Creates an in-app notification AND (optionally) sends a Discord DM to the
+ * recipient. Self-actions are skipped unless `notifySelf` is set — handy for
+ * "I @-mentioned myself" cases where the user clearly opted in.
+ */
+async function notifyUser(input: {
+    userId: string;
+    actorId?: string | null;
+    type: string;
+    title: string;
+    body?: string | null;
+    link?: string | null;
+    issueId?: string | null;
+    discordMessage?: string | null;
+    notifySelf?: boolean;
+}) {
+    const isSelf = !!input.actorId && input.actorId === input.userId;
+    if (isSelf && !input.notifySelf) return;
+
+    try {
+        await (db as any).notification.create({
+            data: {
+                userId: input.userId,
+                actorId: input.actorId || null,
+                type: input.type,
+                title: input.title,
+                body: input.body || null,
+                link: input.link || null,
+                issueId: input.issueId || null,
+            },
+        });
+    } catch (err) {
+        console.error("Failed to create notification", err);
+    }
+
+    if (input.discordMessage) {
+        const discordId = await getUserDiscordId(input.userId);
+        if (discordId) {
+            await sendDiscordDM(discordId, input.discordMessage);
+        }
+    }
+}
+
 async function notifyMentionedUsers(input: {
     content: string;
     senderName: string;
@@ -100,56 +151,26 @@ async function notifyMentionedUsers(input: {
         ? input.content.slice(0, 177) + "…"
         : input.content;
 
+    const baseUrl = getAppBaseUrl();
+    const fullLink = input.targetLink.startsWith("http")
+        ? input.targetLink
+        : `${baseUrl}${input.targetLink}`;
+
     for (const target of targets) {
-        if (target.id === input.senderId) continue;
-        try {
-            await (db as any).notification.create({
-                data: {
-                    userId: target.id,
-                    actorId: input.senderId || null,
-                    type: "MENTION",
-                    title: `${input.senderName} mentioned you${input.pageTitle ? ` in ${input.pageTitle}` : ""}`,
-                    body: snippet,
-                    link: input.targetLink.replace(getAppBaseUrl(), "") || input.targetLink,
-                    issueId: input.issueId || null,
-                },
-            });
-        } catch (err) {
-            console.error("Failed to create mention notification", err);
-        }
+        const dmBody = `You were tagged in BugTracker by **${input.senderName}**: \n${fullLink}\n\n> ${input.content.replace(/\n/g, "\n> ")}`;
 
-        if (target.discordId) {
-            let msg = `You were tagged in BugTracker by **${input.senderName}**: \n${input.targetLink}`;
-            msg += `\n\n> ${input.content.replace(/\n/g, "\n> ")}`;
-            await sendDiscordDM(target.discordId, msg);
-        }
-    }
-}
-
-async function createNotification(input: {
-    userId: string;
-    actorId?: string | null;
-    type: string;
-    title: string;
-    body?: string | null;
-    link?: string | null;
-    issueId?: string | null;
-}) {
-    if (input.actorId && input.actorId === input.userId) return;
-    try {
-        await (db as any).notification.create({
-            data: {
-                userId: input.userId,
-                actorId: input.actorId || null,
-                type: input.type,
-                title: input.title,
-                body: input.body || null,
-                link: input.link || null,
-                issueId: input.issueId || null,
-            },
+        await notifyUser({
+            userId: target.id,
+            actorId: input.senderId || null,
+            type: "MENTION",
+            title: `${input.senderName} mentioned you${input.pageTitle ? ` in ${input.pageTitle}` : ""}`,
+            body: snippet,
+            link: input.targetLink.replace(baseUrl, "") || input.targetLink,
+            issueId: input.issueId || null,
+            discordMessage: target.discordId ? dmBody : null,
+            // Self-mentions ARE intentional — typing @yourself counts as opting in.
+            notifySelf: true,
         });
-    } catch (err) {
-        console.error("Failed to create notification", err);
     }
 }
 
@@ -183,67 +204,62 @@ export async function createIssue(formData: FormData) {
     if (discordPostId) {
         const existing = await db.issue.findUnique({
             where: { discordThreadId: discordPostId },
-            select: { id: true, issueNumber: true },
+            select: { id: true, publicKey: true },
         });
 
         if (existing) {
-            redirect(`/issues/${formatIssueRef(existing.issueNumber, existing.id)}`);
+            redirect(`/issues/${formatIssueRef(existing.publicKey, existing.id)}`);
         }
     }
 
     let issue;
     try {
         let createdIssue = null;
-        for (let attempt = 0; attempt < 3 && !createdIssue; attempt += 1) {
+        for (let attempt = 0; attempt < 5 && !createdIssue; attempt += 1) {
             try {
-                createdIssue = await db.$transaction(async (tx) => {
-                    const lastIssue = await tx.issue.findFirst({
-                        where: { issueNumber: { not: null } },
-                        orderBy: { issueNumber: "desc" },
-                        select: { issueNumber: true },
-                    });
-                    const nextIssueNumber = (lastIssue?.issueNumber ?? 0) + 1;
-
-                    return tx.issue.create({
-                        data: {
-                            issueNumber: nextIssueNumber,
-                            title,
-                            description,
-                            type,
-                            priority,
-                            severity,
-                            environment,
-                            tags,
-                            resourceName: resourceName || undefined,
-                            serverVersion: serverVersion || undefined,
-                            reproductionSteps: reproductionSteps || undefined,
-                            expectedBehavior: expectedBehavior || undefined,
-                            dueDate: dueDateRaw ? new Date(dueDateRaw) : undefined,
-                            storyPoints: storyPointsRaw ? parseInt(storyPointsRaw, 10) : undefined,
-                            label: label || undefined,
-                            discordChannelId: undefined,
-                            discordThreadId: discordPostId || undefined,
-                            reporter: { connect: { id: reporterId } },
-                        }
-                    });
+                createdIssue = await db.issue.create({
+                    data: {
+                        publicKey: generateIssuePublicKey(),
+                        title,
+                        description,
+                        type,
+                        priority,
+                        severity,
+                        environment,
+                        tags,
+                        resourceName: resourceName || undefined,
+                        serverVersion: serverVersion || undefined,
+                        reproductionSteps: reproductionSteps || undefined,
+                        expectedBehavior: expectedBehavior || undefined,
+                        dueDate: dueDateRaw ? new Date(dueDateRaw) : undefined,
+                        storyPoints: storyPointsRaw ? parseInt(storyPointsRaw, 10) : undefined,
+                        label: label || undefined,
+                        discordChannelId: undefined,
+                        discordThreadId: discordPostId || undefined,
+                        reporter: { connect: { id: reporterId } },
+                    }
                 });
             } catch (error: any) {
+                // P2002 on publicKey means collision — retry with a fresh key.
+                // P2002 on discordThreadId is a real conflict — rethrow.
                 if (error?.code !== "P2002") throw error;
+                const conflictTarget = Array.isArray(error?.meta?.target) ? error.meta.target : [];
+                if (!conflictTarget.includes("publicKey")) throw error;
             }
         }
 
         if (!createdIssue) {
-            throw new Error("Failed to allocate next issue number");
+            throw new Error("Failed to allocate a unique issue key");
         }
         issue = createdIssue;
     } catch (error: any) {
         if (error?.code === "P2002" && discordPostId) {
             const existing = await db.issue.findUnique({
                 where: { discordThreadId: discordPostId },
-                select: { id: true, issueNumber: true },
+                select: { id: true, publicKey: true },
             });
             if (existing) {
-                redirect(`/issues/${formatIssueRef(existing.issueNumber, existing.id)}`);
+                redirect(`/issues/${formatIssueRef(existing.publicKey, existing.id)}`);
             }
         }
         throw error;
@@ -252,7 +268,7 @@ export async function createIssue(formData: FormData) {
     // If a forum post ID is linked, publish an initial traceability message there.
     if (discordPostId) {
         const baseUrl = getAppBaseUrl();
-        const issueLink = `${baseUrl}/issues/${formatIssueRef(issue.issueNumber, issue.id)}`;
+        const issueLink = `${baseUrl}/issues/${formatIssueRef(issue.publicKey, issue.id)}`;
         const introMessage = [
             "This has been added to the developer tracker.",
             `Issue: **${issue.title}**`,
@@ -498,7 +514,7 @@ export async function updateIssueAssignee(issueId: string, assigneeId: string | 
 
     const previous = await db.issue.findUnique({
         where: { id: issueId },
-        select: { assigneeId: true, title: true, issueNumber: true },
+        select: { assigneeId: true, title: true, publicKey: true },
     });
 
     await db.issue.update({
@@ -507,15 +523,20 @@ export async function updateIssueAssignee(issueId: string, assigneeId: string | 
     });
 
     if (assigneeId && assigneeId !== previous?.assigneeId) {
-        const issueRef = formatIssueRef(previous?.issueNumber, issueId);
-        await createNotification({
+        const issueRef = formatIssueRef(previous?.publicKey, issueId);
+        const actorName = session.user.name || "Someone";
+        const issueUrl = `${getAppBaseUrl()}/issues/${issueRef}`;
+        const dmBody = `**${actorName}** assigned you **${issueRef}**${previous?.title ? `: ${previous.title}` : ""}\n${issueUrl}`;
+
+        await notifyUser({
             userId: assigneeId,
             actorId: session.user.id,
             type: "ASSIGNED",
-            title: `${session.user.name || "Someone"} assigned you ${issueRef}`,
+            title: `${actorName} assigned you ${issueRef}`,
             body: previous?.title || null,
             link: `/issues/${issueRef}`,
             issueId,
+            discordMessage: dmBody,
         });
     }
 
@@ -573,14 +594,18 @@ export async function createTeamNote(formData: FormData) {
         });
 
         if (issue?.assigneeId && issue.assigneeId !== session.user.id) {
-            await createNotification({
+            const snippet = content.length > 180 ? content.slice(0, 177) + "…" : content;
+            const issueUrl = `${baseUrl}/issues/${issueRef}`;
+            const dmBody = `**${senderName}** commented on **${issue.title}**\n${issueUrl}\n\n> ${content.replace(/\n/g, "\n> ")}`;
+            await notifyUser({
                 userId: issue.assigneeId,
                 actorId: session.user.id,
                 type: "COMMENT",
                 title: `${senderName} commented on ${issue.title}`,
-                body: content.length > 180 ? content.slice(0, 177) + "…" : content,
+                body: snippet,
                 link: `/issues/${issueRef}`,
                 issueId,
+                discordMessage: dmBody,
             });
         }
 
@@ -832,11 +857,11 @@ export async function updateIssueDiscordPost(formData: FormData) {
                 discordThreadId: parsed.postId,
                 id: { not: issueId },
             },
-            select: { id: true, issueNumber: true },
+            select: { id: true, publicKey: true },
         });
 
         if (existing) {
-            throw new Error(`This Discord post is already linked to issue ${formatIssueRef(existing.issueNumber, existing.id)}.`);
+            throw new Error(`This Discord post is already linked to issue ${formatIssueRef(existing.publicKey, existing.id)}.`);
         }
     }
 
@@ -944,6 +969,65 @@ export async function saveDiscordForumSettings(input: { suggestionsForumId?: str
     };
 }
 
+// ---------- Issue comments (edit / delete) ----------
+
+export async function updateIssueComment(formData: FormData) {
+    const session = await auth();
+    if (!session?.user?.id) redirectToSignIn();
+
+    const noteId = (formData.get("noteId") as string | null)?.trim();
+    const content = (formData.get("content") as string | null)?.trim();
+    const issueId = (formData.get("issueId") as string | null)?.trim();
+    if (!noteId || !content || !issueId) throw new Error("Missing fields");
+
+    const note = await db.note.findFirst({
+        where: { id: noteId, issueId },
+        select: { id: true, authorId: true, source: true },
+    });
+    if (!note) throw new Error("Comment not found");
+    if (note.source === "DISCORD") {
+        throw new Error("Discord-sourced comments cannot be edited from the tracker.");
+    }
+
+    const permissionContext = await getNotePermissionContext(session.user.id);
+    if (!canManageNote(permissionContext, note.authorId)) {
+        throw new Error("You do not have permission to edit this comment.");
+    }
+
+    await db.note.update({
+        where: { id: noteId },
+        data: { content },
+    });
+
+    revalidatePath(`/issues/${issueId}`);
+    await redirectToIssue(issueId);
+}
+
+export async function deleteIssueComment(formData: FormData) {
+    const session = await auth();
+    if (!session?.user?.id) redirectToSignIn();
+
+    const noteId = (formData.get("noteId") as string | null)?.trim();
+    const issueId = (formData.get("issueId") as string | null)?.trim();
+    if (!noteId || !issueId) throw new Error("Missing fields");
+
+    const note = await db.note.findFirst({
+        where: { id: noteId, issueId },
+        select: { id: true, authorId: true },
+    });
+    if (!note) throw new Error("Comment not found");
+
+    const permissionContext = await getNotePermissionContext(session.user.id);
+    if (!canManageNote(permissionContext, note.authorId)) {
+        throw new Error("You do not have permission to delete this comment.");
+    }
+
+    await db.note.delete({ where: { id: noteId } });
+
+    revalidatePath(`/issues/${issueId}`);
+    await redirectToIssue(issueId);
+}
+
 // ---------- Notifications ----------
 
 export async function getMyNotifications(limit = 20) {
@@ -1004,7 +1088,7 @@ export async function createSubtask(formData: FormData) {
 
     const parent = await db.issue.findUnique({
         where: { id: parentIssueId },
-        select: { id: true, issueNumber: true, parentIssueId: true },
+        select: { id: true, parentIssueId: true },
     });
     if (!parent) throw new Error("Parent issue not found");
     if (parent.parentIssueId) {
@@ -1012,30 +1096,24 @@ export async function createSubtask(formData: FormData) {
     }
 
     let created = null;
-    for (let attempt = 0; attempt < 3 && !created; attempt += 1) {
+    for (let attempt = 0; attempt < 5 && !created; attempt += 1) {
         try {
-            created = await db.$transaction(async (tx) => {
-                const lastIssue = await tx.issue.findFirst({
-                    where: { issueNumber: { not: null } },
-                    orderBy: { issueNumber: "desc" },
-                    select: { issueNumber: true },
-                });
-                const nextIssueNumber = (lastIssue?.issueNumber ?? 0) + 1;
-                return tx.issue.create({
-                    data: {
-                        issueNumber: nextIssueNumber,
-                        title,
-                        type,
-                        priority,
-                        severity: "MINOR",
-                        status: "OPEN",
-                        reporter: { connect: { id: reporterId } },
-                        parentIssue: { connect: { id: parentIssueId } },
-                    },
-                });
+            created = await db.issue.create({
+                data: {
+                    publicKey: generateIssuePublicKey(),
+                    title,
+                    type,
+                    priority,
+                    severity: "MINOR",
+                    status: "OPEN",
+                    reporter: { connect: { id: reporterId } },
+                    parentIssue: { connect: { id: parentIssueId } },
+                },
             });
         } catch (error: any) {
             if (error?.code !== "P2002") throw error;
+            const conflictTarget = Array.isArray(error?.meta?.target) ? error.meta.target : [];
+            if (!conflictTarget.includes("publicKey")) throw error;
         }
     }
     if (!created) throw new Error("Failed to create subtask");
@@ -1071,25 +1149,21 @@ export async function createIssueLink(formData: FormData) {
     const type = formData.get("linkType") as string | null;
 
     if (!sourceId) throw new Error("Missing source");
-    if (!targetRefRaw) throw new Error("Provide a target issue reference (e.g. RR-12 or the ID)");
+    if (!targetRefRaw) throw new Error("Provide a target issue reference (the key shown on the issue, e.g. k7m3qp2a)");
     if (!type || !(ALLOWED_LINK_TYPE as readonly string[]).includes(type)) {
         throw new Error("Invalid link type");
     }
 
-    // Try to resolve target by issueNumber (numeric or RR-NNN) or by id.
-    let target = null as { id: string; issueNumber: number | null } | null;
-    const numberMatch = targetRefRaw.match(/(\d+)/);
-    if (numberMatch) {
-        const num = parseInt(numberMatch[1], 10);
-        target = await db.issue.findFirst({
-            where: { issueNumber: num },
-            select: { id: true, issueNumber: true },
-        });
-    }
+    // Resolve target by publicKey first, then fall back to the internal cuid.
+    const cleaned = targetRefRaw.replace(/^#/, "").toLowerCase();
+    let target = await db.issue.findUnique({
+        where: { publicKey: cleaned },
+        select: { id: true },
+    });
     if (!target) {
         target = await db.issue.findUnique({
             where: { id: targetRefRaw },
-            select: { id: true, issueNumber: true },
+            select: { id: true },
         });
     }
     if (!target) throw new Error(`No issue found for "${targetRefRaw}"`);

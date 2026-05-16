@@ -13,7 +13,7 @@ export default async function AllIssuesPage() {
     const rawIssues = await db.issue.findMany({
         include: {
             assignee: true,
-            parentIssue: { select: { id: true, issueNumber: true } },
+            parentIssue: { select: { id: true, publicKey: true } },
             _count: { select: { subtasks: true } },
         },
         orderBy: { updatedAt: "desc" },
@@ -21,7 +21,7 @@ export default async function AllIssuesPage() {
 
     const issues: IssueSnippet[] = rawIssues.map((i: any) => ({
         id: i.id,
-        issueNumber: i.issueNumber ?? null,
+        publicKey: i.publicKey ?? null,
         title: i.title,
         type: i.type,
         status: i.status,
@@ -35,7 +35,7 @@ export default async function AllIssuesPage() {
         resourceName: i.resourceName ?? undefined,
         storyPoints: i.storyPoints ?? undefined,
         parentIssueRef: i.parentIssue
-            ? formatIssueRef(i.parentIssue.issueNumber, i.parentIssue.id)
+            ? formatIssueRef(i.parentIssue.publicKey, i.parentIssue.id)
             : null,
         subtaskCount: i._count?.subtasks ?? 0,
     }));

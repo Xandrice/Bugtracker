@@ -78,7 +78,7 @@ export interface UserSnippet {
 
 export interface IssueSnippet {
     id: string;
-    issueNumber?: number | null;
+    publicKey?: string | null;
     title: string;
     status: IssueStatus;
     priority: IssuePriority;
@@ -156,7 +156,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
             filtered = filtered.filter(
                 (i) =>
                     i.title.toLowerCase().includes(q) ||
-                    formatIssueRef(i.issueNumber, i.id).toLowerCase().includes(q)
+                    formatIssueRef(i.publicKey, i.id).toLowerCase().includes(q)
             );
         }
 
@@ -387,7 +387,7 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                 </tr>
                             ) : (
                                 sortedAndFilteredIssues.map((issue) => {
-                                    const issueRef = formatIssueRef(issue.issueNumber, issue.id);
+                                    const issueRef = formatIssueRef(issue.publicKey, issue.id);
                                     const updating = isPending && pendingIssueId === issue.id;
                                     return (
                                         <tr
