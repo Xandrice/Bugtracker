@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { Select } from "@/components/ui/Select";
+import { Dropdown, DropdownTrigger, DropdownPopover, DropdownMenu, DropdownItem, Button, buttonVariants, cn } from "@heroui/react";
 import { setAssignee } from "@/app/actions";
 
 export function AssigneeSelect({
@@ -23,6 +22,8 @@ export function AssigneeSelect({
         ...users.map((u) => ({ value: u.id, label: u.name || u.id })),
     ];
 
+    const currentLabel = options.find((o) => o.value === value)?.label || "Unassigned";
+
     return (
         <form
             action={async (formData) => {
@@ -37,15 +38,38 @@ export function AssigneeSelect({
         >
             <input type="hidden" name="issueId" value={issueId} />
             <input type="hidden" name="assigneeId" value={value} />
-            <Select
-                value={value}
-                onChange={setValue}
-                options={options}
-                size="xs"
-                maxVisibleItems={3}
-            />
-            <Button type="submit" variant="primary" size="xs" disabled={submitting}>
-                {submitting && <Loader2 className="h-3 w-3 animate-spin" />}
+            <Dropdown>
+                <DropdownTrigger
+                    className={cn(
+                        buttonVariants({ variant: "outline", size: "sm" }),
+                        "w-full justify-between text-xs h-8 border-default-200 hover:border-default-450 bg-background/50 font-semibold cursor-pointer focus:outline-none"
+                    )}
+                >
+                    {currentLabel}
+                </DropdownTrigger>
+                <DropdownPopover className="border border-default-100 bg-background/95 backdrop-blur-md shadow-lg">
+                    <DropdownMenu
+                        aria-label="Assignee Select"
+                        selectionMode="single"
+                        selectedKeys={new Set([value])}
+                        onSelectionChange={(keys) => setValue(Array.from(keys)[0] as string)}
+                    >
+                        {options.map((opt) => (
+                            <DropdownItem key={opt.value}>
+                                {opt.label}
+                            </DropdownItem>
+                        ))}
+                    </DropdownMenu>
+                </DropdownPopover>
+            </Dropdown>
+            <Button 
+                type="submit" 
+                variant="primary" 
+                size="sm"
+                className="w-full h-8 text-xs font-semibold flex items-center justify-center gap-1.5"
+                isDisabled={submitting}
+            >
+                {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 Update assignee
             </Button>
         </form>

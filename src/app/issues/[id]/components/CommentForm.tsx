@@ -3,8 +3,7 @@
 import { useState, useRef } from "react";
 import { Send, Loader2 } from "lucide-react";
 import { createTeamNote } from "@/app/actions";
-import { Avatar } from "@/components/ui/Avatar";
-import { Button } from "@/components/ui/Button";
+import { Avatar, Button } from "@heroui/react";
 import { cn } from "@/components/ui/cn";
 
 interface User {
@@ -109,10 +108,13 @@ export default function CommentForm({
     return (
         <form action={handleAction} className="flex items-start gap-3 pt-3">
             <input type="hidden" name="issueId" value={issueId} />
-            <Avatar src={currentUserImage} size="md" name="You" />
-            <div className="relative flex-1 min-w-0 overflow-visible rounded-md border border-input bg-elevated focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30 transition-colors">
+            <Avatar className="h-8 w-8 text-xs font-semibold shrink-0 border border-primary/20">
+                {currentUserImage && <Avatar.Image src={currentUserImage} className="object-cover h-full w-full" />}
+                <Avatar.Fallback>Y</Avatar.Fallback>
+            </Avatar>
+            <div className="relative flex-1 min-w-0 overflow-visible rounded-xl border border-default-200 bg-background/50 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all shadow-sm">
                 {showMentions && filteredUsers.length > 0 && (
-                    <div className="absolute bottom-full left-0 z-50 mb-1 flex max-h-[200px] w-64 flex-col overflow-y-auto rounded-md border border-border bg-elevated p-1 shadow-pop">
+                    <div className="absolute bottom-full left-0 z-50 mb-1 flex max-h-[200px] w-64 flex-col overflow-y-auto rounded-xl border border-default-100 bg-background/95 backdrop-blur-md p-1 shadow-lg">
                         {filteredUsers.map((user, idx) => (
                             <button
                                 type="button"
@@ -123,13 +125,16 @@ export default function CommentForm({
                                 }}
                                 onMouseEnter={() => setSelectedIndex(idx)}
                                 className={cn(
-                                    "flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors",
+                                    "flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors",
                                     idx === selectedIndex
-                                        ? "bg-primary text-primary-foreground"
-                                        : "text-foreground hover:bg-muted"
+                                        ? "bg-primary text-primary-foreground font-semibold"
+                                        : "text-foreground hover:bg-default-100"
                                 )}
                             >
-                                <Avatar src={user.image} name={user.name} size="xs" />
+                                <Avatar className="h-5 w-5 text-[9px]">
+                                    {user.image && <Avatar.Image src={user.image} className="object-cover h-full w-full" />}
+                                    <Avatar.Fallback>{(user.name || "U").charAt(0).toUpperCase()}</Avatar.Fallback>
+                                </Avatar>
                                 <span className="truncate">{user.name}</span>
                             </button>
                         ))}
@@ -144,20 +149,21 @@ export default function CommentForm({
                     onChange={handleChange}
                     onKeyDown={handleKeyDown}
                     placeholder="Add a comment… Markdown supported. Use @ to mention people."
-                    className="block w-full resize-y bg-transparent p-3 text-sm text-foreground placeholder:text-subtle-foreground focus:outline-none min-h-[90px]"
+                    className="block w-full resize-y bg-transparent p-3.5 text-sm text-foreground placeholder:text-default-400 focus:outline-none min-h-[90px]"
                     disabled={isPending}
                 />
-                <div className="flex items-center justify-between border-t border-border bg-surface-2 px-2 py-1.5">
-                    <span className="px-1 text-[10px] text-subtle-foreground">
-                        Tip: <kbd className="rounded border border-border bg-surface px-1">@</kbd> to mention
+                <div className="flex items-center justify-between border-t border-default-100 bg-default-50/10 px-3 py-2 rounded-b-xl">
+                    <span className="px-1 text-[10px] text-default-450 font-medium">
+                        Tip: <kbd className="rounded border border-default-200 bg-default-150 px-1 font-semibold">@</kbd> to mention
                     </span>
                     <Button
                         type="submit"
                         variant="primary"
-                        size="xs"
-                        disabled={isPending || !content.trim()}
+                        size="sm"
+                        className="font-semibold shadow-sm flex items-center justify-center gap-1.5"
+                        isDisabled={isPending || !content.trim()}
                     >
-                        {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                        {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                         {isPending ? "Sending…" : "Comment"}
                     </Button>
                 </div>

@@ -4,9 +4,7 @@ import { useState } from "react";
 import { Pencil, Trash2, X, Loader2, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Avatar } from "@/components/ui/Avatar";
-import { Button } from "@/components/ui/Button";
-import { Textarea } from "@/components/ui/Input";
+import { Avatar, Button } from "@heroui/react";
 import { updateIssueComment, deleteIssueComment } from "@/app/actions";
 
 export type IssueCommentItem = {
@@ -50,22 +48,25 @@ export function IssueCommentCard({
 
     return (
         <div className="flex gap-3">
-            <Avatar src={note.author.image} name={note.author.name} size="md" />
-            <div className="min-w-0 flex-1 rounded-md border border-border bg-surface">
-                <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+            <Avatar className="h-8 w-8 text-xs font-semibold shrink-0 border border-primary/20">
+                {note.author.image && <Avatar.Image src={note.author.image} className="object-cover h-full w-full" />}
+                <Avatar.Fallback>{(note.author.name || "U").charAt(0).toUpperCase()}</Avatar.Fallback>
+            </Avatar>
+            <div className="min-w-0 flex-1 rounded-xl border border-default-100 bg-background/50 backdrop-blur-md shadow-sm">
+                <div className="flex items-center justify-between gap-2 border-b border-default-100 px-3.5 py-2">
                     <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs font-semibold text-foreground truncate">
+                        <span className="text-xs font-bold text-foreground truncate">
                             {note.author.name || "Unknown"}
                         </span>
                         {isDiscord && (
-                            <span className="rounded border border-info/30 bg-info/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-info">
+                            <span className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary">
                                 Discord
                             </span>
                         )}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2.5 shrink-0">
                         <span
-                            className="text-[11px] text-muted-foreground"
+                            className="text-[11px] text-default-450 font-medium"
                             title={note.createdAt}
                         >
                             {formatDate(note.createdAt)}
@@ -74,7 +75,7 @@ export function IssueCommentCard({
                             <button
                                 type="button"
                                 onClick={() => setEditing(true)}
-                                className="text-subtle-foreground transition-colors hover:text-foreground"
+                                className="text-default-400 transition-colors hover:text-foreground cursor-pointer"
                                 title="Edit comment"
                             >
                                 <Pencil className="h-3 w-3" />
@@ -102,7 +103,7 @@ export function IssueCommentCard({
                                 <button
                                     type="submit"
                                     disabled={deleting}
-                                    className="text-subtle-foreground transition-colors hover:text-danger disabled:opacity-50"
+                                    className="text-default-400 transition-colors hover:text-danger disabled:opacity-50 cursor-pointer"
                                     title="Delete comment"
                                 >
                                     {deleting ? (
@@ -131,44 +132,47 @@ export function IssueCommentCard({
                     >
                         <input type="hidden" name="noteId" value={note.id} />
                         <input type="hidden" name="issueId" value={issueId} />
-                        <Textarea
+                        <textarea
                             name="content"
                             value={content}
                             onChange={(e) => setContent(e.target.value)}
                             rows={4}
                             required
+                            className="block w-full resize-y bg-transparent p-2.5 text-sm text-foreground placeholder:text-default-400 border border-default-200 focus:border-primary/50 focus:ring-1 focus:ring-primary/20 focus:outline-none rounded-lg transition-all min-h-[90px]"
                         />
                         <div className="flex items-center justify-end gap-1.5">
                             <Button
                                 type="button"
-                                size="xs"
+                                size="sm"
                                 variant="ghost"
                                 onClick={() => {
                                     setContent(note.content);
                                     setEditing(false);
                                 }}
-                                disabled={saving}
+                                isDisabled={saving}
+                                className="font-semibold text-xs h-8"
                             >
-                                <X className="h-3 w-3" />
+                                <X className="h-3.5 w-3.5" />
                                 Cancel
                             </Button>
                             <Button
                                 type="submit"
-                                size="xs"
+                                size="sm"
                                 variant="primary"
-                                disabled={saving || !content.trim() || content === note.content}
+                                isDisabled={saving || !content.trim() || content === note.content}
+                                className="font-semibold text-xs h-8"
                             >
                                 {saving ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                 ) : (
-                                    <Check className="h-3 w-3" />
+                                    <Check className="h-3.5 w-3.5" />
                                 )}
                                 Save
                             </Button>
                         </div>
                     </form>
                 ) : (
-                    <div className="prose prose-sm dark:prose-invert max-w-none px-3 py-2 text-sm prose-p:my-1 prose-pre:my-2 prose-code:before:content-[''] prose-code:after:content-['']">
+                    <div className="prose prose-sm dark:prose-invert max-w-none px-3.5 py-2.5 text-sm prose-p:my-1 prose-pre:my-2 prose-code:before:content-[''] prose-code:after:content-['']">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                             {note.content}
                         </ReactMarkdown>

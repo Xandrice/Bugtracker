@@ -3,9 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Link2, Plus, X, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
+import {
+    Button,
+    Input,
+    Dropdown,
+    DropdownTrigger,
+    DropdownPopover,
+    DropdownMenu,
+    DropdownItem,
+    buttonVariants,
+    cn,
+} from "@heroui/react";
 import { createIssueLink, deleteIssueLink } from "@/app/actions";
 import {
     LINK_TYPE_META,
@@ -46,33 +54,34 @@ export function IssueLinksPanel({
     }));
 
     return (
-        <div className="rounded-md border border-border bg-surface">
-            <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-                    <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+        <div className="rounded-xl border border-default-100 bg-background/50 backdrop-blur-md shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between border-b border-default-100 px-3.5 py-3">
+                <div className="flex items-center gap-2 text-xs font-bold text-foreground uppercase tracking-wider text-default-450">
+                    <Link2 className="h-3.5 w-3.5" />
                     Linked issues
                 </div>
                 {canEdit && !adding && (
-                    <button
-                        type="button"
-                        onClick={() => setAdding(true)}
-                        className="inline-flex items-center gap-1 rounded-md px-1.5 h-6 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        onPress={() => setAdding(true)}
+                        className="h-6 min-w-0 px-2 text-[11px] font-semibold text-default-500 hover:text-foreground"
                     >
-                        <Plus className="h-3 w-3" />
+                        <Plus className="h-3 w-3 mr-0.5" />
                         Add
-                    </button>
+                    </Button>
                 )}
             </div>
 
-            <div className="divide-y divide-border">
+            <div className="divide-y divide-default-100">
                 {links.length === 0 && !adding && (
-                    <p className="px-3 py-4 text-xs text-subtle-foreground">No linked issues.</p>
+                    <p className="px-3.5 py-4 text-xs font-medium text-default-450">No linked issues.</p>
                 )}
                 {grouped.map(
                     (g) =>
                         g.items.length > 0 && (
-                            <div key={g.type} className="p-2">
-                                <div className="px-1 pb-1 text-[10px] font-medium uppercase tracking-wider text-subtle-foreground">
+                            <div key={g.type} className="p-3">
+                                <div className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-default-450">
                                     {g.label}
                                 </div>
                                 <div className="space-y-1">
@@ -81,16 +90,16 @@ export function IssueLinksPanel({
                                         return (
                                             <div
                                                 key={l.linkId}
-                                                className="flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/40"
+                                                className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-default-50/50"
                                             >
-                                                <span className="shrink-0 text-muted-foreground">
+                                                <span className="shrink-0 text-default-400">
                                                     {meta.icon}
                                                 </span>
                                                 <Link
                                                     href={`/issues/${l.targetIssueRef}`}
-                                                    className="min-w-0 flex-1 truncate text-xs text-foreground hover:text-primary"
+                                                    className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground hover:text-primary transition-colors"
                                                 >
-                                                    <span className="mr-1.5 font-mono text-[10px] text-subtle-foreground">
+                                                    <span className="mr-1.5 font-mono text-[10px] text-default-450">
                                                         {l.targetIssueRef}
                                                     </span>
                                                     {l.targetTitle}
@@ -101,7 +110,7 @@ export function IssueLinksPanel({
                                                         <input type="hidden" name="sourceId" value={sourceId} />
                                                         <button
                                                             type="submit"
-                                                            className="text-subtle-foreground transition-colors hover:text-danger"
+                                                            className="text-default-400 transition-colors hover:text-danger p-0.5 rounded"
                                                             title="Remove link"
                                                         >
                                                             <X className="h-3.5 w-3.5" />
@@ -129,42 +138,72 @@ export function IssueLinksPanel({
                             setSubmitting(false);
                         }
                     }}
-                    className="space-y-2 border-t border-border bg-surface-2 p-3"
+                    className="space-y-3 border-t border-default-100 bg-default-50/20 p-3.5"
                 >
                     <input type="hidden" name="sourceId" value={sourceId} />
-                    <Select
-                        name="linkType"
-                        value={linkType}
-                        onChange={setLinkType}
-                        options={LINK_TYPE_OPTIONS}
-                        size="xs"
-                    />
-                    <Input
-                        name="targetRef"
-                        value={targetRef}
-                        onChange={(e) => setTargetRef(e.target.value)}
-                        placeholder="Issue key (e.g. k7m3qp2a)"
-                        autoFocus
-                        required
-                    />
-                    <div className="flex items-center justify-end gap-1.5">
+                    <input type="hidden" name="linkType" value={linkType} />
+                    
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-default-450">Relationship</span>
+                        <Dropdown>
+                            <DropdownTrigger
+                                className={cn(
+                                    buttonVariants({ variant: "outline", size: "sm" }),
+                                    "w-full h-8 justify-between px-2.5 text-xs border-default-200 hover:border-default-400 bg-background/50 text-foreground font-semibold cursor-pointer focus:outline-none"
+                                )}
+                            >
+                                <span>{LINK_TYPE_OPTIONS.find(o => o.value === linkType)?.label || linkType}</span>
+                            </DropdownTrigger>
+                            <DropdownPopover className="border border-default-100 bg-background/95 backdrop-blur-md shadow-lg" placement="bottom start">
+                                <DropdownMenu
+                                    aria-label="Select Link Type"
+                                    selectionMode="single"
+                                    selectedKeys={new Set([linkType])}
+                                    onSelectionChange={(keys) => setLinkType(Array.from(keys)[0] as string)}
+                                >
+                                    {LINK_TYPE_OPTIONS.map((opt) => (
+                                        <DropdownItem key={opt.value}>
+                                            {opt.label}
+                                        </DropdownItem>
+                                    ))}
+                                </DropdownMenu>
+                            </DropdownPopover>
+                        </Dropdown>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-default-455">Target Issue</span>
+                        <Input
+                            name="targetRef"
+                            value={targetRef}
+                            onChange={(e) => setTargetRef(e.target.value)}
+                            placeholder="Issue key (e.g. k7m3qp2a)"
+                            autoFocus
+                            required
+                            className="w-full h-8 px-2.5 bg-background/50 border border-default-200 hover:border-default-400 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none rounded-lg text-xs text-foreground transition-all font-mono"
+                        />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-1.5 pt-1">
                         <Button
                             type="button"
-                            size="xs"
+                            size="sm"
                             variant="ghost"
-                            onClick={() => {
+                            onPress={() => {
                                 setAdding(false);
                                 setTargetRef("");
                             }}
-                            disabled={submitting}
+                            isDisabled={submitting}
+                            className="h-7 text-xs font-semibold"
                         >
                             Cancel
                         </Button>
                         <Button
                             type="submit"
-                            size="xs"
+                            size="sm"
                             variant="primary"
-                            disabled={submitting || !targetRef.trim()}
+                            isDisabled={submitting || !targetRef.trim()}
+                            className="h-7 text-xs font-semibold flex items-center justify-center gap-1 shadow-sm"
                         >
                             {submitting && <Loader2 className="h-3 w-3 animate-spin" />}
                             Link

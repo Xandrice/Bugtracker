@@ -2,9 +2,10 @@
 
 import { Bell, Check, ChevronRight, Inbox } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { getMyNotifications, markAllNotificationsRead, markNotificationRead } from "@/app/actions";
 import { cn } from "@/components/ui/cn";
+import { Popover, PopoverTrigger, PopoverContent, Button, Badge, BadgeAnchor, BadgeLabel } from "@heroui/react";
 
 type NotificationItem = {
     id: string;
@@ -34,24 +35,6 @@ export function NotificationBell({ unread: initialUnread }: { unread: number }) 
     const [items, setItems] = useState<NotificationItem[] | null>(null);
     const [unread, setUnread] = useState(initialUnread);
     const [loading, setLoading] = useState(false);
-    const wrapperRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (!open) return;
-        const onClick = (e: MouseEvent) => {
-            if (!wrapperRef.current) return;
-            if (!wrapperRef.current.contains(e.target as Node)) setOpen(false);
-        };
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape") setOpen(false);
-        };
-        document.addEventListener("mousedown", onClick);
-        document.addEventListener("keydown", onKey);
-        return () => {
-            document.removeEventListener("mousedown", onClick);
-            document.removeEventListener("keydown", onKey);
-        };
-    }, [open]);
 
     useEffect(() => {
         if (!open || items !== null) return;
@@ -92,112 +75,126 @@ export function NotificationBell({ unread: initialUnread }: { unread: number }) 
     };
 
     return (
-        <div ref={wrapperRef} className="relative">
-            <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className={cn(
-                    "relative inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-                    open && "bg-muted text-foreground"
-                )}
-                aria-label="Notifications"
-            >
-                <Bell className="h-3.5 w-3.5" />
-                {unread > 0 && (
-                    <span className="absolute -right-0.5 -top-0.5 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-none text-primary-foreground">
-                        {unread > 99 ? "99+" : unread}
-                    </span>
-                )}
-            </button>
-
-            {open && (
-                <div className="absolute right-0 mt-1.5 w-80 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-elevated shadow-pop overflow-hidden">
-                    <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                        <span className="text-xs font-semibold text-foreground">Inbox</span>
-                        {unread > 0 && (
-                            <button
-                                type="button"
-                                onClick={handleMarkAll}
-                                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-                            >
-                                <Check className="h-3 w-3" />
-                                Mark all read
-                            </button>
-                        )}
-                    </div>
-                    <div className="max-h-96 overflow-y-auto">
-                        {loading ? (
-                            <div className="px-3 py-8 text-center text-xs text-muted-foreground">
-                                Loading…
+        <Popover isOpen={open} onOpenChange={setOpen}>
+            <PopoverTrigger>
+                <div className="relative inline-flex items-center justify-center cursor-pointer">
+                    {unread > 0 ? (
+                        <Badge color="danger" size="sm">
+                            <BadgeAnchor>
+                                <Button
+                                    isIconOnly
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-default-500 hover:text-foreground rounded-lg animate-pulse"
+                                    aria-label="Notifications"
+                                >
+                                    <Bell className="h-4 w-4" />
+                                </Button>
+                            </BadgeAnchor>
+                            <BadgeLabel>{unread > 99 ? "99+" : unread}</BadgeLabel>
+                        </Badge>
+                    ) : (
+                        <Button
+                            isIconOnly
+                            variant="ghost"
+                            size="sm"
+                            className="text-default-500 hover:text-foreground rounded-lg"
+                            aria-label="Notifications"
+                        >
+                            <Bell className="h-4 w-4" />
+                        </Button>
+                    )}
+                </div>
+            </PopoverTrigger>
+            <PopoverContent placement="bottom end" className="w-80 p-0 border border-default-100 bg-background/95 backdrop-blur-md shadow-xl rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between border-b border-divider px-4 py-3 bg-default-50/50">
+                    <span className="text-xs font-bold text-foreground">Inbox</span>
+                    {unread > 0 && (
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-[11px] font-bold text-primary h-7 px-2 flex items-center gap-1"
+                            onClick={handleMarkAll}
+                        >
+                            <Check className="h-3 w-3" />
+                            Mark all read
+                        </Button>
+                    )}
+                </div>
+                <div className="max-h-96 overflow-y-auto">
+                    {loading ? (
+                        <div className="px-4 py-8 text-center text-xs text-default-400">
+                            Loading…
+                        </div>
+                    ) : !items || items.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center gap-2.5 px-4 py-10 text-center">
+                            <div className="h-10 w-10 rounded-full bg-default-100 flex items-center justify-center text-default-400">
+                                <Inbox className="h-5 w-5" />
                             </div>
-                        ) : !items || items.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center gap-2 px-3 py-10 text-center">
-                                <Inbox className="h-6 w-6 text-subtle-foreground" />
-                                <div className="text-xs text-muted-foreground">
-                                    You're all caught up.
-                                </div>
+                            <div className="text-xs font-semibold text-default-500">
+                                You're all caught up.
                             </div>
-                        ) : (
-                            items.map((item) => {
-                                const content = (
-                                    <div
+                        </div>
+                    ) : (
+                        items.map((item) => {
+                            const content = (
+                                <div
+                                    className={cn(
+                                        "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-default-50",
+                                        !item.readAt && "bg-primary/5"
+                                    )}
+                                >
+                                    <span
                                         className={cn(
-                                            "flex w-full items-start gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted",
-                                            !item.readAt && "bg-primary/5"
+                                            "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
+                                            !item.readAt ? "bg-primary" : "bg-transparent"
                                         )}
-                                    >
-                                        <span
-                                            className={cn(
-                                                "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
-                                                !item.readAt ? "bg-primary" : "bg-transparent"
-                                            )}
-                                        />
-                                        <div className="min-w-0 flex-1">
-                                            <div className="text-xs font-medium text-foreground truncate">
-                                                {item.title}
-                                            </div>
-                                            {item.body && (
-                                                <div className="mt-0.5 text-[11px] text-muted-foreground line-clamp-2">
-                                                    {item.body}
-                                                </div>
-                                            )}
-                                            <div className="mt-1 text-[10px] text-subtle-foreground">
-                                                {formatRelative(item.createdAt)}
-                                            </div>
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="text-xs font-bold text-foreground truncate">
+                                            {item.title}
                                         </div>
-                                        {item.link && (
-                                            <ChevronRight className="mt-1 h-3 w-3 shrink-0 text-subtle-foreground" />
+                                        {item.body && (
+                                            <div className="mt-0.5 text-[11px] text-default-500 line-clamp-2">
+                                                {item.body}
+                                            </div>
                                         )}
+                                        <div className="mt-1.5 text-[10px] font-medium text-default-400">
+                                            {formatRelative(item.createdAt)}
+                                        </div>
                                     </div>
-                                );
+                                    {item.link && (
+                                        <ChevronRight className="mt-1 h-3.5 w-3.5 shrink-0 text-default-400" />
+                                    )}
+                                </div>
+                            );
 
-                                if (item.link) {
-                                    return (
-                                        <Link
-                                            key={item.id}
-                                            href={item.link}
-                                            onClick={() => handleClickItem(item)}
-                                            className="block border-b border-border last:border-b-0"
-                                        >
-                                            {content}
-                                        </Link>
-                                    );
-                                }
+                            if (item.link) {
                                 return (
-                                    <button
+                                    <Link
                                         key={item.id}
-                                        type="button"
+                                        href={item.link}
                                         onClick={() => handleClickItem(item)}
-                                        className="block w-full border-b border-border last:border-b-0"
+                                        className="block border-b border-divider last:border-b-0"
                                     >
                                         {content}
-                                    </button>
+                                    </Link>
                                 );
-                            })
-                        )}
-                    </div>
+                            }
+                            return (
+                                <button
+                                    key={item.id}
+                                    type="button"
+                                    onClick={() => handleClickItem(item)}
+                                    className="block w-full border-b border-divider last:border-b-0 cursor-pointer"
+                                >
+                                    {content}
+                                </button>
+                            );
+                        })
+                    )}
                 </div>
-            )}
-        </div>
+            </PopoverContent>
+        </Popover>
     );
 }

@@ -16,7 +16,7 @@ import { GripVertical } from "lucide-react";
 import { updateIssueWorkflow } from "@/app/actions";
 import { formatIssueRef } from "@/lib/issue-ids";
 import { cn } from "@/components/ui/cn";
-import { Badge } from "@/components/ui/Badge";
+import { Card, CardContent, Chip } from "@heroui/react";
 import {
     PRIORITY_META,
     STATUS_META,
@@ -41,6 +41,18 @@ const COLUMNS: { status: IssueStatus; title: string }[] = [
     { status: "REVIEW", title: "Review" },
     { status: "DONE", title: "Done" },
 ];
+
+const toneToColor = (tone: string): "default" | "accent" | "success" | "warning" | "danger" => {
+    switch (tone) {
+        case "neutral": return "default";
+        case "info": return "accent";
+        case "warning": return "warning";
+        case "primary": return "accent";
+        case "success": return "success";
+        case "danger": return "danger";
+        default: return "default";
+    }
+};
 
 function KanbanCard({
     issue,
@@ -76,47 +88,55 @@ function KanbanCard({
     const priorityMeta = PRIORITY_META[wfPriority];
 
     return (
-        <div
+        <Card
             ref={setNodeRef}
             style={style}
             className={cn(
-                "rounded-md border border-border bg-surface p-2.5 transition-colors hover:border-border-strong",
-                isDragging && "opacity-60 ring-1 ring-primary"
+                "border border-default-100 bg-background/60 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-default-300/80 hover:shadow-md cursor-default select-none shadow-sm",
+                isDragging && "opacity-60 ring-2 ring-primary/80 shadow-lg shadow-primary/20 scale-[1.01]"
             )}
         >
-            <div className="flex gap-2">
-                {interactive ? (
-                    <button
-                        type="button"
-                        className="mt-0.5 shrink-0 cursor-grab touch-none text-subtle-foreground transition-colors hover:text-foreground"
-                        aria-label="Drag issue"
-                        {...listeners}
-                        {...attributes}
-                    >
-                        <GripVertical className="h-3.5 w-3.5" />
-                    </button>
-                ) : (
-                    <span className="mt-0.5 w-3.5 shrink-0" aria-hidden />
-                )}
-                <div className="min-w-0 flex-1 space-y-1.5">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-mono text-[10px] text-muted-foreground">{issueRef}</span>
-                        <Badge tone={typeMeta.tone} size="xs">
-                            {typeMeta.icon} {typeMeta.label}
-                        </Badge>
-                        <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-                            {priorityMeta.icon} {priorityMeta.short}
-                        </span>
+            <CardContent className="p-3">
+                <div className="flex gap-2">
+                    {interactive ? (
+                        <button
+                           type="button"
+                           className="mt-0.5 shrink-0 cursor-grab touch-none text-default-400 hover:text-foreground transition-colors"
+                           aria-label="Drag issue"
+                           {...listeners}
+                           {...attributes}
+                        >
+                            <GripVertical className="h-3.5 w-3.5" />
+                        </button>
+                    ) : (
+                        <span className="mt-0.5 w-3.5 shrink-0" aria-hidden />
+                    )}
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-mono text-[10px] text-default-450 font-semibold">{issueRef}</span>
+                            <Chip
+                                size="sm"
+                                variant="soft"
+                                color={toneToColor(typeMeta.tone)}
+                                className="inline-flex items-center gap-1 border border-default-250/20 px-1.5 h-5 text-[9px] font-semibold"
+                            >
+                                {typeMeta.icon}
+                                {typeMeta.label}
+                            </Chip>
+                            <span className="inline-flex items-center gap-1 text-[10px] text-default-500 font-semibold">
+                                {priorityMeta.icon} {priorityMeta.short}
+                            </span>
+                        </div>
+                        <Link
+                            href={`/issues/${issueRef}`}
+                            className="block text-sm font-semibold leading-snug text-foreground hover:text-primary transition-colors"
+                        >
+                            {issue.title}
+                        </Link>
                     </div>
-                    <Link
-                        href={`/issues/${issueRef}`}
-                        className="block text-sm font-medium leading-snug text-foreground hover:text-primary"
-                    >
-                        {issue.title}
-                    </Link>
                 </div>
-            </div>
-        </div>
+            </CardContent>
+        </Card>
     );
 }
 
@@ -134,28 +154,37 @@ function KanbanColumn({
     const { setNodeRef, isOver } = useDroppable({ id: status, disabled: !interactive });
 
     return (
-        <div className="flex min-w-[280px] max-w-[340px] flex-1 flex-col rounded-md border border-border bg-surface/50">
-            <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <div className="flex min-w-[280px] max-w-[340px] flex-1 flex-col rounded-xl border border-default-100 bg-default-50/20 backdrop-blur-md shadow-sm">
+            <div className="flex items-center justify-between border-b border-default-100 px-3.5 py-2.5 bg-default-50/30">
                 <div className="flex items-center gap-2">
-                    <span className="text-foreground">{STATUS_META[status].icon}</span>
-                    <span className="text-xs font-semibold text-foreground">{title}</span>
+                    <span className="text-default-500">{STATUS_META[status].icon}</span>
+                    <span className="text-xs font-bold text-foreground">{title}</span>
                 </div>
-                <span className="text-[11px] text-muted-foreground">{issues.length}</span>
+                <Chip 
+                    size="sm" 
+                    variant="soft" 
+                    color={toneToColor(STATUS_META[status].tone)}
+                    className="h-5 min-w-[20px] px-1 text-[10px] font-bold border border-default-250/20"
+                >
+                    {issues.length}
+                </Chip>
             </div>
             <div
                 ref={setNodeRef}
                 className={cn(
-                    "flex min-h-[280px] flex-1 flex-col gap-2 p-2 transition-colors",
-                    isOver && "bg-primary/5"
+                    "flex min-h-[350px] flex-1 flex-col gap-2.5 p-3 transition-all duration-200 rounded-b-xl",
+                    isOver && "bg-primary/5 ring-1 ring-primary/10"
                 )}
             >
                 {issues.map((issue) => (
                     <KanbanCard key={issue.id} issue={issue} interactive={interactive} />
                 ))}
                 {issues.length === 0 && (
-                    <p className="py-8 text-center text-[11px] text-subtle-foreground">
-                        {interactive ? "Drop issues here" : "No issues in this column"}
-                    </p>
+                    <div className="flex flex-col items-center justify-center py-12 px-4 text-center border-2 border-dashed border-default-200/50 rounded-xl flex-grow bg-default-50/5">
+                        <p className="text-[11px] font-semibold text-default-400">
+                            {interactive ? "Drop issues here" : "No issues in this column"}
+                        </p>
+                    </div>
                 )}
             </div>
         </div>
@@ -246,7 +275,7 @@ export function MainKanbanBoard({
     return (
         <DndContext sensors={sensors} onDragEnd={onDragEnd}>
             {pending && (
-                <p className="mb-2 text-center text-[11px] text-muted-foreground" aria-live="polite">
+                <p className="mb-2 text-center text-[11px] text-muted-foreground animate-pulse" aria-live="polite">
                     Updating board…
                 </p>
             )}
