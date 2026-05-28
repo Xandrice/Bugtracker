@@ -10,7 +10,7 @@ import {
     Search,
     X,
 } from "lucide-react";
-import { updateIssueWorkflow } from "@/app/actions";
+import { updateIssueAssignee, updateIssueWorkflow } from "@/app/actions";
 import { formatIssueRef } from "@/lib/issue-ids";
 import {
     PRIORITY_META,
@@ -98,9 +98,11 @@ export interface IssueSnippet {
 interface DataGridProps {
     issues: IssueSnippet[];
     hideFilters?: boolean;
+    /** When provided, the assignee column becomes an inline dropdown. */
+    assignableUsers?: UserSnippet[];
 }
 
-export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
+export function DataGrid({ issues, hideFilters = false, assignableUsers }: DataGridProps) {
     const [localIssues, setLocalIssues] = useState(issues);
     const [sortConfig, setSortConfig] = useState<{
         key: keyof IssueSnippet;
@@ -116,6 +118,22 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
     useEffect(() => {
         setLocalIssues(issues);
     }, [issues]);
+
+    const assigneeOptions = useMemo(
+        () => [
+            { value: "none", label: "Unassigned" },
+            ...(assignableUsers ?? []).map((user) => ({
+                value: user.id,
+                label: user.name || "Unnamed",
+                icon: (
+                    <Avatar src={user.image} name={user.name} size="xs" />
+                ),
+            })),
+        ],
+        [assignableUsers]
+    );
+
+    const canEditAssignee = !!assignableUsers;
 
     const assignees = useMemo(() => {
         const unique = new Map<string, UserSnippet>();
@@ -224,6 +242,33 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
         startTransition(async () => {
             try {
                 const result = await updateIssueWorkflow(issueId, updates);
+                if (result?.error) setLocalIssues(previous);
+            } catch {
+                setLocalIssues(previous);
+            } finally {
+                setPendingIssueId(null);
+            }
+        });
+    };
+
+    const runAssigneeUpdate = (issueId: string, assigneeId: string | null) => {
+        const previous = localIssues;
+        const nextAssignee = assigneeId
+            ? assignableUsers?.find((user) => user.id === assigneeId) ??
+              localIssues.find((issue) => issue.id === issueId)?.assignee ??
+              null
+            : null;
+
+        setLocalIssues((prev) =>
+            prev.map((issue) =>
+                issue.id !== issueId ? issue : { ...issue, assignee: nextAssignee }
+            )
+        );
+        setPendingIssueId(issueId);
+
+        startTransition(async () => {
+            try {
+                const result = await updateIssueAssignee(issueId, assigneeId);
                 if (result?.error) setLocalIssues(previous);
             } catch {
                 setLocalIssues(previous);
@@ -473,8 +518,23 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                                     disabled={updating}
                                                 />
                                             </td>
-                                            <td className="px-3 py-1.5">
-                                                {issue.assignee ? (
+                                            <td className="px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                                {canEditAssignee ? (
+                                                    <Select
+                                                        size="xs"
+                                                        value={issue.assignee?.id ?? "none"}
+                                                        options={assigneeOptions}
+                                                        onChange={(value) =>
+                                                            runAssigneeUpdate(
+                                                                issue.id,
+                                                                value === "none" ? null : value
+                                                            )
+                                                        }
+                                                        disabled={updating}
+                                                        maxVisibleItems={3}
+                                                        className="min-w-[140px]"
+                                                    />
+                                                ) : issue.assignee ? (
                                                     <div className="flex items-center gap-2 min-w-0">
                                                         <Avatar
                                                             src={issue.assignee.image}

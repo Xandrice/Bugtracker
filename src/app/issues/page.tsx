@@ -3,12 +3,14 @@ import { auth } from "@/../auth";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { db } from "@/lib/db";
+import { getStaffUsers } from "@/lib/staff";
 import { ALL_ISSUES_SUBTITLE } from "@/lib/site";
 import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { formatIssueRef } from "@/lib/issue-ids";
 
 export default async function AllIssuesPage() {
     const session = await auth();
+    const assignableUsers = session?.user?.id ? await getStaffUsers() : [];
 
     const rawIssues = await db.issue.findMany({
         include: {
@@ -57,7 +59,7 @@ export default async function AllIssuesPage() {
                     )
                 }
             />
-            <DataGrid issues={issues} />
+            <DataGrid issues={issues} assignableUsers={assignableUsers} />
         </PageContainer>
     );
 }
