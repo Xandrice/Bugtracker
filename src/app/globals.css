@@ -1,6 +1,4 @@
 @import "tailwindcss";
-@import "@heroui/styles";
-
 
 @theme inline {
   --color-background: var(--background);

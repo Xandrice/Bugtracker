@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Trash2, Loader2 } from "lucide-react";
 import { deleteIssue } from "@/app/actions";
-import { Button } from "@heroui/react";
+import { Button } from "@/components/ui/Button";
 
 export default function DeleteIssueForm({ issueId }: { issueId: string }) {
     const [isDeleting, setIsDeleting] = useState(false);
@@ -24,14 +24,8 @@ export default function DeleteIssueForm({ issueId }: { issueId: string }) {
             <p className="text-xs text-muted-foreground">
                 Permanently delete this issue, its subtasks, and notes.
             </p>
-            <Button 
-                type="submit" 
-                variant="danger" 
-                size="sm" 
-                className="font-semibold" 
-                isDisabled={isDeleting}
-            >
-                {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            <Button type="submit" variant="danger" size="xs" disabled={isDeleting}>
+                {isDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                 {isDeleting ? "Deleting…" : "Delete issue"}
             </Button>
         </form>

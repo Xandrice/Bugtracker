@@ -30,94 +30,33 @@ import {
     normalizeStatus,
     normalizeType,
 } from "@/lib/issue-tokens";
-import {
-    Table,
-    Dropdown,
-    DropdownTrigger,
-    DropdownPopover,
-    DropdownMenu,
-    DropdownItem,
-    Button,
-    Chip,
-    Avatar,
-    Input,
-    buttonVariants,
-    cn,
-} from "@heroui/react";
+import { Select } from "@/components/ui/Select";
+import { Badge } from "@/components/ui/Badge";
+import { Avatar } from "@/components/ui/Avatar";
+import { cn } from "@/components/ui/cn";
 
 // ---- Backwards-compat re-exports for any page still importing these ----
 export type { IssueStatus, IssuePriority, IssueType, IssueSeverity } from "@/lib/issue-tokens";
 
-const toneToColor = (tone: string): "default" | "accent" | "success" | "warning" | "danger" => {
-    switch (tone) {
-        case "neutral": return "default";
-        case "info": return "accent";
-        case "warning": return "warning";
-        case "primary": return "accent";
-        case "success": return "success";
-        case "danger": return "danger";
-        default: return "default";
-    }
+export const statusStyles: Record<IssueStatus, string> = {
+    OPEN: "bg-info/12 text-info border-info/30",
+    IN_PROGRESS: "bg-warning/12 text-warning border-warning/30",
+    REVIEW: "bg-primary/12 text-primary border-primary/30",
+    DONE: "bg-success/12 text-success border-success/30",
 };
 
-export function StatusBadge({ status }: { status: IssueStatus }) {
-    const meta = STATUS_META[status];
-    return (
-        <Chip
-            size="sm"
-            variant="soft"
-            color={toneToColor(meta.tone)}
-            className="inline-flex items-center gap-1 border border-default-250/20 px-1.5 h-6 text-[11px] font-medium"
-        >
-            {meta.icon}
-            {meta.label}
-        </Chip>
-    );
-}
+export const typeStyles: Record<IssueType, string> = {
+    BUG: "bg-danger/12 text-danger border-danger/30",
+    FEATURE: "bg-info/12 text-info border-info/30",
+    TASK: "bg-muted text-muted-foreground border-border",
+};
 
-export function PriorityBadge({ priority }: { priority: IssuePriority }) {
-    const meta = PRIORITY_META[priority];
-    return (
-        <Chip
-            size="sm"
-            variant="soft"
-            color={toneToColor(meta.tone)}
-            className="inline-flex items-center gap-1 border border-default-250/20 px-1.5 h-6 text-[11px] font-medium"
-        >
-            {meta.icon}
-            {meta.label}
-        </Chip>
-    );
-}
-
-export function TypeBadge({ type }: { type: IssueType }) {
-    const meta = TYPE_META[type];
-    return (
-        <Chip
-            size="sm"
-            variant="soft"
-            color={toneToColor(meta.tone)}
-            className="inline-flex items-center gap-1 border border-default-250/20 px-1.5 h-6 text-[11px] font-medium"
-        >
-            {meta.icon}
-            {meta.label}
-        </Chip>
-    );
-}
-
-export function SeverityBadge({ severity }: { severity: IssueSeverity }) {
-    const meta = SEVERITY_META[severity];
-    return (
-        <Chip
-            size="sm"
-            variant="soft"
-            color={toneToColor(meta.tone)}
-            className="inline-flex items-center border border-default-250/20 px-1.5 h-6 text-[11px] font-medium"
-        >
-            {meta.label}
-        </Chip>
-    );
-}
+export const priorityLabels: Record<IssuePriority, string> = {
+    URGENT: "P0 · Urgent",
+    HIGH: "P1 · High",
+    MEDIUM: "P2 · Medium",
+    LOW: "P3 · Low",
+};
 
 export const StatusIcon = ({ status }: { status: IssueStatus }) => (
     <>{STATUS_META[status].icon}</>
@@ -197,9 +136,9 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
     const getSortIndicator = (key: keyof IssueSnippet) => {
         if (!sortConfig || sortConfig.key !== key) return null;
         return sortConfig.direction === "asc" ? (
-            <ArrowUp className="w-3.5 h-3.5 inline ml-1 text-primary" />
+            <ArrowUp className="w-3 h-3 inline ml-1 text-primary" />
         ) : (
-            <ArrowDown className="w-3.5 h-3.5 inline ml-1 text-primary" />
+            <ArrowDown className="w-3 h-3 inline ml-1 text-primary" />
         );
     };
 
@@ -303,403 +242,264 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
     return (
         <div className="flex flex-col gap-3">
             {!hideFilters && (
-                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-default-100 bg-background/50 backdrop-blur-md p-2.5 shadow-sm">
-                    <div className="flex items-center gap-1.5 px-1.5 text-[11px] font-semibold uppercase tracking-wider text-default-400">
-                        <Filter className="h-3.5 w-3.5" />
-                        Filters
+                <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface p-2">
+                    <div className="flex items-center gap-1.5 px-1.5 text-[11px] uppercase tracking-wider text-subtle-foreground">
+                        <Filter className="h-3 w-3" />
+                        Filter
                     </div>
 
-                    <div className="relative flex-1 min-w-[180px] max-w-xs">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-default-450 pointer-events-none" />
-                        <Input
-                            placeholder="Search issues..."
+                    <div className="relative flex-1 min-w-[160px] max-w-xs">
+                        <Search className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-subtle-foreground" />
+                        <input
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="pl-8 pr-8 py-1 w-full bg-default-50/50 border border-default-200/50 hover:border-default-400 focus:outline-none focus:border-primary text-xs rounded-lg transition-colors h-9"
+                            placeholder="Search…"
+                            className="h-7 w-full rounded-md border border-input bg-elevated pl-7 pr-2 text-xs focus-ring transition-colors hover:border-border-strong"
                         />
-                        {search && (
-                            <button
-                                type="button"
-                                onClick={() => setSearch("")}
-                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-default-450 hover:text-foreground cursor-pointer"
-                            >
-                                <X className="h-3.5 w-3.5" />
-                            </button>
-                        )}
                     </div>
 
-                    {/* Status Filter Dropdown */}
-                    <Dropdown>
-                        <DropdownTrigger
-                            className={cn(
-                                buttonVariants({ variant: "outline", size: "sm" }),
-                                "h-9 rounded-lg border border-default-200/50 bg-default-50/50 text-xs font-semibold text-foreground/80 hover:text-foreground cursor-pointer focus:outline-none"
-                            )}
-                        >
-                            Status: {statusFilter === "ALL" ? "All" : STATUS_META[statusFilter as IssueStatus].label}
-                        </DropdownTrigger>
-                        <DropdownPopover className="border border-default-100 bg-background/95 backdrop-blur-md shadow-lg" placement="bottom start">
-                            <DropdownMenu 
-                                aria-label="Filter Status" 
-                                selectionMode="single" 
-                                selectedKeys={new Set([statusFilter])}
-                                onSelectionChange={(keys) => setStatusFilter(Array.from(keys)[0] as string)}
-                            >
-                                <DropdownItem key="ALL">All Statuses</DropdownItem>
-                                {STATUS_OPTIONS.map((opt) => (
-                                    <DropdownItem key={opt.value}>
-                                        <span className="flex items-center gap-2">
-                                            {opt.icon}
-                                            {opt.label}
-                                        </span>
-                                    </DropdownItem>
-                                ))}
-                            </DropdownMenu>
-                        </DropdownPopover>
-                    </Dropdown>
-
-                    {/* Type Filter Dropdown */}
-                    <Dropdown>
-                        <DropdownTrigger
-                            className={cn(
-                                buttonVariants({ variant: "outline", size: "sm" }),
-                                "h-9 rounded-lg border border-default-200/50 bg-default-50/50 text-xs font-semibold text-foreground/80 hover:text-foreground cursor-pointer focus:outline-none"
-                            )}
-                        >
-                            Type: {typeFilter === "ALL" ? "All" : TYPE_META[typeFilter as IssueType].label}
-                        </DropdownTrigger>
-                        <DropdownPopover className="border border-default-100 bg-background/95 backdrop-blur-md shadow-lg" placement="bottom start">
-                            <DropdownMenu 
-                                aria-label="Filter Type" 
-                                selectionMode="single" 
-                                selectedKeys={new Set([typeFilter])}
-                                onSelectionChange={(keys) => setTypeFilter(Array.from(keys)[0] as string)}
-                            >
-                                <DropdownItem key="ALL">All Types</DropdownItem>
-                                {TYPE_OPTIONS.map((opt) => (
-                                    <DropdownItem key={opt.value}>
-                                        <span className="flex items-center gap-2">
-                                            {opt.icon}
-                                            {opt.label}
-                                        </span>
-                                    </DropdownItem>
-                                ))}
-                            </DropdownMenu>
-                        </DropdownPopover>
-                    </Dropdown>
-
-                    {/* Assignee Filter Dropdown */}
-                    <Dropdown>
-                        <DropdownTrigger
-                            className={cn(
-                                buttonVariants({ variant: "outline", size: "sm" }),
-                                "h-9 rounded-lg border border-default-200/50 bg-default-50/50 text-xs font-semibold text-foreground/80 hover:text-foreground cursor-pointer focus:outline-none"
-                            )}
-                        >
-                            Assignee: {
-                                assigneeFilter === "ALL" 
-                                    ? "Anyone" 
-                                    : assigneeFilter === "UNASSIGNED" 
-                                        ? "Unassigned" 
-                                        : assignees.find(a => a.id === assigneeFilter)?.name || "User"
-                            }
-                        </DropdownTrigger>
-                        <DropdownPopover className="border border-default-100 bg-background/95 backdrop-blur-md shadow-lg" placement="bottom start">
-                            <DropdownMenu 
-                                aria-label="Filter Assignee" 
-                                selectionMode="single" 
-                                selectedKeys={new Set([assigneeFilter])}
-                                onSelectionChange={(keys) => setAssigneeFilter(Array.from(keys)[0] as string)}
-                            >
-                                <DropdownItem key="ALL">Anyone</DropdownItem>
-                                <DropdownItem key="UNASSIGNED">Unassigned</DropdownItem>
-                                {assignees.map((a) => (
-                                    <DropdownItem key={a.id}>
-                                        <span className="flex items-center gap-2">
-                                            <Avatar className="h-5 w-5 text-[9px]">
-                                                {a.image && <Avatar.Image src={a.image} className="object-cover h-full w-full" />}
-                                                <Avatar.Fallback>{(a.name || "U").charAt(0).toUpperCase()}</Avatar.Fallback>
-                                            </Avatar>
-                                            {a.name || "Unnamed"}
-                                        </span>
-                                    </DropdownItem>
-                                ))}
-                            </DropdownMenu>
-                        </DropdownPopover>
-                    </Dropdown>
+                    <Select
+                        size="xs"
+                        value={statusFilter}
+                        onChange={setStatusFilter}
+                        options={[
+                            { value: "ALL", label: "Status · All" },
+                            ...STATUS_OPTIONS,
+                        ]}
+                        className="w-auto min-w-[120px]"
+                        fullWidth={false}
+                    />
+                    <Select
+                        size="xs"
+                        value={typeFilter}
+                        onChange={setTypeFilter}
+                        options={[
+                            { value: "ALL", label: "Type · All" },
+                            ...TYPE_OPTIONS,
+                        ]}
+                        className="w-auto min-w-[120px]"
+                        fullWidth={false}
+                    />
+                    <Select
+                        size="xs"
+                        value={assigneeFilter}
+                        onChange={setAssigneeFilter}
+                        options={[
+                            { value: "ALL", label: "Assignee · Anyone" },
+                            { value: "UNASSIGNED", label: "Unassigned" },
+                            ...assignees.map((a) => ({
+                                value: a.id,
+                                label: a.name || "Unnamed",
+                            })),
+                        ]}
+                        className="w-auto min-w-[150px]"
+                        fullWidth={false}
+                        maxVisibleItems={5}
+                    />
 
                     {hasActiveFilters && (
-                        <Button
-                            size="sm"
-                            variant="ghost"
+                        <button
+                            type="button"
                             onClick={() => {
                                 setStatusFilter("ALL");
                                 setTypeFilter("ALL");
                                 setAssigneeFilter("ALL");
                                 setSearch("");
                             }}
-                            className="ml-auto text-xs text-default-500 hover:text-foreground h-9 px-3"
+                            className="ml-auto inline-flex items-center gap-1 rounded-md px-2 h-7 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                         >
-                            <X className="h-3.5 w-3.5 mr-1" />
+                            <X className="h-3 w-3" />
                             Clear
-                        </Button>
+                        </button>
                     )}
 
-                    <div className={`text-[11px] font-semibold text-default-450 ${!hasActiveFilters ? "ml-auto" : ""}`}>
+                    <div className={cn("text-[11px] text-subtle-foreground", !hasActiveFilters && "ml-auto")}>
                         {sortedAndFilteredIssues.length} of {localIssues.length}
                     </div>
                 </div>
             )}
 
-            <div className="overflow-x-auto bg-background/40 backdrop-blur-md border border-default-100 shadow-none rounded-xl p-0">
-                <Table className="w-full border-collapse text-left [&_th]:bg-default-50/50 [&_th]:text-default-500 [&_th]:font-semibold [&_th]:text-[10px] [&_th]:uppercase [&_th]:tracking-wider [&_th]:py-3 [&_th]:px-4 [&_th]:border-b [&_th]:border-default-100 [&_th]:hover:text-foreground [&_th]:transition-colors [&_th]:cursor-pointer [&_td]:py-3 [&_td]:px-4 [&_td]:border-b [&_td]:border-default-100/50 [&_tr]:last:[&_td]:border-b-0 [&_tr]:first:rounded-t-xl">
-                    <Table.Content aria-label="Issues table">
-                        <Table.Header>
-                            <Table.Column onClick={() => handleSort("id")}>ID {getSortIndicator("id")}</Table.Column>
-                            <Table.Column onClick={() => handleSort("type")}>Type {getSortIndicator("type")}</Table.Column>
-                            <Table.Column onClick={() => handleSort("title")}>Title {getSortIndicator("title")}</Table.Column>
-                            <Table.Column onClick={() => handleSort("status")}>Status {getSortIndicator("status")}</Table.Column>
-                            <Table.Column onClick={() => handleSort("priority")}>Priority {getSortIndicator("priority")}</Table.Column>
-                            <Table.Column>Severity</Table.Column>
-                            <Table.Column onClick={() => handleSort("assignee")}>Assignee {getSortIndicator("assignee")}</Table.Column>
-                            <Table.Column onClick={() => handleSort("dueDate")}>Due {getSortIndicator("dueDate")}</Table.Column>
-                            <Table.Column onClick={() => handleSort("updatedAt")} className="text-right">Updated {getSortIndicator("updatedAt")}</Table.Column>
-                        </Table.Header>
-                        <Table.Body>
+            <div className="overflow-hidden rounded-md border border-border bg-surface">
+                <div className="overflow-x-auto">
+                    <table className="w-full whitespace-nowrap text-left text-sm">
+                        <thead>
+                            <tr className="border-b border-border bg-surface-2 text-[10px] uppercase tracking-wider text-subtle-foreground">
+                                <th
+                                    onClick={() => handleSort("id")}
+                                    className="w-16 px-3 py-2 font-medium cursor-pointer hover:text-foreground"
+                                >
+                                    ID {getSortIndicator("id")}
+                                </th>
+                                <th
+                                    onClick={() => handleSort("type")}
+                                    className="w-28 px-2 py-2 font-medium cursor-pointer hover:text-foreground"
+                                >
+                                    Type {getSortIndicator("type")}
+                                </th>
+                                <th
+                                    onClick={() => handleSort("title")}
+                                    className="px-3 py-2 font-medium cursor-pointer hover:text-foreground"
+                                >
+                                    Title {getSortIndicator("title")}
+                                </th>
+                                <th
+                                    onClick={() => handleSort("status")}
+                                    className="w-32 px-2 py-2 font-medium cursor-pointer hover:text-foreground"
+                                >
+                                    Status {getSortIndicator("status")}
+                                </th>
+                                <th
+                                    onClick={() => handleSort("priority")}
+                                    className="w-24 px-2 py-2 font-medium cursor-pointer hover:text-foreground"
+                                >
+                                    Priority {getSortIndicator("priority")}
+                                </th>
+                                <th className="w-28 px-2 py-2 font-medium">Severity</th>
+                                <th
+                                    onClick={() => handleSort("assignee")}
+                                    className="w-36 px-3 py-2 font-medium cursor-pointer hover:text-foreground"
+                                >
+                                    Assignee {getSortIndicator("assignee")}
+                                </th>
+                                <th
+                                    onClick={() => handleSort("dueDate")}
+                                    className="w-24 px-3 py-2 font-medium cursor-pointer hover:text-foreground"
+                                >
+                                    Due {getSortIndicator("dueDate")}
+                                </th>
+                                <th
+                                    onClick={() => handleSort("updatedAt")}
+                                    className="w-28 px-3 py-2 font-medium cursor-pointer hover:text-foreground text-right"
+                                >
+                                    Updated {getSortIndicator("updatedAt")}
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
                             {sortedAndFilteredIssues.length === 0 ? (
-                                <Table.Row>
-                                    <Table.Cell colSpan={9} className="py-8 text-center text-xs text-default-450">
+                                <tr>
+                                    <td
+                                        colSpan={9}
+                                        className="px-4 py-12 text-center text-xs text-muted-foreground"
+                                    >
                                         No issues found matching your criteria.
-                                    </Table.Cell>
-                                </Table.Row>
+                                    </td>
+                                </tr>
                             ) : (
                                 sortedAndFilteredIssues.map((issue) => {
                                     const issueRef = formatIssueRef(issue.publicKey, issue.id);
                                     const updating = isPending && pendingIssueId === issue.id;
                                     return (
-                                        <Table.Row key={issue.id} id={issue.id} className="group hover:bg-default-50/40 transition-colors">
-                                            {/* ID */}
-                                            <Table.Cell>
+                                        <tr
+                                            key={issue.id}
+                                            className="group border-b border-border last:border-b-0 hover:bg-muted/40 transition-colors"
+                                        >
+                                            <td className="px-3 py-1.5">
                                                 <Link
                                                     href={`/issues/${issueRef}`}
-                                                    className="font-mono text-[11px] text-default-500 hover:text-primary transition-colors font-medium"
+                                                    className="font-mono text-[11px] text-muted-foreground hover:text-primary transition-colors"
                                                 >
                                                     {issueRef}
                                                 </Link>
-                                            </Table.Cell>
-
-                                            {/* Type Selector (Inline Dropdown) */}
-                                            <Table.Cell onClick={(e) => e.stopPropagation()}>
-                                                <Dropdown>
-                                                    <DropdownTrigger
-                                                        className={cn(
-                                                            buttonVariants({ variant: "outline", size: "sm" }),
-                                                            "h-7 min-w-[85px] justify-between px-2 text-xs border border-default-200/50 hover:border-default-400 bg-background/50 rounded-lg cursor-pointer focus:outline-none"
-                                                        )}
-                                                        isDisabled={updating}
-                                                    >
-                                                        <span className="flex items-center gap-1.5">
-                                                            {TYPE_META[issue.type].icon}
-                                                            {TYPE_META[issue.type].label}
-                                                        </span>
-                                                    </DropdownTrigger>
-                                                    <DropdownPopover className="border border-default-100 bg-background/95 backdrop-blur-md shadow-lg" placement="bottom start">
-                                                        <DropdownMenu
-                                                            aria-label="Select Type"
-                                                            selectionMode="single"
-                                                            selectedKeys={new Set([issue.type])}
-                                                            onSelectionChange={(keys) => {
-                                                                const nextVal = Array.from(keys)[0] as IssueType;
-                                                                if (nextVal) {
-                                                                    runWorkflowUpdate(issue.id, { type: nextVal });
-                                                                }
-                                                            }}
-                                                        >
-                                                            {TYPE_OPTIONS.map((opt) => (
-                                                                <DropdownItem key={opt.value}>
-                                                                    <span className="flex items-center gap-2">
-                                                                        {opt.icon}
-                                                                        {opt.label}
-                                                                    </span>
-                                                                </DropdownItem>
-                                                            ))}
-                                                        </DropdownMenu>
-                                                    </DropdownPopover>
-                                                </Dropdown>
-                                            </Table.Cell>
-
-                                            {/* Title */}
-                                            <Table.Cell>
+                                            </td>
+                                            <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                                <Select
+                                                    size="xs"
+                                                    value={normalizeType(issue.type)}
+                                                    options={TYPE_OPTIONS}
+                                                    onChange={(v) =>
+                                                        runWorkflowUpdate(issue.id, {
+                                                            type: v as IssueType,
+                                                        })
+                                                    }
+                                                    disabled={updating}
+                                                />
+                                            </td>
+                                            <td className="px-3 py-1.5">
                                                 <Link
                                                     href={`/issues/${issueRef}`}
-                                                    className="block truncate max-w-[400px] text-sm font-semibold text-foreground transition-colors group-hover:text-primary"
+                                                    className="block truncate max-w-[520px] text-sm font-medium text-foreground transition-colors group-hover:text-primary"
                                                 >
                                                     {issue.parentIssueRef && (
-                                                        <span className="mr-1.5 text-[10px] font-mono text-default-450 font-normal">
+                                                        <span className="mr-1.5 text-[10px] font-mono text-subtle-foreground">
                                                             ↳ {issue.parentIssueRef}
                                                         </span>
                                                     )}
                                                     {issue.title}
                                                     {!!issue.subtaskCount && issue.subtaskCount > 0 && (
-                                                        <Chip
-                                                            size="sm"
-                                                            variant="soft"
-                                                            color="default"
-                                                            className="ml-2 h-5 text-[10px] font-semibold border border-default-200/30"
-                                                        >
-                                                            {issue.subtaskCount} subtask{issue.subtaskCount === 1 ? "" : "s"}
-                                                        </Chip>
+                                                        <span className="ml-2 inline-flex items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground align-middle">
+                                                            {issue.subtaskCount} subtask
+                                                            {issue.subtaskCount === 1 ? "" : "s"}
+                                                        </span>
                                                     )}
                                                 </Link>
-                                            </Table.Cell>
-
-                                            {/* Status Selector (Inline Dropdown) */}
-                                            <Table.Cell onClick={(e) => e.stopPropagation()}>
-                                                <Dropdown>
-                                                    <DropdownTrigger
-                                                        className={cn(
-                                                            buttonVariants({ variant: "outline", size: "sm" }),
-                                                            "h-7 min-w-[110px] justify-between px-2 text-xs border border-default-200/50 hover:border-default-400 bg-background/50 rounded-lg cursor-pointer focus:outline-none"
-                                                        )}
-                                                        isDisabled={updating}
-                                                    >
-                                                        <span className="flex items-center gap-1.5 font-medium">
-                                                            {STATUS_META[issue.status].icon}
-                                                            {STATUS_META[issue.status].label}
-                                                        </span>
-                                                    </DropdownTrigger>
-                                                    <DropdownPopover className="border border-default-100 bg-background/95 backdrop-blur-md shadow-lg" placement="bottom start">
-                                                        <DropdownMenu
-                                                            aria-label="Select Status"
-                                                            selectionMode="single"
-                                                            selectedKeys={new Set([issue.status])}
-                                                            onSelectionChange={(keys) => {
-                                                                const nextVal = Array.from(keys)[0] as IssueStatus;
-                                                                if (nextVal) {
-                                                                    runWorkflowUpdate(issue.id, { status: nextVal });
-                                                                }
-                                                            }}
-                                                        >
-                                                            {STATUS_OPTIONS.map((opt) => (
-                                                                <DropdownItem key={opt.value}>
-                                                                    <span className="flex items-center gap-2">
-                                                                        {opt.icon}
-                                                                        {opt.label}
-                                                                    </span>
-                                                                </DropdownItem>
-                                                            ))}
-                                                        </DropdownMenu>
-                                                    </DropdownPopover>
-                                                </Dropdown>
-                                            </Table.Cell>
-
-                                            {/* Priority Selector (Inline Dropdown) */}
-                                            <Table.Cell onClick={(e) => e.stopPropagation()}>
-                                                <Dropdown>
-                                                    <DropdownTrigger
-                                                        className={cn(
-                                                            buttonVariants({ variant: "outline", size: "sm" }),
-                                                            "h-7 min-w-[90px] justify-between px-2 text-xs border border-default-200/50 hover:border-default-400 bg-background/50 rounded-lg cursor-pointer focus:outline-none"
-                                                        )}
-                                                        isDisabled={updating}
-                                                    >
-                                                        <span className="flex items-center gap-1.5 font-medium">
-                                                            {PRIORITY_META[issue.priority].icon}
-                                                            {PRIORITY_META[issue.priority].label}
-                                                        </span>
-                                                    </DropdownTrigger>
-                                                    <DropdownPopover className="border border-default-100 bg-background/95 backdrop-blur-md shadow-lg" placement="bottom start">
-                                                        <DropdownMenu
-                                                            aria-label="Select Priority"
-                                                            selectionMode="single"
-                                                            selectedKeys={new Set([issue.priority])}
-                                                            onSelectionChange={(keys) => {
-                                                                const nextVal = Array.from(keys)[0] as IssuePriority;
-                                                                if (nextVal) {
-                                                                    runWorkflowUpdate(issue.id, { priority: nextVal });
-                                                                }
-                                                            }}
-                                                        >
-                                                            {PRIORITY_OPTIONS.map((opt) => (
-                                                                <DropdownItem key={opt.value}>
-                                                                    <span className="flex items-center gap-2">
-                                                                        {opt.icon}
-                                                                        {opt.label}
-                                                                    </span>
-                                                                </DropdownItem>
-                                                            ))}
-                                                        </DropdownMenu>
-                                                    </DropdownPopover>
-                                                </Dropdown>
-                                            </Table.Cell>
-
-                                            {/* Severity Selector (Inline Dropdown) */}
-                                            <Table.Cell onClick={(e) => e.stopPropagation()}>
-                                                <Dropdown>
-                                                    <DropdownTrigger
-                                                        className={cn(
-                                                            buttonVariants({ variant: "outline", size: "sm" }),
-                                                            "h-7 min-w-[95px] justify-between px-2 text-xs border border-default-200/50 hover:border-default-400 bg-background/50 rounded-lg font-medium cursor-pointer focus:outline-none"
-                                                        )}
-                                                        isDisabled={updating}
-                                                    >
-                                                        <span>
-                                                            {SEVERITY_META[issue.severity ?? "MINOR"].label}
-                                                        </span>
-                                                    </DropdownTrigger>
-                                                    <DropdownPopover className="border border-default-100 bg-background/95 backdrop-blur-md shadow-lg" placement="bottom start">
-                                                        <DropdownMenu
-                                                            aria-label="Select Severity"
-                                                            selectionMode="single"
-                                                            selectedKeys={new Set([issue.severity ?? "MINOR"])}
-                                                            onSelectionChange={(keys) => {
-                                                                const nextVal = Array.from(keys)[0] as IssueSeverity;
-                                                                if (nextVal) {
-                                                                    runWorkflowUpdate(issue.id, { severity: nextVal });
-                                                                }
-                                                            }}
-                                                        >
-                                                            {SEVERITY_OPTIONS.map((opt) => (
-                                                                <DropdownItem key={opt.value}>
-                                                                    {opt.label}
-                                                                </DropdownItem>
-                                                            ))}
-                                                        </DropdownMenu>
-                                                    </DropdownPopover>
-                                                </Dropdown>
-                                            </Table.Cell>
-
-                                            {/* Assignee */}
-                                            <Table.Cell>
+                                            </td>
+                                            <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                                <Select
+                                                    size="xs"
+                                                    value={normalizeStatus(issue.status)}
+                                                    options={STATUS_OPTIONS}
+                                                    onChange={(v) =>
+                                                        runWorkflowUpdate(issue.id, {
+                                                            status: v as IssueStatus,
+                                                        })
+                                                    }
+                                                    disabled={updating}
+                                                />
+                                            </td>
+                                            <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                                <Select
+                                                    size="xs"
+                                                    value={normalizePriority(issue.priority)}
+                                                    options={PRIORITY_OPTIONS}
+                                                    onChange={(v) =>
+                                                        runWorkflowUpdate(issue.id, {
+                                                            priority: v as IssuePriority,
+                                                        })
+                                                    }
+                                                    disabled={updating}
+                                                />
+                                            </td>
+                                            <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                                <Select
+                                                    size="xs"
+                                                    value={normalizeSeverity(issue.severity ?? "MINOR")}
+                                                    options={SEVERITY_OPTIONS}
+                                                    onChange={(v) =>
+                                                        runWorkflowUpdate(issue.id, {
+                                                            severity: v as IssueSeverity,
+                                                        })
+                                                    }
+                                                    disabled={updating}
+                                                />
+                                            </td>
+                                            <td className="px-3 py-1.5">
                                                 {issue.assignee ? (
                                                     <div className="flex items-center gap-2 min-w-0">
-                                                        <Avatar className="h-6 w-6 text-[10px]">
-                                                            {issue.assignee.image && <Avatar.Image src={issue.assignee.image} className="object-cover h-full w-full" />}
-                                                            <Avatar.Fallback>{(issue.assignee.name || "U").charAt(0).toUpperCase()}</Avatar.Fallback>
-                                                        </Avatar>
-                                                        <span className="truncate text-xs font-semibold text-foreground">
+                                                        <Avatar
+                                                            src={issue.assignee.image}
+                                                            name={issue.assignee.name}
+                                                            size="xs"
+                                                        />
+                                                        <span className="truncate text-xs text-foreground">
                                                             {issue.assignee.name}
                                                         </span>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-xs text-default-400">
+                                                    <span className="text-xs text-subtle-foreground">
                                                         Unassigned
                                                     </span>
                                                 )}
-                                            </Table.Cell>
-
-                                            {/* Due Date */}
-                                            <Table.Cell className="text-xs text-default-500 font-medium">
+                                            </td>
+                                            <td className="px-3 py-1.5 text-xs text-muted-foreground">
                                                 {issue.dueDate
                                                     ? new Intl.DateTimeFormat("en-US", {
                                                           month: "short",
                                                           day: "numeric",
                                                       }).format(new Date(issue.dueDate))
                                                     : "—"}
-                                            </Table.Cell>
-
-                                            {/* Updated At */}
-                                            <Table.Cell className="text-right text-xs font-mono text-default-400 font-medium">
+                                            </td>
+                                            <td className="px-3 py-1.5 text-right text-xs font-mono text-muted-foreground">
                                                 <div className="flex items-center justify-end gap-1.5">
                                                     {updating && (
                                                         <Loader2 className="h-3 w-3 animate-spin text-primary" />
@@ -709,15 +509,46 @@ export function DataGrid({ issues, hideFilters = false }: DataGridProps) {
                                                         day: "numeric",
                                                     }).format(new Date(issue.updatedAt))}
                                                 </div>
-                                            </Table.Cell>
-                                        </Table.Row>
+                                            </td>
+                                        </tr>
                                     );
                                 })
                             )}
-                        </Table.Body>
-                    </Table.Content>
-                </Table>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );
+}
+
+// ---- Inline badges used elsewhere (issue detail page, kanban) ----
+
+export function StatusBadge({ status }: { status: IssueStatus }) {
+    const meta = STATUS_META[status];
+    return (
+        <Badge tone={meta.tone}>
+            {meta.icon} {meta.label}
+        </Badge>
+    );
+}
+export function PriorityBadge({ priority }: { priority: IssuePriority }) {
+    const meta = PRIORITY_META[priority];
+    return (
+        <Badge tone={meta.tone}>
+            {meta.icon} {meta.label}
+        </Badge>
+    );
+}
+export function TypeBadge({ type }: { type: IssueType }) {
+    const meta = TYPE_META[type];
+    return (
+        <Badge tone={meta.tone}>
+            {meta.icon} {meta.label}
+        </Badge>
+    );
+}
+export function SeverityBadge({ severity }: { severity: IssueSeverity }) {
+    const meta = SEVERITY_META[severity];
+    return <Badge tone={meta.tone}>{meta.label}</Badge>;
 }

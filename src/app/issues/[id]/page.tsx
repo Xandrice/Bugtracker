@@ -30,8 +30,10 @@ import { canManageNote, getNotePermissionContext } from "@/lib/note-permissions"
 import { syncIssueNotesFromDiscord } from "@/lib/discordSync";
 import { formatIssueRef } from "@/lib/issue-ids";
 import { SITE_NAME } from "@/lib/site";
-import { Button, Input, Avatar } from "@heroui/react";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { Section, Meta, EmptyState } from "@/components/ui/Section";
+import { Avatar } from "@/components/ui/Avatar";
 import {
     PriorityBadge,
     SeverityBadge,
@@ -48,7 +50,6 @@ import {
 } from "@/lib/issue-tokens";
 import { WorkflowFields } from "./components/WorkflowFields";
 import { AssigneeSelect } from "./components/AssigneeSelect";
-import { cn } from "@/components/ui/cn";
 
 export default async function IssueDetailsPage({
     params,
@@ -141,31 +142,31 @@ export default async function IssueDetailsPage({
     return (
         <div className="flex flex-col md:h-full md:min-h-0 md:flex-row md:overflow-hidden">
             {/* Main column */}
-            <div className="min-w-0 md:flex-1 md:overflow-y-auto md:border-r md:border-default-100">
+            <div className="min-w-0 md:flex-1 md:overflow-y-auto md:border-r md:border-border">
                 <div className="mx-auto w-full max-w-3xl px-6 py-6 space-y-6">
                     {/* Breadcrumb */}
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-default-450 tracking-wide uppercase">
+                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                         <span>{SITE_NAME}</span>
-                        <ChevronRight className="h-3 w-3 text-default-400" />
+                        <ChevronRight className="h-3 w-3" />
                         <span>Issues</span>
                         {parentRef && (
                             <>
-                                <ChevronRight className="h-3 w-3 text-default-400" />
+                                <ChevronRight className="h-3 w-3" />
                                 <a
                                     href={`/issues/${parentRef}`}
-                                    className="font-mono text-primary hover:underline transition-all"
+                                    className="font-mono hover:text-primary transition-colors"
                                 >
                                     {parentRef}
                                 </a>
                             </>
                         )}
-                        <ChevronRight className="h-3 w-3 text-default-400" />
-                        <span className="font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded-md">{publicIssueRef}</span>
+                        <ChevronRight className="h-3 w-3" />
+                        <span className="font-mono text-primary">{publicIssueRef}</span>
                     </div>
 
                     {/* Title + badges */}
                     <div className="space-y-3">
-                        <h1 className="text-3xl font-extrabold tracking-tight leading-tight text-foreground">
+                        <h1 className="text-2xl font-semibold leading-tight text-foreground">
                             {issue.title}
                         </h1>
                         <div className="flex flex-wrap items-center gap-2">
@@ -174,7 +175,7 @@ export default async function IssueDetailsPage({
                             <TypeBadge type={workflowType} />
                             <SeverityBadge severity={workflowSeverity} />
                             {issue.storyPoints != null && (
-                                <span className="inline-flex items-center gap-1 rounded-full border border-default-100 bg-default-100/50 px-2.5 h-6 text-[11px] font-semibold text-foreground">
+                                <span className="inline-flex items-center gap-1 rounded border border-border bg-muted px-1.5 h-6 text-[11px] font-medium text-muted-foreground">
                                     {issue.storyPoints} pts
                                 </span>
                             )}
@@ -183,11 +184,11 @@ export default async function IssueDetailsPage({
 
                     {/* Description */}
                     {issue.description && (
-                        <div className="rounded-xl border border-default-100 bg-background/50 backdrop-blur-md shadow-sm overflow-hidden">
-                            <div className="border-b border-default-100 px-5 py-3 text-xs font-bold uppercase tracking-wider text-default-450 bg-default-50/20">
+                        <div className="rounded-md border border-border bg-surface">
+                            <div className="border-b border-border px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                 Description
                             </div>
-                            <div className="prose prose-sm dark:prose-invert max-w-none p-5 text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                            <div className="prose prose-sm dark:prose-invert max-w-none p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">
                                 {issue.description}
                             </div>
                         </div>
@@ -195,43 +196,43 @@ export default async function IssueDetailsPage({
 
                     {/* Resource + version */}
                     {(issue.resourceName || issue.serverVersion) && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             {issue.resourceName && (
-                                <div className="rounded-xl border border-default-100 bg-background/50 backdrop-blur-md shadow-sm p-4 hover:border-default-250 transition-colors flex flex-col gap-1">
-                                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-default-450">
-                                        <Code className="h-3.5 w-3.5 text-primary" /> Resource
+                                <div className="rounded-md border border-border bg-surface p-3">
+                                    <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                        <Code className="h-3 w-3" /> Resource
                                     </div>
-                                    <p className="font-mono text-xs font-semibold text-foreground">{issue.resourceName}</p>
+                                    <p className="font-mono text-xs text-foreground">{issue.resourceName}</p>
                                 </div>
                             )}
                             {issue.serverVersion && (
-                                <div className="rounded-xl border border-default-100 bg-background/50 backdrop-blur-md shadow-sm p-4 hover:border-default-250 transition-colors flex flex-col gap-1">
-                                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-default-450">
-                                        <Gamepad2 className="h-3.5 w-3.5 text-primary" /> Server / build
+                                <div className="rounded-md border border-border bg-surface p-3">
+                                    <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                        <Gamepad2 className="h-3 w-3" /> Server / build
                                     </div>
-                                    <p className="font-mono text-xs font-semibold text-foreground">{issue.serverVersion}</p>
+                                    <p className="font-mono text-xs text-foreground">{issue.serverVersion}</p>
                                 </div>
                             )}
                         </div>
                     )}
 
                     {issue.reproductionSteps && (
-                        <div className="rounded-xl border border-warning-200/30 bg-warning-50/5 backdrop-blur-md shadow-sm overflow-hidden">
-                            <div className="flex items-center gap-1.5 border-b border-warning-200/20 px-5 py-3 text-xs font-bold uppercase tracking-wider text-warning">
-                                <ListOrdered className="h-3.5 w-3.5" /> Steps to reproduce
+                        <div className="rounded-md border border-warning/30 bg-warning/5">
+                            <div className="flex items-center gap-1.5 border-b border-warning/20 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-warning">
+                                <ListOrdered className="h-3 w-3" /> Steps to reproduce
                             </div>
-                            <p className="p-5 text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+                            <p className="p-4 text-sm leading-relaxed whitespace-pre-wrap text-foreground">
                                 {issue.reproductionSteps}
                             </p>
                         </div>
                     )}
 
                     {issue.expectedBehavior && (
-                        <div className="rounded-xl border border-success-200/30 bg-success-50/5 backdrop-blur-md shadow-sm overflow-hidden">
-                            <div className="border-b border-success-200/20 px-5 py-3 text-xs font-bold uppercase tracking-wider text-success">
+                        <div className="rounded-md border border-success/30 bg-success/5">
+                            <div className="border-b border-success/20 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-success">
                                 Expected behavior
                             </div>
-                            <p className="p-5 text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+                            <p className="p-4 text-sm leading-relaxed whitespace-pre-wrap text-foreground">
                                 {issue.expectedBehavior}
                             </p>
                         </div>
@@ -260,10 +261,10 @@ export default async function IssueDetailsPage({
 
                     {/* Activity */}
                     <div className="space-y-3">
-                        <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
-                            <MessageSquare className="h-4 w-4 text-default-400" />
+                        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                            <MessageSquare className="h-4 w-4 text-muted-foreground" />
                             Activity
-                            <span className="text-[11px] font-semibold text-default-450 bg-default-100/50 px-2 py-0.5 rounded-full">
+                            <span className="text-[11px] font-normal text-muted-foreground">
                                 {issue.notes.length} comment{issue.notes.length === 1 ? "" : "s"}
                             </span>
                         </h3>
@@ -308,9 +309,9 @@ export default async function IssueDetailsPage({
             </div>
 
             {/* Sidebar */}
-            <aside className="w-full shrink-0 border-t border-default-100 bg-default-50/10 backdrop-blur-md p-5 md:w-80 md:border-t-0 md:border-l md:overflow-y-auto">
-                <div className="space-y-4">
-                    <h3 className="px-1 text-[10px] font-bold uppercase tracking-wider text-default-450">
+            <aside className="w-full shrink-0 border-t border-border bg-surface/30 p-4 md:w-80 md:border-t-0 md:border-l md:overflow-y-auto">
+                <div className="space-y-3">
+                    <h3 className="px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Properties
                     </h3>
 
@@ -340,15 +341,14 @@ export default async function IssueDetailsPage({
                         <div className="space-y-3">
                             <Meta label="Reporter">
                                 <div className="flex items-center gap-2">
-                                    <Avatar className="h-6 w-6 text-[11px] font-semibold shrink-0">
-                                        {issue.reporter?.image && (
-                                            <Avatar.Image src={issue.reporter.image} className="object-cover h-full w-full" />
-                                        )}
-                                        <Avatar.Fallback>{(issue.reporter?.name || "?").charAt(0).toUpperCase()}</Avatar.Fallback>
-                                    </Avatar>
-                                    <span className="text-sm font-semibold">
+                                    <Avatar
+                                        src={issue.reporter?.image}
+                                        name={issue.reporter?.name}
+                                        size="sm"
+                                    />
+                                    <span className="text-sm">
                                         {issue.reporter?.name || (
-                                            <span className="text-default-400">Unknown</span>
+                                            <span className="text-subtle-foreground">Unknown</span>
                                         )}
                                     </span>
                                 </div>
@@ -357,16 +357,15 @@ export default async function IssueDetailsPage({
                             <Meta label="Assignee">
                                 {issue.assignee ? (
                                     <div className="flex items-center gap-2">
-                                        <Avatar className="h-6 w-6 text-[11px] font-semibold shrink-0">
-                                            {issue.assignee.image && (
-                                                <Avatar.Image src={issue.assignee.image} className="object-cover h-full w-full" />
-                                            )}
-                                            <Avatar.Fallback>{(issue.assignee.name || "?").charAt(0).toUpperCase()}</Avatar.Fallback>
-                                        </Avatar>
-                                        <span className="text-sm font-semibold">{issue.assignee.name}</span>
+                                        <Avatar
+                                            src={issue.assignee.image}
+                                            name={issue.assignee.name}
+                                            size="sm"
+                                        />
+                                        <span className="text-sm">{issue.assignee.name}</span>
                                     </div>
                                 ) : (
-                                    <span className="text-sm font-semibold text-default-400">Unassigned</span>
+                                    <span className="text-sm text-subtle-foreground">Unassigned</span>
                                 )}
                             </Meta>
                         </div>
@@ -392,19 +391,15 @@ export default async function IssueDetailsPage({
                                     name="resolved"
                                     value={workflowStatus === "DONE" ? "false" : "true"}
                                 />
-                                <p className="text-xs font-medium text-default-450">
+                                <p className="text-[11px] text-muted-foreground">
                                     {workflowStatus === "DONE"
                                         ? "Issue is resolved."
                                         : "Mark as resolved."}
                                 </p>
                                 <Button
                                     type="submit"
-                                    variant={workflowStatus === "DONE" ? "outline" : "primary"}
-                                    className={cn(
-                                        "h-7 text-xs font-semibold px-2.5",
-                                        workflowStatus !== "DONE" && "bg-success text-success-foreground hover:bg-success-600"
-                                    )}
-                                    size="sm"
+                                    variant={workflowStatus === "DONE" ? "outline" : "success"}
+                                    size="xs"
                                 >
                                     {workflowStatus === "DONE" ? "Reopen" : "Resolve"}
                                 </Button>
@@ -416,7 +411,7 @@ export default async function IssueDetailsPage({
                         <div className="space-y-3">
                             {issue.dueDate && (
                                 <Meta label="Due date">
-                                    <div className="flex items-center gap-2 text-sm font-semibold">
+                                    <div className="flex items-center gap-2 text-sm">
                                         <Calendar className="h-3.5 w-3.5 text-primary" />
                                         {new Intl.DateTimeFormat("en-US", {
                                             dateStyle: "medium",
@@ -437,7 +432,7 @@ export default async function IssueDetailsPage({
                                                 return (
                                                     <span
                                                         key={t}
-                                                        className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-[10px] font-semibold text-primary"
+                                                        className="inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
                                                     >
                                                         <Tag className="h-2.5 w-2.5 opacity-70" />
                                                         {t}
@@ -446,7 +441,7 @@ export default async function IssueDetailsPage({
                                             })}
                                         </div>
                                     ) : (
-                                        <span className="text-sm font-semibold text-default-400">—</span>
+                                        <span className="text-sm text-subtle-foreground">—</span>
                                     )}
                                 </Meta>
                             )}
@@ -457,9 +452,9 @@ export default async function IssueDetailsPage({
                         <div className="space-y-3">
                             {issue.environment && (
                                 <Meta label="Environment">
-                                    <div className="flex items-center gap-2 text-sm font-semibold">
-                                        <Terminal className="h-3.5 w-3.5 text-default-400" />
-                                        <span className="truncate font-mono text-xs" title={issue.environment}>
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
+                                        <span className="truncate" title={issue.environment}>
                                             {issue.environment}
                                         </span>
                                     </div>
@@ -473,19 +468,14 @@ export default async function IssueDetailsPage({
                                         name="discordPostId"
                                         defaultValue={issue.discordThreadId || ""}
                                         placeholder="Paste post link or post ID"
-                                        className="w-full h-8 px-2.5 bg-background/50 border border-default-200 hover:border-default-400 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none rounded-lg text-xs font-mono text-foreground transition-all"
+                                        className="font-mono text-xs"
                                     />
-                                    <Button 
-                                        type="submit" 
-                                        size="sm" 
-                                        variant="outline"
-                                        className="h-7 text-xs font-semibold px-2.5"
-                                    >
+                                    <Button type="submit" size="xs" variant="outline">
                                         Save post link
                                     </Button>
                                 </form>
                                 {issue.discordThreadId && (
-                                    <p className="mt-2 text-[10px] font-mono break-all text-default-450 bg-default-100/50 p-2 rounded-lg border border-default-100">
+                                    <p className="mt-2 text-[10px] font-mono break-all text-muted-foreground">
                                         Post ID: {issue.discordThreadId}
                                     </p>
                                 )}
@@ -496,16 +486,16 @@ export default async function IssueDetailsPage({
                     <Section title="Timeline" defaultOpen={false}>
                         <div className="space-y-3">
                             <Meta label="Created">
-                                <div className="flex items-center gap-2 text-sm font-semibold text-default-450">
-                                    <Calendar className="h-3.5 w-3.5" />
+                                <div className="flex items-center gap-2 text-sm">
+                                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                                     {new Intl.DateTimeFormat("en-US", {
                                         dateStyle: "medium",
                                     }).format(issue.createdAt)}
                                 </div>
                             </Meta>
                             <Meta label="Updated">
-                                <div className="flex items-center gap-2 text-sm font-semibold text-default-450">
-                                    <Clock className="h-3.5 w-3.5" />
+                                <div className="flex items-center gap-2 text-sm">
+                                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                                     {new Intl.DateTimeFormat("en-US", {
                                         dateStyle: "medium",
                                     }).format(issue.updatedAt)}
