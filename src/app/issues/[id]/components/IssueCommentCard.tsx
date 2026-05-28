@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import { Pencil, Trash2, X, Loader2, Check } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
+import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import { updateIssueComment, deleteIssueComment } from "@/app/actions";
 
 export type IssueCommentItem = {
@@ -168,11 +167,7 @@ export function IssueCommentCard({
                         </div>
                     </form>
                 ) : (
-                    <div className="prose prose-sm dark:prose-invert max-w-none px-3 py-2 text-sm prose-p:my-1 prose-pre:my-2 prose-code:before:content-[''] prose-code:after:content-['']">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {note.content}
-                        </ReactMarkdown>
-                    </div>
+                    <MarkdownContent content={note.content} className="px-3 py-2" />
                 )}
             </div>
         </div>
