@@ -1,12 +1,21 @@
 import { DataGrid, IssueSnippet } from "@/components/views/DataGrid";
+import { auth } from "@/../auth";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import { Plus, AlertTriangle } from "lucide-react";
 import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardBody } from "@/components/ui/Card";
 import { formatIssueRef } from "@/lib/issue-ids";
+import { getStaffUsers } from "@/lib/staff";
+import { canAssignIssues, getPermissionContext } from "@/lib/permissions";
 
 export default async function BugTriagePage() {
+    const session = await auth();
+    const permissionContext = await getPermissionContext(session?.user?.id);
+    const assignableUsers =
+        session?.user?.id && canAssignIssues(permissionContext)
+            ? await getStaffUsers()
+            : [];
     const rawIssues = await db.issue.findMany({
         where: { assigneeId: null, status: "OPEN" },
         include: {
@@ -60,7 +69,7 @@ export default async function BugTriagePage() {
                     </div>
                 </CardBody>
             </Card>
-            <DataGrid issues={issues} />
+            <DataGrid issues={issues} assignableUsers={assignableUsers} />
         </PageContainer>
     );
 }

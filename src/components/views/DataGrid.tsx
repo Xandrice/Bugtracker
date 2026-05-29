@@ -11,6 +11,7 @@ import {
     X,
 } from "lucide-react";
 import { updateIssueAssignee, updateIssueWorkflow } from "@/app/actions";
+import { deleteSavedView, saveSavedView, type SavedViewFilters } from "@/app/staff-actions";
 import { formatIssueRef } from "@/lib/issue-ids";
 import {
     PRIORITY_META,
@@ -100,10 +101,13 @@ interface DataGridProps {
     hideFilters?: boolean;
     /** When provided, the assignee column becomes an inline dropdown. */
     assignableUsers?: UserSnippet[];
+    savedViews?: Array<{ id: string; name: string; filters: SavedViewFilters }>;
 }
 
-export function DataGrid({ issues, hideFilters = false, assignableUsers }: DataGridProps) {
+export function DataGrid({ issues, hideFilters = false, assignableUsers, savedViews = [] }: DataGridProps) {
     const [localIssues, setLocalIssues] = useState(issues);
+    const [localSavedViews, setLocalSavedViews] = useState(savedViews);
+    const [viewName, setViewName] = useState("");
     const [sortConfig, setSortConfig] = useState<{
         key: keyof IssueSnippet;
         direction: "asc" | "desc";
@@ -118,6 +122,51 @@ export function DataGrid({ issues, hideFilters = false, assignableUsers }: DataG
     useEffect(() => {
         setLocalIssues(issues);
     }, [issues]);
+
+    useEffect(() => {
+        setLocalSavedViews(savedViews);
+    }, [savedViews]);
+
+    const applySavedView = (filters: SavedViewFilters) => {
+        setStatusFilter(filters.status || "ALL");
+        setTypeFilter(filters.type || "ALL");
+        setAssigneeFilter(filters.assignee || "ALL");
+        setSearch(filters.search || "");
+    };
+
+    const handleSaveView = () => {
+        const name = viewName.trim();
+        if (!name) return;
+        startTransition(async () => {
+            await saveSavedView(name, {
+                status: statusFilter,
+                type: typeFilter,
+                assignee: assigneeFilter,
+                search,
+            });
+            setViewName("");
+            setLocalSavedViews((prev) => [
+                ...prev,
+                {
+                    id: `temp-${Date.now()}`,
+                    name,
+                    filters: {
+                        status: statusFilter,
+                        type: typeFilter,
+                        assignee: assigneeFilter,
+                        search,
+                    },
+                },
+            ]);
+        });
+    };
+
+    const handleDeleteView = (id: string) => {
+        startTransition(async () => {
+            await deleteSavedView(id);
+            setLocalSavedViews((prev) => prev.filter((v) => v.id !== id));
+        });
+    };
 
     const assigneeOptions = useMemo(
         () => [
@@ -361,6 +410,54 @@ export function DataGrid({ issues, hideFilters = false, assignableUsers }: DataG
                     <div className={cn("text-[11px] text-subtle-foreground", !hasActiveFilters && "ml-auto")}>
                         {sortedAndFilteredIssues.length} of {localIssues.length}
                     </div>
+
+                    {localSavedViews.length > 0 && (
+                        <div className="flex w-full flex-wrap items-center gap-1.5 border-t border-border pt-2">
+                            <span className="text-[10px] uppercase tracking-wider text-subtle-foreground">
+                                Saved views
+                            </span>
+                            {localSavedViews.map((view) => (
+                                <div key={view.id} className="flex items-center gap-0.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => applySavedView(view.filters)}
+                                        className="rounded-md border border-border bg-muted px-2 py-0.5 text-[11px] hover:bg-muted/80"
+                                    >
+                                        {view.name}
+                                    </button>
+                                    {!view.id.startsWith("temp-") && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDeleteView(view.id)}
+                                            className="rounded p-0.5 text-subtle-foreground hover:text-danger"
+                                            title="Delete view"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {hasActiveFilters && (
+                        <div className="flex w-full items-center gap-2 border-t border-border pt-2">
+                            <input
+                                value={viewName}
+                                onChange={(e) => setViewName(e.target.value)}
+                                placeholder="Save current filters as…"
+                                className="h-7 flex-1 rounded-md border border-input bg-elevated px-2 text-xs focus-ring"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleSaveView}
+                                disabled={!viewName.trim() || isPending}
+                                className="rounded-md border border-border px-2 h-7 text-xs hover:bg-muted disabled:opacity-50"
+                            >
+                                Save view
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 

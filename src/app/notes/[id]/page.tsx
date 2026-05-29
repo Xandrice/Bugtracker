@@ -13,6 +13,7 @@ import { PageContainer } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
+import { MarkdownContent } from "@/components/ui/MarkdownContent";
 
 function formatDate(value: Date) {
     return new Intl.DateTimeFormat("en-US", {
@@ -97,9 +98,7 @@ export default async function NoteThreadPage({
                     </span>
                 </CardHeader>
                 <CardBody>
-                    <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
-                        {thread.content}
-                    </div>
+                    <MarkdownContent content={thread.content} />
                 </CardBody>
             </Card>
 
@@ -140,9 +139,7 @@ export default async function NoteThreadPage({
                             </div>
                         </CardHeader>
                         <CardBody>
-                            <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
-                                {reply.content}
-                            </div>
+                            <MarkdownContent content={reply.content} />
                         </CardBody>
                     </Card>
                 ))}

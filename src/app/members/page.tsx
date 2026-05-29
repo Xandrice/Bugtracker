@@ -1,12 +1,17 @@
 import { Users, Mail, ShieldAlert, Plus } from "lucide-react";
 import { db } from "@/lib/db";
+import { auth } from "@/../auth";
 import { addProjectMember } from "@/app/actions";
 import { ManageMemberActions } from "./components/ManageMemberActions";
 import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { canManageMembers, getPermissionContext } from "@/lib/permissions";
 
 export default async function MembersPage() {
+    const session = await auth();
+    const permissions = await getPermissionContext(session?.user?.id);
+    const canManage = canManageMembers(permissions);
     const projectMembers = await (db as any).projectMember.findMany({
         orderBy: { createdAt: "desc" },
     });
@@ -31,21 +36,23 @@ export default async function MembersPage() {
                 description="Manage your team members and their roles."
                 icon={<Users className="h-4 w-4" />}
                 actions={
-                    <form action={addProjectMember} className="flex gap-2">
-                        <input
-                            name="discordId"
-                            placeholder="Discord ID…"
-                            className="h-8 w-44 rounded-md border border-input bg-elevated px-2.5 text-xs text-foreground placeholder:text-subtle-foreground focus-ring transition-colors hover:border-border-strong"
-                            required
-                        />
-                        <button
-                            type="submit"
-                            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 h-8 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                        >
-                            <Plus className="h-3.5 w-3.5" />
-                            Add
-                        </button>
-                    </form>
+                    canManage ? (
+                        <form action={addProjectMember} className="flex gap-2">
+                            <input
+                                name="discordId"
+                                placeholder="Discord ID…"
+                                className="h-8 w-44 rounded-md border border-input bg-elevated px-2.5 text-xs text-foreground placeholder:text-subtle-foreground focus-ring transition-colors hover:border-border-strong"
+                                required
+                            />
+                            <button
+                                type="submit"
+                                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 h-8 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                            >
+                                <Plus className="h-3.5 w-3.5" />
+                                Add
+                            </button>
+                        </form>
+                    ) : undefined
                 }
             />
 
@@ -103,10 +110,14 @@ export default async function MembersPage() {
                                     </Badge>
                                 </td>
                                 <td className="px-4 py-3 text-right">
-                                    <ManageMemberActions
-                                        memberId={member.id}
-                                        currentRole={member.role}
-                                    />
+                                    {canManage ? (
+                                        <ManageMemberActions
+                                            memberId={member.id}
+                                            currentRole={member.role}
+                                        />
+                                    ) : (
+                                        <span className="text-xs text-muted-foreground">—</span>
+                                    )}
                                 </td>
                             </tr>
                         ))}

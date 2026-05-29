@@ -50,6 +50,14 @@ model User {
   notes          Note[]
   notifications  Notification[] @relation("NotificationRecipient")
   notificationsCreated Notification[] @relation("NotificationActor")
+  issueActivities IssueActivity[] @relation("ActivityActor")
+  savedViews     SavedView[]
+  announcements  Announcement[] @relation("AnnouncementAuthor")
+  incidents      Incident[]     @relation("IncidentReporter")
+  assignedIncidents Incident[]  @relation("IncidentAssignee")
+  releases       Release[]      @relation("ReleaseAuthor")
+  playerReports  PlayerReport[] @relation("ReportReporter")
+  assignedReports PlayerReport[] @relation("ReportAssignee")
 }
 
 model VerificationToken {
@@ -93,6 +101,10 @@ model Issue {
   assigneeId String?
   assignee   User?    @relation("Assignee", fields: [assigneeId], references: [id])
   notes      Note[]
+  activities IssueActivity[]
+  releaseIssues ReleaseIssue[]
+  incidentLinks IncidentIssue[]
+  reportLinks PlayerReportIssue[]
 
   // Subtasks (parent/child relationship)
   parentIssueId String?
@@ -179,4 +191,132 @@ model AppSetting {
   id    String @id @default(cuid())
   key   String @unique
   value String
+}
+
+model IssueActivity {
+  id        String   @id @default(cuid())
+  issueId   String
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  actorId   String
+  actor     User     @relation("ActivityActor", fields: [actorId], references: [id], onDelete: Cascade)
+  action    String
+  field     String?
+  oldValue  String?
+  newValue  String?
+  createdAt DateTime @default(now())
+
+  @@index([issueId, createdAt])
+}
+
+model SavedView {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  filters   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Announcement {
+  id          String    @id @default(cuid())
+  title       String
+  body        String
+  pinned      Boolean   @default(false)
+  audienceRole String?
+  expiresAt   DateTime?
+  authorId    String
+  author      User      @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([pinned, expiresAt])
+}
+
+model Incident {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  status      String   @default("INVESTIGATING")
+  severity    String   @default("MINOR")
+  reporterId  String
+  reporter    User     @relation("IncidentReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  assigneeId  String?
+  assignee    User?    @relation("IncidentAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  linkedIssues IncidentIssue[]
+
+  @@index([status])
+}
+
+model IncidentIssue {
+  id         String   @id @default(cuid())
+  incidentId String
+  issueId    String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  issue      Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([incidentId, issueId])
+}
+
+model Release {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  status      String   @default("PLANNED")
+  targetDate  DateTime?
+  authorId    String
+  author      User     @relation("ReleaseAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  issues      ReleaseIssue[]
+
+  @@index([status])
+}
+
+model ReleaseIssue {
+  id        String   @id @default(cuid())
+  releaseId String
+  issueId   String
+  release   Release  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([releaseId, issueId])
+}
+
+model PlayerReport {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  reporterName    String?
+  accusedPlayer   String?
+  category        String   @default("OTHER")
+  evidenceLinks   String?
+  status          String   @default("OPEN")
+  reporterId      String
+  reporter        User     @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  assigneeId      String?
+  assignee        User?    @relation("ReportAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  linkedIssues    PlayerReportIssue[]
+
+  @@index([status])
+}
+
+model PlayerReportIssue {
+  id       String       @id @default(cuid())
+  reportId String
+  issueId  String
+  report   PlayerReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  issue    Issue        @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+
+  @@unique([reportId, issueId])
 }

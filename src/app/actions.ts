@@ -8,7 +8,17 @@ import { getAppBaseUrl, sendDiscordChannelMessage, sendDiscordDM } from "@/lib/d
 import { getStaffUsers } from "@/lib/staff";
 import { formatIssueRef, generateIssuePublicKey } from "@/lib/issue-ids";
 import { normalizeNoteThreadCategory } from "@/lib/note-categories";
-import { canManageNote, getNotePermissionContext } from "@/lib/note-permissions";
+import {
+    canAssignIssues,
+    canDeleteAllData,
+    canDeleteIssues,
+    canExportData,
+    canManageMembers,
+    canManageNote,
+    getPermissionContext,
+    requirePermission,
+} from "@/lib/permissions";
+import { recordActivity } from "@/lib/activity";
 
 const ALLOWED_STATUS = ["OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const;
 const ALLOWED_PRIORITY = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
@@ -25,6 +35,20 @@ const LINK_TYPE_INVERSE: Record<LinkType, LinkType> = {
 
 function redirectToSignIn(): never {
     redirect("/api/auth/signin");
+}
+
+async function assertSignedIn() {
+    const session = await auth();
+    if (!session?.user?.id) return null;
+    return session;
+}
+
+async function getActorContext() {
+    const session = await assertSignedIn();
+    if (!session?.user?.id) return null;
+    const userId = session.user.id;
+    const permissions = await getPermissionContext(userId);
+    return { session, permissions, userId };
 }
 
 async function getIssuePublicRef(issueId: string) {
@@ -289,6 +313,14 @@ export async function createIssue(formData: FormData) {
     revalidatePath("/issues");
     revalidatePath("/boards/triage");
     revalidatePath("/boards/main");
+    revalidatePath("/");
+
+    await recordActivity({
+        issueId: issue.id,
+        actorId: reporterId,
+        action: "CREATED",
+    });
+
     redirect("/issues");
 }
 
@@ -312,8 +344,14 @@ export async function updateIssueWorkflow(
     issueId: string,
     updates: Partial<{ type: string; priority: string; severity: string; status: string }>
 ) {
-    const session = await auth();
-    if (!session?.user?.id) return { error: "Unauthorized" };
+    const actor = await getActorContext();
+    if (!actor) return { error: "Unauthorized" };
+
+    const previous = await db.issue.findUnique({
+        where: { id: issueId },
+        select: { type: true, priority: true, severity: true, status: true },
+    });
+    if (!previous) return { error: "Issue not found" };
 
     const data: Record<string, string> = {};
 
@@ -354,6 +392,22 @@ export async function updateIssueWorkflow(
         data
     });
 
+    for (const [field, newValue] of Object.entries(data)) {
+        const oldValue = String((previous as any)[field] ?? "");
+        if (oldValue === newValue) continue;
+
+        await recordActivity({
+            issueId,
+            actorId: actor.userId,
+            action: field === "status" ? "STATUS_CHANGE" : "FIELD_CHANGE",
+            field,
+            oldValue,
+            newValue,
+            actorName: actor.session.user?.name,
+            notifyStatusChange: field === "status",
+        });
+    }
+
     revalidateIssuePaths(issueId);
 }
 
@@ -391,8 +445,18 @@ export async function toggleIssueResolved(formData: FormData) {
 }
 
 export async function updateIssue(issueId: string, formData: FormData): Promise<{ error?: string } | void> {
-    const session = await auth();
-    if (!session?.user?.id) return { error: "Unauthorized" };
+    const actor = await getActorContext();
+    if (!actor) return { error: "Unauthorized" };
+
+    const previous = await db.issue.findUnique({
+        where: { id: issueId },
+        select: {
+            title: true,
+            assigneeId: true,
+            assignee: { select: { name: true } },
+        },
+    });
+    if (!previous) return { error: "Issue not found" };
 
     const data: Record<string, unknown> = {};
     if (formData.has("title")) {
@@ -420,6 +484,9 @@ export async function updateIssue(issueId: string, formData: FormData): Promise<
         data.severity = severityVal;
     }
     if (formData.has("assigneeId")) {
+        const denied = requirePermission(canAssignIssues(actor.permissions));
+        if (denied) return denied;
+
         const assigneeId = formData.get("assigneeId") as string | null;
         data.assigneeId = !assigneeId || assigneeId === "none" ? null : assigneeId;
     }
@@ -494,6 +561,40 @@ export async function updateIssue(issueId: string, formData: FormData): Promise<
         data: data as any
     });
 
+    if (formData.has("title") && data.title && data.title !== previous.title) {
+        await recordActivity({
+            issueId,
+            actorId: actor.userId,
+            action: "FIELD_CHANGE",
+            field: "title",
+            oldValue: previous.title,
+            newValue: String(data.title),
+        });
+    }
+
+    if (formData.has("assigneeId")) {
+        const nextAssigneeId = data.assigneeId as string | null;
+        if (nextAssigneeId !== previous.assigneeId) {
+            let newAssigneeName = "Unassigned";
+            if (nextAssigneeId) {
+                const user = await db.user.findUnique({
+                    where: { id: nextAssigneeId },
+                    select: { name: true },
+                });
+                newAssigneeName = user?.name || nextAssigneeId;
+            }
+
+            await recordActivity({
+                issueId,
+                actorId: actor.userId,
+                action: "ASSIGNEE_CHANGE",
+                field: "assignee",
+                oldValue: previous.assignee?.name || "Unassigned",
+                newValue: newAssigneeName,
+            });
+        }
+    }
+
     revalidateIssuePaths(issueId);
 }
 
@@ -509,12 +610,15 @@ export async function saveIssueDetails(formData: FormData): Promise<void> {
 }
 
 export async function updateIssueAssignee(issueId: string, assigneeId: string | null) {
-    const session = await auth();
-    if (!session?.user?.id) return { error: "Unauthorized" };
+    const actor = await getActorContext();
+    if (!actor) return { error: "Unauthorized" };
+
+    const denied = requirePermission(canAssignIssues(actor.permissions));
+    if (denied) return denied;
 
     const previous = await db.issue.findUnique({
         where: { id: issueId },
-        select: { assigneeId: true, title: true, publicKey: true },
+        select: { assigneeId: true, title: true, publicKey: true, assignee: { select: { name: true } } },
     });
 
     await db.issue.update({
@@ -522,15 +626,35 @@ export async function updateIssueAssignee(issueId: string, assigneeId: string | 
         data: { assigneeId: assigneeId || null }
     });
 
+    if (assigneeId !== previous?.assigneeId) {
+        let newAssigneeName = "Unassigned";
+        if (assigneeId) {
+            const user = await db.user.findUnique({
+                where: { id: assigneeId },
+                select: { name: true },
+            });
+            newAssigneeName = user?.name || assigneeId;
+        }
+
+        await recordActivity({
+            issueId,
+            actorId: actor.userId,
+            action: "ASSIGNEE_CHANGE",
+            field: "assignee",
+            oldValue: previous?.assignee?.name || "Unassigned",
+            newValue: newAssigneeName,
+        });
+    }
+
     if (assigneeId && assigneeId !== previous?.assigneeId) {
         const issueRef = formatIssueRef(previous?.publicKey, issueId);
-        const actorName = session.user.name || "Someone";
+        const actorName = actor.session.user?.name || "Someone";
         const issueUrl = `${getAppBaseUrl()}/issues/${issueRef}`;
         const dmBody = `**${actorName}** assigned you **${issueRef}**${previous?.title ? `: ${previous.title}` : ""}\n${issueUrl}`;
 
         await notifyUser({
             userId: assigneeId,
-            actorId: session.user.id,
+            actorId: actor.userId,
             type: "ASSIGNED",
             title: `${actorName} assigned you ${issueRef}`,
             body: previous?.title || null,
@@ -705,7 +829,7 @@ export async function updateTeamThread(formData: FormData) {
     });
     if (!thread) throw new Error("Thread not found");
 
-    const permissionContext = await getNotePermissionContext(session.user.id);
+    const permissionContext = await getPermissionContext(session.user.id);
     if (!canManageNote(permissionContext, thread.authorId)) {
         throw new Error("You do not have permission to edit this thread.");
     }
@@ -745,7 +869,7 @@ export async function deleteTeamThread(formData: FormData) {
     });
     if (!thread) throw new Error("Thread not found");
 
-    const permissionContext = await getNotePermissionContext(session.user.id);
+    const permissionContext = await getPermissionContext(session.user.id);
     if (!canManageNote(permissionContext, thread.authorId)) {
         throw new Error("You do not have permission to delete this thread.");
     }
@@ -779,7 +903,7 @@ export async function deleteTeamReply(formData: FormData) {
     });
     if (!reply) throw new Error("Reply not found");
 
-    const permissionContext = await getNotePermissionContext(session.user.id);
+    const permissionContext = await getPermissionContext(session.user.id);
     if (!canManageNote(permissionContext, reply.authorId)) {
         throw new Error("You do not have permission to delete this reply.");
     }
@@ -793,8 +917,11 @@ export async function deleteTeamReply(formData: FormData) {
 }
 
 export async function addProjectMember(formData: FormData) {
-    const session = await auth();
-    if (!session?.user?.id) redirectToSignIn();
+    const actor = await getActorContext();
+    if (!actor) redirectToSignIn();
+
+    const denied = requirePermission(canManageMembers(actor.permissions));
+    if (denied) throw new Error(denied.error);
 
     const discordId = formData.get("discordId") as string;
     const role = formData.get("role") as string || "Member";
@@ -812,8 +939,11 @@ export async function addProjectMember(formData: FormData) {
 }
 
 export async function updateProjectMemberRole(memberId: string, role: string) {
-    const session = await auth();
-    if (!session?.user?.id) redirectToSignIn();
+    const actor = await getActorContext();
+    if (!actor) redirectToSignIn();
+
+    const denied = requirePermission(canManageMembers(actor.permissions));
+    if (denied) throw new Error(denied.error);
 
     await (db as any).projectMember.update({
         where: { id: memberId },
@@ -824,8 +954,11 @@ export async function updateProjectMemberRole(memberId: string, role: string) {
 }
 
 export async function removeProjectMember(memberId: string) {
-    const session = await auth();
-    if (!session?.user?.id) redirectToSignIn();
+    const actor = await getActorContext();
+    if (!actor) redirectToSignIn();
+
+    const denied = requirePermission(canManageMembers(actor.permissions));
+    if (denied) throw new Error(denied.error);
 
     await (db as any).projectMember.delete({
         where: { id: memberId }
@@ -878,8 +1011,11 @@ export async function updateIssueDiscordPost(formData: FormData) {
 }
 
 export async function deleteIssue(formData: FormData) {
-    const session = await auth();
-    if (!session?.user?.id) redirectToSignIn();
+    const actor = await getActorContext();
+    if (!actor) redirectToSignIn();
+
+    const denied = requirePermission(canDeleteIssues(actor.permissions));
+    if (denied) throw new Error(denied.error);
 
     const issueId = formData.get("issueId") as string | null;
     if (!issueId) throw new Error("Missing issue");
@@ -899,8 +1035,11 @@ export async function deleteIssue(formData: FormData) {
 }
 
 export async function exportProjectData() {
-    const session = await auth();
-    if (!session?.user?.id) redirectToSignIn();
+    const actor = await getActorContext();
+    if (!actor) redirectToSignIn();
+
+    const denied = requirePermission(canExportData(actor.permissions));
+    if (denied) throw new Error(denied.error);
 
     const issues = await db.issue.findMany({
         include: {
@@ -935,8 +1074,11 @@ export async function getDiscordForumSettings() {
 }
 
 export async function saveDiscordForumSettings(input: { suggestionsForumId?: string; bugsForumId?: string }) {
-    const session = await auth();
-    if (!session?.user?.id) redirectToSignIn();
+    const actor = await getActorContext();
+    if (!actor) redirectToSignIn();
+
+    const denied = requirePermission(canExportData(actor.permissions));
+    if (denied) throw new Error(denied.error);
 
     const cleanSuggestions = (input.suggestionsForumId || "").trim();
     const cleanBugs = (input.bugsForumId || "").trim();
@@ -989,7 +1131,7 @@ export async function updateIssueComment(formData: FormData) {
         throw new Error("Discord-sourced comments cannot be edited from the tracker.");
     }
 
-    const permissionContext = await getNotePermissionContext(session.user.id);
+    const permissionContext = await getPermissionContext(session.user.id);
     if (!canManageNote(permissionContext, note.authorId)) {
         throw new Error("You do not have permission to edit this comment.");
     }
@@ -1017,7 +1159,7 @@ export async function deleteIssueComment(formData: FormData) {
     });
     if (!note) throw new Error("Comment not found");
 
-    const permissionContext = await getNotePermissionContext(session.user.id);
+    const permissionContext = await getPermissionContext(session.user.id);
     if (!canManageNote(permissionContext, note.authorId)) {
         throw new Error("You do not have permission to delete this comment.");
     }
@@ -1118,20 +1260,39 @@ export async function createSubtask(formData: FormData) {
     }
     if (!created) throw new Error("Failed to create subtask");
 
+    await recordActivity({
+        issueId: parentIssueId,
+        actorId: reporterId,
+        action: "SUBTASK_ADDED",
+        newValue: title,
+    });
+
     revalidateIssuePaths(parentIssueId);
     await redirectToIssue(parentIssueId);
 }
 
 export async function unlinkSubtask(formData: FormData) {
-    const session = await auth();
-    if (!session?.user?.id) redirectToSignIn();
+    const actor = await getActorContext();
+    if (!actor) redirectToSignIn();
     const subtaskId = formData.get("subtaskId") as string | null;
     const parentIssueId = formData.get("parentIssueId") as string | null;
     if (!subtaskId || !parentIssueId) throw new Error("Missing fields");
 
+    const subtask = await db.issue.findUnique({
+        where: { id: subtaskId },
+        select: { title: true },
+    });
+
     await db.issue.updateMany({
         where: { id: subtaskId, parentIssueId },
         data: { parentIssueId: null },
+    });
+
+    await recordActivity({
+        issueId: parentIssueId,
+        actorId: actor.userId,
+        action: "SUBTASK_REMOVED",
+        oldValue: subtask?.title || subtaskId,
     });
 
     revalidateIssuePaths(parentIssueId);
@@ -1185,6 +1346,21 @@ export async function createIssueLink(formData: FormData) {
         }),
     ]);
 
+    const targetRef = formatIssueRef(
+        (await db.issue.findUnique({ where: { id: target.id }, select: { publicKey: true } }))?.publicKey,
+        target.id
+    );
+
+    const actor = await getActorContext();
+    if (actor) {
+        await recordActivity({
+            issueId: sourceId,
+            actorId: actor.userId,
+            action: "LINK_ADDED",
+            newValue: targetRef,
+        });
+    }
+
     revalidateIssuePaths(sourceId);
     revalidateIssuePaths(target.id);
     await redirectToIssue(sourceId);
@@ -1204,6 +1380,11 @@ export async function deleteIssueLink(formData: FormData) {
     }
 
     const inverse = LINK_TYPE_INVERSE[link.type as LinkType];
+    const targetRef = formatIssueRef(
+        (await db.issue.findUnique({ where: { id: link.targetId }, select: { publicKey: true } }))?.publicKey,
+        link.targetId
+    );
+
     await db.$transaction([
         (db as any).issueLink.delete({ where: { id: linkId } }),
         (db as any).issueLink.deleteMany({
@@ -1215,16 +1396,38 @@ export async function deleteIssueLink(formData: FormData) {
         }),
     ]);
 
+    const actor = await getActorContext();
+    if (actor) {
+        await recordActivity({
+            issueId: sourceId,
+            actorId: actor.userId,
+            action: "LINK_REMOVED",
+            oldValue: targetRef,
+        });
+    }
+
     revalidateIssuePaths(sourceId);
     revalidateIssuePaths(link.targetId);
     await redirectToIssue(sourceId);
 }
 
 export async function deleteAllProjectData() {
-    const session = await auth();
-    if (!session?.user?.id) redirectToSignIn();
+    const actor = await getActorContext();
+    if (!actor) redirectToSignIn();
+
+    const denied = requirePermission(canDeleteAllData(actor.permissions));
+    if (denied) throw new Error(denied.error);
 
     // Clear all DB relations
+    await (db as any).issueActivity.deleteMany({});
+    await (db as any).savedView.deleteMany({});
+    await (db as any).announcement.deleteMany({});
+    await (db as any).incidentIssue.deleteMany({});
+    await (db as any).incident.deleteMany({});
+    await (db as any).releaseIssue.deleteMany({});
+    await (db as any).release.deleteMany({});
+    await (db as any).playerReportIssue.deleteMany({});
+    await (db as any).playerReport.deleteMany({});
     await (db as any).notification.deleteMany({});
     await (db as any).issueLink.deleteMany({});
     await db.note.deleteMany({});

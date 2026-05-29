@@ -7,10 +7,17 @@ import { getStaffUsers } from "@/lib/staff";
 import { ALL_ISSUES_SUBTITLE } from "@/lib/site";
 import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { formatIssueRef } from "@/lib/issue-ids";
+import { canAssignIssues, getPermissionContext } from "@/lib/permissions";
+import { getMySavedViews } from "@/app/staff-actions";
 
 export default async function AllIssuesPage() {
     const session = await auth();
-    const assignableUsers = session?.user?.id ? await getStaffUsers() : [];
+    const permissionContext = await getPermissionContext(session?.user?.id);
+    const assignableUsers =
+        session?.user?.id && canAssignIssues(permissionContext)
+            ? await getStaffUsers()
+            : [];
+    const savedViews = session?.user?.id ? await getMySavedViews() : [];
 
     const rawIssues = await db.issue.findMany({
         include: {
@@ -59,7 +66,15 @@ export default async function AllIssuesPage() {
                     )
                 }
             />
-            <DataGrid issues={issues} assignableUsers={assignableUsers} />
+            <DataGrid
+                issues={issues}
+                assignableUsers={assignableUsers}
+                savedViews={savedViews.map((v: any) => ({
+                    id: v.id,
+                    name: v.name,
+                    filters: JSON.parse(v.filters || "{}"),
+                }))}
+            />
         </PageContainer>
     );
 }

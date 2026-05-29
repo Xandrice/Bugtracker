@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Bug, Search, UserCircle, Settings, LogOut } from "lucide-react";
+import { Shield, UserCircle, Settings, LogOut } from "lucide-react";
 import { auth } from "@/../auth";
 import { db } from "@/lib/db";
 import { ThemeToggle } from "./ThemeToggle";
 import { SITE_NAME } from "@/lib/site";
 import { NotificationBell } from "./NotificationBell";
+import { SearchTriggerButton } from "./SearchTriggerButton";
 
 async function getUnreadCount(userId: string | undefined) {
     if (!userId) return 0;
@@ -29,29 +30,19 @@ export async function TopNavbar() {
                     className="flex items-center gap-2 text-foreground transition-opacity hover:opacity-90"
                 >
                     <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/15 text-primary">
-                        <Bug className="h-3.5 w-3.5" />
+                        <Shield className="h-3.5 w-3.5" />
                     </span>
                     <span className="text-sm font-semibold hidden sm:block whitespace-nowrap">
                         {SITE_NAME}
                     </span>
                     <span className="hidden md:block text-[11px] text-muted-foreground border-l border-border pl-2 ml-1">
-                        Tracker
+                        Staff Panel
                     </span>
                 </Link>
             </div>
 
             <div className="hidden flex-1 items-center justify-center px-4 max-w-xl md:flex">
-                <div className="relative w-full">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-subtle-foreground pointer-events-none" />
-                    <input
-                        type="search"
-                        placeholder="Search issues, notes, members…"
-                        className="h-7 w-full rounded-md border border-input bg-elevated pl-8 pr-2 text-xs text-foreground placeholder:text-subtle-foreground focus-ring transition-colors hover:border-border-strong"
-                    />
-                    <kbd className="absolute right-1.5 top-1/2 -translate-y-1/2 hidden h-5 select-none items-center rounded border border-border bg-surface-2 px-1 text-[10px] font-medium text-subtle-foreground sm:inline-flex">
-                        ⌘K
-                    </kbd>
-                </div>
+                <SearchTriggerButton />
             </div>
 
             <div className="flex items-center gap-1">

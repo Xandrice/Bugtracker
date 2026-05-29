@@ -11,20 +11,34 @@ import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/Section";
 import { cn } from "@/components/ui/cn";
+import { MarkdownContent } from "@/components/ui/MarkdownContent";
 
 type NotesPageProps = {
-    searchParams: Promise<{ category?: string }>;
+    searchParams: Promise<{ category?: string; q?: string }>;
 };
 
 export default async function NotesPage({ searchParams }: NotesPageProps) {
     const session = await auth();
     const params = await searchParams;
+    const searchQuery = params?.q?.trim() || "";
     const activeCategory = params?.category
         ? normalizeNoteThreadCategory(params.category)
         : null;
 
     const threads = await db.note.findMany({
-        where: { issueId: null, isThread: true, parentId: null },
+        where: {
+            issueId: null,
+            isThread: true,
+            parentId: null,
+            ...(searchQuery
+                ? {
+                      OR: [
+                          { title: { contains: searchQuery, mode: "insensitive" } },
+                          { content: { contains: searchQuery, mode: "insensitive" } },
+                      ],
+                  }
+                : {}),
+        },
         include: {
             author: true,
             _count: { select: { replies: true } },
@@ -56,8 +70,8 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
     return (
         <PageContainer>
             <PageHeader
-                title="Notes"
-                description="Shared documentation and team discussions."
+                title="Playbooks"
+                description="Shared documentation, SOPs, and team discussions."
                 icon={<BookOpen className="h-4 w-4" />}
                 actions={
                     <Link
@@ -69,6 +83,15 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
                     </Link>
                 }
             />
+
+            <form method="get" className="relative max-w-md">
+                <input
+                    name="q"
+                    defaultValue={searchQuery}
+                    placeholder="Search playbooks…"
+                    className="h-8 w-full rounded-md border border-input bg-elevated px-3 text-xs focus-ring"
+                />
+            </form>
 
             <div className="grid grid-cols-1 md:grid-cols-[1fr_240px] gap-5">
                 <div className="space-y-5 min-w-0">
@@ -115,9 +138,9 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
                                                         {getNoteThreadCategoryLabel(thread.category)}
                                                     </span>
                                                 </div>
-                                                <p className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-wrap">
-                                                    {thread.content}
-                                                </p>
+                                                <div className="text-xs text-muted-foreground line-clamp-2">
+                                                    <MarkdownContent content={thread.content} />
+                                                </div>
                                                 <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-subtle-foreground">
                                                     <span className="flex items-center gap-1">
                                                         <span className="text-foreground/80">

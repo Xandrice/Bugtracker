@@ -4,6 +4,7 @@ import {
     Clock,
     Code,
     Gamepad2,
+    History,
     ListOrdered,
     MessageSquare,
     Terminal,
@@ -26,7 +27,12 @@ import { SubtasksPanel, type SubtaskRow } from "./components/SubtasksPanel";
 import { IssueLinksPanel, type LinkedIssueRow } from "./components/IssueLinksPanel";
 import { IssueCommentCard } from "./components/IssueCommentCard";
 import { getStaffUsers } from "@/lib/staff";
-import { canManageNote, getNotePermissionContext } from "@/lib/note-permissions";
+import {
+    canAssignIssues,
+    canDeleteIssues,
+    canManageNote,
+    getPermissionContext,
+} from "@/lib/permissions";
 import { syncIssueNotesFromDiscord } from "@/lib/discordSync";
 import { formatIssueRef } from "@/lib/issue-ids";
 import { SITE_NAME } from "@/lib/site";
@@ -50,6 +56,7 @@ import {
 } from "@/lib/issue-tokens";
 import { WorkflowFields } from "./components/WorkflowFields";
 import { AssigneeSelect } from "./components/AssigneeSelect";
+import { IssueActivityTimeline } from "./components/IssueActivityTimeline";
 
 export default async function IssueDetailsPage({
     params,
@@ -107,7 +114,11 @@ export default async function IssueDetailsPage({
     }
 
     const assignableUsers = await getStaffUsers();
-    const permissionContext = await getNotePermissionContext(session?.user?.id);
+    const permissionContext = await getPermissionContext(session?.user?.id);
+    const canEdit = !!session?.user?.id;
+    const canAssign = canAssignIssues(permissionContext);
+    const canDelete = canDeleteIssues(permissionContext);
+
     const workflowType = normalizeType(issue.type);
     const workflowPriority = normalizePriority(issue.priority);
     const workflowSeverity = normalizeSeverity(issue.severity);
@@ -131,7 +142,6 @@ export default async function IssueDetailsPage({
         targetStatus: normalizeStatus(l.target.status) as IssueStatus,
     }));
 
-    const canEdit = !!session?.user?.id;
     const parentRef = (issue as any).parentIssue
         ? formatIssueRef(
               (issue as any).parentIssue.publicKey,
@@ -305,6 +315,14 @@ export default async function IssueDetailsPage({
                             />
                         )}
                     </div>
+
+                    <div className="space-y-3">
+                        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                            <History className="h-4 w-4 text-muted-foreground" />
+                            Change log
+                        </h3>
+                        <IssueActivityTimeline issueId={issue.id} />
+                    </div>
                 </div>
             </div>
 
@@ -327,7 +345,7 @@ export default async function IssueDetailsPage({
                         </Section>
                     )}
 
-                    {canEdit && (
+                    {canEdit && canAssign && (
                         <Section title="Assignee" defaultOpen>
                             <AssigneeSelect
                                 issueId={issue.id}
@@ -504,7 +522,7 @@ export default async function IssueDetailsPage({
                         </div>
                     </Section>
 
-                    {canEdit && (
+                    {canEdit && canDelete && (
                         <Section title="Danger zone" defaultOpen={false}>
                             <DeleteIssueForm issueId={issue.id} />
                         </Section>

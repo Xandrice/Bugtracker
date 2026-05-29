@@ -14,6 +14,7 @@ const geistMono = Geist_Mono({
 
 import { TopNavbar } from "@/components/layout/TopNavbar";
 import { LeftSidebar } from "@/components/layout/LeftSidebar";
+import { GlobalSearchTrigger } from "@/components/layout/GlobalSearch";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { auth } from "@/../auth";
 import { SITE_METADATA_DESCRIPTION, SITE_METADATA_TITLE } from "@/lib/site";
@@ -59,6 +60,7 @@ export default async function RootLayout({
                                 {children}
                             </main>
                         </div>
+                        <GlobalSearchTrigger />
                     </div>
                 </ThemeProvider>
             </body>
