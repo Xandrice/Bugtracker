@@ -229,7 +229,7 @@ async function queryRows<T extends RowDataPacket>(
 
 async function execute(sql: string, params: unknown[] = []): Promise<ResultSetHeader> {
   const pool = getPool();
-  const [result] = await pool.execute<ResultSetHeader>(sql, params);
+  const [result] = await pool.query<ResultSetHeader>(sql, params);
   return result;
 }
 
