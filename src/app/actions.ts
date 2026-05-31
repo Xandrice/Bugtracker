@@ -20,7 +20,7 @@ import {
 } from "@/lib/permissions";
 import { recordActivity } from "@/lib/activity";
 
-const ALLOWED_STATUS = ["OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const;
+const ALLOWED_STATUS = ["BACKLOG", "OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const;
 const ALLOWED_PRIORITY = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 const ALLOWED_TYPE = ["BUG", "FEATURE", "TASK"] as const;
 const ALLOWED_SEVERITY = ["MINOR", "MAJOR", "CRITICAL", "BLOCKER"] as const;

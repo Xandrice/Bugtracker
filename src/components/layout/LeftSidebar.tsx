@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Archive,
   Inbox,
   ListTodo,
   KanbanSquare,
@@ -11,15 +12,16 @@ import {
   Users,
   Settings2,
   Plus,
-  Megaphone,
   AlertTriangle,
   Rocket,
   Shield,
   Logs,
+  Car,
+  Coins,
 } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 
-function navItems(canViewLogs: boolean) {
+function navItems(canViewLogs: boolean, canAccessStaffTools: boolean) {
   return [
   {
     title: "Dashboard",
@@ -30,6 +32,7 @@ function navItems(canViewLogs: boolean) {
     items: [
       { name: "My issues", href: "/issues/me", icon: Inbox },
       { name: "All issues", href: "/issues", icon: ListTodo },
+      { name: "Backlog", href: "/issues/backlog", icon: Archive },
       { name: "Main board", href: "/boards/main", icon: KanbanSquare },
       { name: "Triage", href: "/boards/triage", icon: KanbanSquare },
     ],
@@ -37,13 +40,24 @@ function navItems(canViewLogs: boolean) {
   {
     title: "Operations",
     items: [
-      { name: "Announcements", href: "/announcements", icon: Megaphone },
       { name: "Incidents", href: "/incidents", icon: AlertTriangle },
       { name: "Releases", href: "/releases", icon: Rocket },
       { name: "Player reports", href: "/reports", icon: Shield },
       ...(canViewLogs ? [{ name: "Logs", href: "/logs", icon: Logs }] : []),
     ],
   },
+  ...(canAccessStaffTools
+    ? [
+        {
+          title: "Staff tools",
+          items: [
+            { name: "Players", href: "/staff-tools/players", icon: Users },
+            { name: "Vehicles", href: "/staff-tools/vehicles", icon: Car },
+            { name: "Economy", href: "/staff-tools/economy", icon: Coins },
+          ],
+        },
+      ]
+    : []),
   {
     title: "Docs",
     items: [{ name: "Playbooks", href: "/notes", icon: FileText }],
@@ -58,19 +72,22 @@ function navItems(canViewLogs: boolean) {
 export function LeftSidebar({
   isLoggedIn,
   canViewLogs = false,
+  canAccessStaffTools = false,
 }: {
   isLoggedIn: boolean;
   canViewLogs?: boolean;
+  canAccessStaffTools?: boolean;
 }) {
   const pathname = usePathname();
   const groups = isLoggedIn
-    ? navItems(canViewLogs)
+    ? navItems(canViewLogs, canAccessStaffTools)
     : [
         {
           title: "Work",
           items: [
             { name: "Dashboard", href: "/", icon: LayoutDashboard },
             { name: "All issues", href: "/issues", icon: ListTodo },
+            { name: "Backlog", href: "/issues/backlog", icon: Archive },
           ],
         },
       ];

@@ -40,6 +40,7 @@ import { cn } from "@/components/ui/cn";
 export type { IssueStatus, IssuePriority, IssueType, IssueSeverity } from "@/lib/issue-tokens";
 
 export const statusStyles: Record<IssueStatus, string> = {
+    BACKLOG: "bg-muted text-muted-foreground border-border",
     OPEN: "bg-info/12 text-info border-info/30",
     IN_PROGRESS: "bg-warning/12 text-warning border-warning/30",
     REVIEW: "bg-primary/12 text-primary border-primary/30",

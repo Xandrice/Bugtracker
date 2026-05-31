@@ -42,6 +42,14 @@ function truncate(value: string, max = 120): string {
   return `${value.slice(0, max - 1)}…`;
 }
 
+const QUERY_EXAMPLES: Array<{ label: string; query: string }> = [
+  { label: "All logs", query: "*" },
+  { label: "Exact source", query: 'source:="62407"' },
+  { label: "Errors", query: "error" },
+  { label: "Nginx stream", query: '{app="nginx"} AND error' },
+  { label: "Has level", query: "log.level:*" },
+];
+
 export default async function LogsPage({ searchParams }: LogsPageProps) {
   const session = await auth();
 
@@ -84,6 +92,16 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
   const accountId = readParam(params.accountId).trim();
   const projectId = readParam(params.projectId).trim();
   const limit = parseLimit(readParam(params.limit).trim());
+  const buildExampleHref = (exampleQuery: string): string => {
+    const next = new URLSearchParams();
+    next.set("q", exampleQuery);
+    next.set("start", start);
+    next.set("end", end);
+    next.set("limit", String(limit));
+    if (accountId) next.set("accountId", accountId);
+    if (projectId) next.set("projectId", projectId);
+    return `/logs?${next.toString()}`;
+  };
 
   const result = configured
     ? await queryVictoriaLogs({
@@ -183,6 +201,23 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
                   </Button>
                 </div>
               </form>
+              <div className="mt-3 space-y-1.5 border-t border-border pt-3">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-subtle-foreground">
+                  Examples
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {QUERY_EXAMPLES.map((example) => (
+                    <Link
+                      key={example.label}
+                      href={buildExampleHref(example.query)}
+                      className="inline-flex items-center rounded border border-border bg-muted px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
+                    >
+                      <span className="mr-1.5 text-subtle-foreground">{example.label}:</span>
+                      <code>{example.query}</code>
+                    </Link>
+                  ))}
+                </div>
+              </div>
             </CardBody>
           </Card>
 

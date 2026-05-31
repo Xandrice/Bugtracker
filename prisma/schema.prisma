@@ -75,7 +75,7 @@ model Issue {
   publicKey   String? @unique
   title       String
   description String?
-  status      String  @default("OPEN") // OPEN, IN_PROGRESS, REVIEW, DONE
+  status      String  @default("OPEN") // BACKLOG, OPEN, IN_PROGRESS, REVIEW, DONE
   priority    String  @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
   severity    String  @default("MINOR") // MINOR, MAJOR, CRITICAL, BLOCKER
   type        String  @default("BUG") // BUG, FEATURE, TASK

@@ -36,6 +36,7 @@ export type KanbanIssue = {
 };
 
 const COLUMNS: { status: IssueStatus; title: string }[] = [
+    { status: "BACKLOG", title: "Backlog" },
     { status: "OPEN", title: "Open" },
     { status: "IN_PROGRESS", title: "In progress" },
     { status: "REVIEW", title: "Review" },
@@ -174,13 +175,14 @@ export function MainKanbanBoard({
 
     const byStatus = useMemo(() => {
         const map: Record<IssueStatus, KanbanIssue[]> = {
+            BACKLOG: [],
             OPEN: [],
             IN_PROGRESS: [],
             REVIEW: [],
             DONE: [],
         };
         for (const issue of issues) {
-            const s = (["OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const).includes(issue.status)
+            const s = (["BACKLOG", "OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const).includes(issue.status)
                 ? issue.status
                 : "OPEN";
             map[s].push({ ...issue, status: s });
@@ -201,13 +203,13 @@ export function MainKanbanBoard({
         const issueId = String(active.id);
         const overId = String(over.id);
         let nextStatus: IssueStatus | null = null;
-        if (["OPEN", "IN_PROGRESS", "REVIEW", "DONE"].includes(overId)) {
+        if (["BACKLOG", "OPEN", "IN_PROGRESS", "REVIEW", "DONE"].includes(overId)) {
             nextStatus = overId as IssueStatus;
         } else {
             const targetIssue = issues.find((i) => i.id === overId);
             if (targetIssue) {
                 const s = targetIssue.status;
-                nextStatus = (["OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const).includes(s)
+                nextStatus = (["BACKLOG", "OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const).includes(s)
                     ? s
                     : "OPEN";
             }

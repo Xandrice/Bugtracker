@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  Archive,
   AlertTriangle,
   ArrowRight,
   Bell,
@@ -8,7 +9,6 @@ import {
   Inbox,
   KanbanSquare,
   ListTodo,
-  Megaphone,
   UserCircle2,
 } from "lucide-react";
 import { auth } from "@/../auth";
@@ -20,7 +20,6 @@ import { formatIssueRef } from "@/lib/issue-ids";
 import { StatusBadge } from "@/components/views/DataGrid";
 import { normalizeStatus } from "@/lib/issue-tokens";
 import { Avatar } from "@/components/ui/Avatar";
-import { MarkdownContent } from "@/components/ui/MarkdownContent";
 
 function StatCard({
   label,
@@ -56,21 +55,24 @@ export default async function DashboardPage() {
   const userId = session?.user?.id;
 
   const [
-    openCount,
+    activeCount,
+    backlogCount,
     urgentCount,
     unassignedCount,
     myAssignedCount,
     recentIssues,
     recentComments,
     activeIncidents,
-    pinnedAnnouncements,
   ] = await Promise.all([
-    db.issue.count({ where: { status: { not: "DONE" } } }),
+    db.issue.count({
+      where: { status: { in: ["OPEN", "IN_PROGRESS", "REVIEW"] } },
+    }),
+    db.issue.count({ where: { status: "BACKLOG" } }),
     db.issue.count({
       where: { priority: "URGENT", status: { not: "DONE" } },
     }),
     db.issue.count({
-      where: { assigneeId: null, status: { not: "DONE" } },
+      where: { assigneeId: null, status: "OPEN" },
     }),
     userId
       ? db.issue.count({
@@ -96,15 +98,6 @@ export default async function DashboardPage() {
       take: 3,
       orderBy: { updatedAt: "desc" },
       include: { assignee: true },
-    }),
-    (db as any).announcement.findMany({
-      where: {
-        pinned: true,
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-      },
-      take: 3,
-      orderBy: { createdAt: "desc" },
-      include: { author: true },
     }),
   ]);
 
@@ -133,34 +126,13 @@ export default async function DashboardPage() {
         }
       />
 
-      {pinnedAnnouncements.length > 0 && (
-        <div className="space-y-2">
-          {pinnedAnnouncements.map((announcement: any) => (
-            <Card key={announcement.id} className="border-primary/30 bg-primary/5">
-              <CardBody className="flex items-start gap-3 py-3">
-                <Megaphone className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-foreground">
-                      {announcement.title}
-                    </h3>
-                    <span className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-primary">
-                      Pinned
-                    </span>
-                  </div>
-                  <MarkdownContent
-                    content={announcement.body}
-                    className="text-xs text-muted-foreground"
-                  />
-                </div>
-              </CardBody>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Open work items" value={openCount} href="/issues?status=OPEN" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <StatCard label="Active work items" value={activeCount} href="/boards/main" />
+        <StatCard
+          label="Backlog"
+          value={backlogCount}
+          href="/issues/backlog"
+        />
         <StatCard
           label="Urgent (not done)"
           value={urgentCount}
@@ -321,7 +293,7 @@ export default async function DashboardPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
         <Link
           href="/boards/triage"
           className="flex items-center gap-3 rounded-md border border-border bg-surface p-4 transition-colors hover:bg-muted/40"
@@ -331,6 +303,18 @@ export default async function DashboardPage() {
             <div className="text-sm font-medium text-foreground">Triage queue</div>
             <div className="text-xs text-muted-foreground">
               {unassignedCount} unassigned open items
+            </div>
+          </div>
+        </Link>
+        <Link
+          href="/issues/backlog"
+          className="flex items-center gap-3 rounded-md border border-border bg-surface p-4 transition-colors hover:bg-muted/40"
+        >
+          <Archive className="h-5 w-5 text-subtle-foreground" />
+          <div>
+            <div className="text-sm font-medium text-foreground">Backlog</div>
+            <div className="text-xs text-muted-foreground">
+              {backlogCount} parked work items
             </div>
           </div>
         </Link>

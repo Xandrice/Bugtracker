@@ -18,6 +18,7 @@ const ASSIGN_ROLES = new Set<ProjectRole>([
   "Moderator",
 ]);
 const MANAGE_ROLES = new Set<ProjectRole>(["Owner", "Admin"]);
+const STAFF_TOOL_ROLES = new Set<ProjectRole>(["Owner", "Admin", "Moderator"]);
 const DEFAULT_LOG_VIEW_ROLES: ProjectRole[] = ["Owner", "Admin"];
 const LOG_VIEW_ROLES = parseRoleSet(
   process.env.LOG_VIEW_ROLES,
@@ -137,6 +138,10 @@ export function canManageReleases(context: PermissionContext | null): boolean {
 
 export function canManageReports(context: PermissionContext | null): boolean {
   return hasRole(context, new Set([...MANAGE_ROLES, "Moderator" as ProjectRole]));
+}
+
+export function canAccessStaffTools(context: PermissionContext | null): boolean {
+  return hasRole(context, STAFF_TOOL_ROLES);
 }
 
 export function canViewLogs(context: PermissionContext | null): boolean {

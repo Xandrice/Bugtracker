@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-export type IssueStatus = "OPEN" | "IN_PROGRESS" | "REVIEW" | "DONE";
+export type IssueStatus = "BACKLOG" | "OPEN" | "IN_PROGRESS" | "REVIEW" | "DONE";
 export type IssuePriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 export type IssueType = "BUG" | "FEATURE" | "TASK";
 export type IssueSeverity = "MINOR" | "MAJOR" | "CRITICAL" | "BLOCKER";
@@ -26,6 +26,7 @@ export const STATUS_META: Record<IssueStatus, {
     icon: ReactNode;
     tone: "neutral" | "info" | "warning" | "primary" | "success";
 }> = {
+    BACKLOG: { label: "Backlog", short: "Backlog", icon: <KanbanSquare className="h-3.5 w-3.5" />, tone: "neutral" },
     OPEN: { label: "Open", short: "Open", icon: <CircleDashed className="h-3.5 w-3.5" />, tone: "info" },
     IN_PROGRESS: { label: "In Progress", short: "In progress", icon: <CircleDot className="h-3.5 w-3.5" />, tone: "warning" },
     REVIEW: { label: "Review", short: "Review", icon: <AlertCircle className="h-3.5 w-3.5" />, tone: "primary" },

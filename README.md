@@ -14,6 +14,21 @@ pnpm install
 pnpm dev
 ```
 
+### Optional: FiveM staff tools DB
+
+`/staff-tools` can connect to your game database (MySQL) for player and vehicle management.
+Set either:
+
+- `FIVEM_DB_URL=mysql://user:pass@host:3306/database`
+
+or split credentials:
+
+- `FIVEM_DB_HOST`
+- `FIVEM_DB_PORT` (default `3306`)
+- `FIVEM_DB_USER`
+- `FIVEM_DB_PASSWORD`
+- `FIVEM_DB_NAME`
+
 ## Deploy to Vercel (migration from Render)
 
 This app expects PostgreSQL for production on Vercel.
