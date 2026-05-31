@@ -56,6 +56,11 @@ Optional:
 - `DISCORD_BOT_TOKEN` (required for DM mentions and posting tracker notices in Discord forum posts)
 - `DISCORD_PUBLIC_KEY` (if receiving signed Discord interaction-style webhook requests)
 - `DISCORD_WEBHOOK_SECRET` (shared-secret fallback for relayed bot gateway events)
+- `VICTORIALOGS_URL` (required for in-panel logs viewer integration)
+- `VICTORIALOGS_BEARER_TOKEN` (optional bearer auth for VictoriaLogs)
+- `VICTORIALOGS_USERNAME` / `VICTORIALOGS_PASSWORD` (optional basic auth for VictoriaLogs)
+- `VICTORIALOGS_ACCOUNT_ID` / `VICTORIALOGS_PROJECT_ID` (optional default tenant headers)
+- `LOG_VIEW_ROLES` (comma-separated roles allowed to view `/logs`; default `Owner,Admin`)
 
 ### Discord forum sync notes
 
@@ -66,6 +71,13 @@ Optional:
 - Inbound Discord comments become issue notes without requiring the Discord user to be a ProjectMember.
 - If a linked thread is archived (`THREAD_UPDATE` with `archived=true`), the linked issue is auto-set to `DONE`.
 - Sync is one-way for close state: resolving in the tracker does not archive/close Discord threads.
+
+### VictoriaLogs notes
+
+- Logs page endpoint: `/logs`
+- Query backend: `POST /select/logsql/query`
+- The page passes `AccountID` and `ProjectID` headers when configured.
+- Access is controlled by `LOG_VIEW_ROLES`, so logs can be restricted to specific staff roles.
 
 ### 4) Prisma migration notes
 

@@ -104,7 +104,14 @@ interface DataGridProps {
     savedViews?: Array<{ id: string; name: string; filters: SavedViewFilters }>;
 }
 
-export function DataGrid({ issues, hideFilters = false, assignableUsers, savedViews = [] }: DataGridProps) {
+const EMPTY_SAVED_VIEWS: Array<{ id: string; name: string; filters: SavedViewFilters }> = [];
+
+export function DataGrid({
+    issues,
+    hideFilters = false,
+    assignableUsers,
+    savedViews = EMPTY_SAVED_VIEWS,
+}: DataGridProps) {
     const [localIssues, setLocalIssues] = useState(issues);
     const [localSavedViews, setLocalSavedViews] = useState(savedViews);
     const [viewName, setViewName] = useState("");

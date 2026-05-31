@@ -18,6 +18,26 @@ const ASSIGN_ROLES = new Set<ProjectRole>([
   "Moderator",
 ]);
 const MANAGE_ROLES = new Set<ProjectRole>(["Owner", "Admin"]);
+const DEFAULT_LOG_VIEW_ROLES: ProjectRole[] = ["Owner", "Admin"];
+const LOG_VIEW_ROLES = parseRoleSet(
+  process.env.LOG_VIEW_ROLES,
+  DEFAULT_LOG_VIEW_ROLES
+);
+
+function parseRoleSet(
+  raw: string | undefined,
+  fallback: ProjectRole[]
+): Set<ProjectRole> {
+  const validRoles = new Set<ProjectRole>(PROJECT_ROLES);
+  if (!raw?.trim()) return new Set(fallback);
+
+  const parsed = raw
+    .split(",")
+    .map((role) => role.trim())
+    .filter((role): role is ProjectRole => validRoles.has(role as ProjectRole));
+
+  return parsed.length > 0 ? new Set(parsed) : new Set(fallback);
+}
 
 export type PermissionContext = {
   userId: string;
@@ -117,6 +137,10 @@ export function canManageReleases(context: PermissionContext | null): boolean {
 
 export function canManageReports(context: PermissionContext | null): boolean {
   return hasRole(context, new Set([...MANAGE_ROLES, "Moderator" as ProjectRole]));
+}
+
+export function canViewLogs(context: PermissionContext | null): boolean {
+  return hasRole(context, LOG_VIEW_ROLES);
 }
 
 export function canManageNote(

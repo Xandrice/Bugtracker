@@ -15,10 +15,12 @@ import {
   AlertTriangle,
   Rocket,
   Shield,
+  Logs,
 } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 
-const navItems = [
+function navItems(canViewLogs: boolean) {
+  return [
   {
     title: "Dashboard",
     items: [{ name: "Home", href: "/", icon: LayoutDashboard }],
@@ -39,6 +41,7 @@ const navItems = [
       { name: "Incidents", href: "/incidents", icon: AlertTriangle },
       { name: "Releases", href: "/releases", icon: Rocket },
       { name: "Player reports", href: "/reports", icon: Shield },
+      ...(canViewLogs ? [{ name: "Logs", href: "/logs", icon: Logs }] : []),
     ],
   },
   {
@@ -50,11 +53,18 @@ const navItems = [
     items: [{ name: "Members", href: "/members", icon: Users }],
   },
 ];
+}
 
-export function LeftSidebar({ isLoggedIn }: { isLoggedIn: boolean }) {
+export function LeftSidebar({
+  isLoggedIn,
+  canViewLogs = false,
+}: {
+  isLoggedIn: boolean;
+  canViewLogs?: boolean;
+}) {
   const pathname = usePathname();
   const groups = isLoggedIn
-    ? navItems
+    ? navItems(canViewLogs)
     : [
         {
           title: "Work",

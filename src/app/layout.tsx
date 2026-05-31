@@ -17,6 +17,7 @@ import { LeftSidebar } from "@/components/layout/LeftSidebar";
 import { GlobalSearchTrigger } from "@/components/layout/GlobalSearch";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { auth } from "@/../auth";
+import { canViewLogs, getPermissionContext } from "@/lib/permissions";
 import { SITE_METADATA_DESCRIPTION, SITE_METADATA_TITLE } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -30,6 +31,8 @@ export default async function RootLayout({
     children: React.ReactNode;
 }>) {
     const session = await auth();
+    const permissionContext = await getPermissionContext(session?.user?.id);
+    const showLogs = canViewLogs(permissionContext);
 
     return (
         <html lang="en" suppressHydrationWarning className="h-full">
@@ -55,7 +58,7 @@ export default async function RootLayout({
                     <div className="flex h-screen flex-col overflow-hidden">
                         <TopNavbar />
                         <div className="flex flex-1 min-h-0 overflow-hidden">
-                            <LeftSidebar isLoggedIn={!!session?.user?.id} />
+                            <LeftSidebar isLoggedIn={!!session?.user?.id} canViewLogs={showLogs} />
                             <main className="flex-1 min-h-0 overflow-y-auto bg-background">
                                 {children}
                             </main>
