@@ -8,12 +8,16 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import {
-  canAccessStaffTools,
+  canManageStaffVehicles,
+  canRefreshStaffSchema,
+  canViewStaffEconomy,
+  canViewStaffPlayers,
+  canViewStaffVehicles,
   getPermissionContext,
   requirePermission,
 } from "@/lib/permissions";
 import { getStaffToolsSnapshot } from "@/lib/fivem-db";
-import { refreshStaffSchemaAction, toggleVehicleStorageAction } from "../actions";
+import { putAwayVehicleAction, refreshStaffSchemaAction, toggleVehicleStorageAction } from "../actions";
 
 function boolLabel(value: boolean | null, trueLabel: string, falseLabel: string) {
   if (value === true) return trueLabel;
@@ -32,9 +36,13 @@ export default async function StaffVehiclesPage({
   }
 
   const permissions = await getPermissionContext(session.user.id);
+  const canManageVehicles = canManageStaffVehicles(permissions);
+  const canRefreshSchema = canRefreshStaffSchema(permissions);
+  const showPlayersLink = canViewStaffPlayers(permissions);
+  const showEconomyLink = canViewStaffEconomy(permissions);
   const denied = requirePermission(
-    canAccessStaffTools(permissions),
-    "You do not have permission to access staff tools."
+    canViewStaffVehicles(permissions),
+    "You do not have permission to access vehicle staff tools."
   );
   if (denied) {
     return (
@@ -58,6 +66,11 @@ export default async function StaffVehiclesPage({
     vehicleSearch: vehicleQ,
     limit: 80,
   });
+  const canPutAwayVehicle = Boolean(
+    canManageVehicles &&
+    snapshot.vehicleCapabilities?.garageColumn &&
+      (snapshot.vehicleCapabilities.storedColumn || snapshot.vehicleCapabilities.stateColumn)
+  );
 
   return (
     <PageContainer className="max-w-[1600px]">
@@ -67,26 +80,32 @@ export default async function StaffVehiclesPage({
         icon={<Car className="h-4 w-4" />}
         actions={
           <div className="flex items-center gap-2">
-            <Link
-              href="/staff-tools/players"
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:border-border-strong"
-            >
-              <Users className="h-3.5 w-3.5" />
-              Players
-            </Link>
-            <Link
-              href="/staff-tools/economy"
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:border-border-strong"
-            >
-              <Coins className="h-3.5 w-3.5" />
-              Economy
-            </Link>
-            <form action={refreshStaffSchemaAction}>
-              <Button type="submit" variant="outline" size="sm">
-                <RefreshCcw className="h-3.5 w-3.5" />
-                Refresh schema
-              </Button>
-            </form>
+            {showPlayersLink && (
+              <Link
+                href="/staff-tools/players"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:border-border-strong"
+              >
+                <Users className="h-3.5 w-3.5" />
+                Players
+              </Link>
+            )}
+            {showEconomyLink && (
+              <Link
+                href="/staff-tools/economy"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:border-border-strong"
+              >
+                <Coins className="h-3.5 w-3.5" />
+                Economy
+              </Link>
+            )}
+            {canRefreshSchema && (
+              <form action={refreshStaffSchemaAction}>
+                <Button type="submit" variant="outline" size="sm">
+                  <RefreshCcw className="h-3.5 w-3.5" />
+                  Refresh schema
+                </Button>
+              </form>
+            )}
           </div>
         }
       />
@@ -155,6 +174,15 @@ export default async function StaffVehiclesPage({
             </CardBody>
           </Card>
 
+          {canManageVehicles && snapshot.vehicleCapabilities && !canPutAwayVehicle && (
+            <Card className="border-warning/30">
+              <CardBody className="py-3 text-xs text-muted-foreground">
+                Garage put-away needs both a garage column and a stored/state column on the detected
+                vehicle table. Refresh schema after adding those fields.
+              </CardBody>
+            </Card>
+          )}
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-sm">
@@ -208,8 +236,24 @@ export default async function StaffVehiclesPage({
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex justify-end gap-1.5">
-                            {(snapshot.vehicleCapabilities?.storedColumn ||
+                          <div className="flex flex-wrap justify-end gap-1.5">
+                            {canPutAwayVehicle && (
+                              <form action={putAwayVehicleAction} className="flex flex-wrap justify-end gap-1.5">
+                                <input type="hidden" name="vehicleKey" value={vehicle.key} />
+                                <Input
+                                  name="garageName"
+                                  defaultValue={vehicle.garage || ""}
+                                  placeholder="Garage"
+                                  aria-label={`Garage for ${vehicle.plate || vehicle.key}`}
+                                  className="h-7 w-32 px-2 text-xs"
+                                  maxLength={100}
+                                />
+                                <Button type="submit" size="xs" variant="success">
+                                  Put away
+                                </Button>
+                              </form>
+                            )}
+                            {canManageVehicles && (snapshot.vehicleCapabilities?.storedColumn ||
                               snapshot.vehicleCapabilities?.stateColumn) && (
                               <form action={toggleVehicleStorageAction}>
                                 <input type="hidden" name="vehicleKey" value={vehicle.key} />

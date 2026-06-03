@@ -1,4 +1,11 @@
 import { db } from "@/lib/db";
+import {
+  EMPTY_STAFF_PANEL_PERMISSIONS,
+  FULL_STAFF_PANEL_PERMISSIONS,
+  mergeStaffPanelPermissions,
+  normalizeStaffPanelPermissions,
+  type StaffPanelPermissions,
+} from "@/lib/staff-permissions";
 
 export const PROJECT_ROLES = [
   "Owner",
@@ -44,7 +51,24 @@ export type PermissionContext = {
   userId: string;
   role: ProjectRole | null;
   isAdminLike: boolean;
+  staffRole: {
+    id: string;
+    name: string;
+    baseRole: ProjectRole | null;
+  } | null;
+  staffPermissions: StaffPanelPermissions;
+  hasStaffPermissionOverrides: boolean;
 };
+
+function toProjectRole(value: string | null | undefined): ProjectRole | null {
+  return PROJECT_ROLES.includes(value as ProjectRole) ? (value as ProjectRole) : null;
+}
+
+function legacyStaffPermissionsForRole(role: ProjectRole | null): StaffPanelPermissions {
+  return role && STAFF_TOOL_ROLES.has(role)
+    ? FULL_STAFF_PANEL_PERMISSIONS
+    : EMPTY_STAFF_PANEL_PERMISSIONS;
+}
 
 export async function getPermissionContext(
   userId: string | null | undefined
@@ -56,6 +80,13 @@ export async function getPermissionContext(
       userId,
       role: "Admin",
       isAdminLike: true,
+      staffRole: {
+        id: "dev-auto-admin",
+        name: "Admin",
+        baseRole: "Admin",
+      },
+      staffPermissions: FULL_STAFF_PANEL_PERMISSIONS,
+      hasStaffPermissionOverrides: false,
     };
   }
 
@@ -72,19 +103,55 @@ export async function getPermissionContext(
       userId,
       role: null,
       isAdminLike: false,
+      staffRole: null,
+      staffPermissions: EMPTY_STAFF_PANEL_PERMISSIONS,
+      hasStaffPermissionOverrides: false,
     };
   }
 
   const member = await db.projectMember.findUnique({
     where: { discordId: discordAccount.providerAccountId },
-    select: { role: true },
+    select: {
+      role: true,
+      staffPermissionOverrides: true,
+      staffRole: {
+        select: {
+          id: true,
+          name: true,
+          baseRole: true,
+          permissions: true,
+        },
+      },
+    },
   });
 
-  const role = (member?.role as ProjectRole | undefined) ?? null;
+  const legacyRole = toProjectRole(member?.role);
+  const baseRole = toProjectRole(member?.staffRole?.baseRole);
+  const role = baseRole ?? legacyRole;
+  const roleStaffPermissions = member?.staffRole
+    ? normalizeStaffPanelPermissions(
+        member.staffRole.permissions,
+        legacyStaffPermissionsForRole(role)
+      )
+    : legacyStaffPermissionsForRole(role);
+  const staffPermissions = mergeStaffPanelPermissions(
+    roleStaffPermissions,
+    member?.staffPermissionOverrides
+  );
+
   return {
     userId,
     role,
     isAdminLike: role ? ADMIN_LIKE_ROLES.has(role) : false,
+    staffRole: member?.staffRole
+      ? {
+          id: member.staffRole.id,
+          name: member.staffRole.name,
+          baseRole,
+        }
+      : null,
+    staffPermissions,
+    hasStaffPermissionOverrides: !!member?.staffPermissionOverrides,
   };
 }
 
@@ -141,7 +208,39 @@ export function canManageReports(context: PermissionContext | null): boolean {
 }
 
 export function canAccessStaffTools(context: PermissionContext | null): boolean {
-  return hasRole(context, STAFF_TOOL_ROLES);
+  return canAccessAnyStaffTool(context);
+}
+
+export function canAccessAnyStaffTool(context: PermissionContext | null): boolean {
+  return (
+    canViewStaffPlayers(context) ||
+    canViewStaffVehicles(context) ||
+    canViewStaffEconomy(context)
+  );
+}
+
+export function canViewStaffPlayers(context: PermissionContext | null): boolean {
+  return context?.staffPermissions.players.view ?? false;
+}
+
+export function canManageStaffPlayers(context: PermissionContext | null): boolean {
+  return context?.staffPermissions.players.manage ?? false;
+}
+
+export function canViewStaffVehicles(context: PermissionContext | null): boolean {
+  return context?.staffPermissions.vehicles.view ?? false;
+}
+
+export function canManageStaffVehicles(context: PermissionContext | null): boolean {
+  return context?.staffPermissions.vehicles.manage ?? false;
+}
+
+export function canViewStaffEconomy(context: PermissionContext | null): boolean {
+  return context?.staffPermissions.economy.view ?? false;
+}
+
+export function canRefreshStaffSchema(context: PermissionContext | null): boolean {
+  return context?.staffPermissions.schema.refresh ?? false;
 }
 
 export function canViewLogs(context: PermissionContext | null): boolean {

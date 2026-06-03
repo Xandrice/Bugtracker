@@ -6,7 +6,10 @@ import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import {
-  canAccessStaffTools,
+  canRefreshStaffSchema,
+  canViewStaffEconomy,
+  canViewStaffPlayers,
+  canViewStaffVehicles,
   getPermissionContext,
   requirePermission,
 } from "@/lib/permissions";
@@ -28,9 +31,12 @@ export default async function StaffEconomyPage() {
   }
 
   const permissions = await getPermissionContext(session.user.id);
+  const canRefreshSchema = canRefreshStaffSchema(permissions);
+  const showPlayersLink = canViewStaffPlayers(permissions);
+  const showVehiclesLink = canViewStaffVehicles(permissions);
   const denied = requirePermission(
-    canAccessStaffTools(permissions),
-    "You do not have permission to access staff tools."
+    canViewStaffEconomy(permissions),
+    "You do not have permission to access economy staff tools."
   );
   if (denied) {
     return (
@@ -57,26 +63,32 @@ export default async function StaffEconomyPage() {
         icon={<Coins className="h-4 w-4" />}
         actions={
           <div className="flex items-center gap-2">
-            <Link
-              href="/staff-tools/players"
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:border-border-strong"
-            >
-              <Users className="h-3.5 w-3.5" />
-              Players
-            </Link>
-            <Link
-              href="/staff-tools/vehicles"
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:border-border-strong"
-            >
-              <Car className="h-3.5 w-3.5" />
-              Vehicles
-            </Link>
-            <form action={refreshStaffSchemaAction}>
-              <Button type="submit" variant="outline" size="sm">
-                <RefreshCcw className="h-3.5 w-3.5" />
-                Refresh schema
-              </Button>
-            </form>
+            {showPlayersLink && (
+              <Link
+                href="/staff-tools/players"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:border-border-strong"
+              >
+                <Users className="h-3.5 w-3.5" />
+                Players
+              </Link>
+            )}
+            {showVehiclesLink && (
+              <Link
+                href="/staff-tools/vehicles"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:border-border-strong"
+              >
+                <Car className="h-3.5 w-3.5" />
+                Vehicles
+              </Link>
+            )}
+            {canRefreshSchema && (
+              <form action={refreshStaffSchemaAction}>
+                <Button type="submit" variant="outline" size="sm">
+                  <RefreshCcw className="h-3.5 w-3.5" />
+                  Refresh schema
+                </Button>
+              </form>
+            )}
           </div>
         }
       />

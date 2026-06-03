@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { auth } from "@/../auth";
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAppBaseUrl, sendDiscordChannelMessage, sendDiscordDM } from "@/lib/discord";
@@ -16,8 +17,17 @@ import {
     canManageMembers,
     canManageNote,
     getPermissionContext,
+    PROJECT_ROLES,
     requirePermission,
 } from "@/lib/permissions";
+import {
+    EMPTY_STAFF_PANEL_PERMISSIONS,
+    getStaffPermissionValue,
+    mergeStaffPanelPermissions,
+    normalizeStaffPanelPermissions,
+    setStaffPermissionValue,
+    type StaffPermissionKey,
+} from "@/lib/staff-permissions";
 import { recordActivity } from "@/lib/activity";
 
 const ALLOWED_STATUS = ["BACKLOG", "OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const;
@@ -71,6 +81,44 @@ function revalidateIssuePaths(issueId: string) {
     revalidatePath("/boards/triage");
     revalidatePath("/boards/main");
     revalidatePath(`/issues/${issueId}`);
+}
+
+function revalidatePermissionPaths() {
+    revalidatePath("/members");
+    revalidatePath("/staff-tools");
+    revalidatePath("/staff-tools/players");
+    revalidatePath("/staff-tools/vehicles");
+    revalidatePath("/staff-tools/economy");
+}
+
+async function ensureCanManageMembers() {
+    const actor = await getActorContext();
+    if (!actor) redirectToSignIn();
+
+    const denied = requirePermission(canManageMembers(actor.permissions));
+    if (denied) throw new Error(denied.error);
+
+    return actor;
+}
+
+function parseStaffPermissionKey(value: FormDataEntryValue | null): StaffPermissionKey {
+    const key = String(value || "").trim() as StaffPermissionKey;
+    if (
+        key !== "players.view" &&
+        key !== "players.manage" &&
+        key !== "vehicles.view" &&
+        key !== "vehicles.manage" &&
+        key !== "economy.view" &&
+        key !== "schema.refresh"
+    ) {
+        throw new Error("Invalid staff permission.");
+    }
+    return key;
+}
+
+function parseProjectRole(value: FormDataEntryValue | null): string {
+    const role = String(value || "Member").trim();
+    return PROJECT_ROLES.includes(role as (typeof PROJECT_ROLES)[number]) ? role : "Member";
 }
 
 function parseDiscordPostInput(value: string | null): { postId: string | null; postLink: string | null } {
@@ -917,54 +965,240 @@ export async function deleteTeamReply(formData: FormData) {
 }
 
 export async function addProjectMember(formData: FormData) {
-    const actor = await getActorContext();
-    if (!actor) redirectToSignIn();
-
-    const denied = requirePermission(canManageMembers(actor.permissions));
-    if (denied) throw new Error(denied.error);
+    await ensureCanManageMembers();
 
     const discordId = formData.get("discordId") as string;
     const role = formData.get("role") as string || "Member";
 
     if (!discordId) throw new Error("Missing discordId");
 
-    await (db as any).projectMember.create({
+    const staffRole = await db.staffRole.findUnique({
+        where: { name: parseProjectRole(role) },
+        select: { id: true },
+    });
+
+    await db.projectMember.create({
         data: {
             discordId,
-            role,
+            role: parseProjectRole(role),
+            staffRoleId: staffRole?.id ?? null,
         }
     });
 
-    revalidatePath("/members");
+    revalidatePermissionPaths();
 }
 
 export async function updateProjectMemberRole(memberId: string, role: string) {
-    const actor = await getActorContext();
-    if (!actor) redirectToSignIn();
+    await ensureCanManageMembers();
 
-    const denied = requirePermission(canManageMembers(actor.permissions));
-    if (denied) throw new Error(denied.error);
-
-    await (db as any).projectMember.update({
-        where: { id: memberId },
-        data: { role }
+    const nextRole = parseProjectRole(role);
+    const staffRole = await db.staffRole.findUnique({
+        where: { name: nextRole },
+        select: { id: true },
     });
 
-    revalidatePath("/members");
+    await db.projectMember.update({
+        where: { id: memberId },
+        data: {
+            role: nextRole,
+            staffRoleId: staffRole?.id ?? undefined,
+        }
+    });
+
+    revalidatePermissionPaths();
 }
 
 export async function removeProjectMember(memberId: string) {
-    const actor = await getActorContext();
-    if (!actor) redirectToSignIn();
+    await ensureCanManageMembers();
 
-    const denied = requirePermission(canManageMembers(actor.permissions));
-    if (denied) throw new Error(denied.error);
-
-    await (db as any).projectMember.delete({
+    await db.projectMember.delete({
         where: { id: memberId }
     });
 
-    revalidatePath("/members");
+    revalidatePermissionPaths();
+}
+
+export async function createStaffRoleAction(formData: FormData) {
+    await ensureCanManageMembers();
+
+    const name = String(formData.get("name") || "").trim();
+    const baseRole = parseProjectRole(formData.get("baseRole"));
+    if (!name) throw new Error("Missing role name.");
+    if (name.length > 60) throw new Error("Role name must be 60 characters or fewer.");
+
+    await db.staffRole.create({
+        data: {
+            name,
+            baseRole,
+            permissions: EMPTY_STAFF_PANEL_PERMISSIONS,
+            isSystem: false,
+        },
+    });
+
+    revalidatePermissionPaths();
+}
+
+export async function renameStaffRoleAction(formData: FormData) {
+    await ensureCanManageMembers();
+
+    const roleId = String(formData.get("roleId") || "").trim();
+    const name = String(formData.get("name") || "").trim();
+    if (!roleId) throw new Error("Missing role id.");
+    if (!name) throw new Error("Missing role name.");
+    if (name.length > 60) throw new Error("Role name must be 60 characters or fewer.");
+
+    const role = await db.staffRole.findUnique({
+        where: { id: roleId },
+        select: { isSystem: true },
+    });
+    if (!role) throw new Error("Role not found.");
+    if (role.isSystem) throw new Error("System roles cannot be renamed.");
+
+    await db.staffRole.update({
+        where: { id: roleId },
+        data: { name },
+    });
+
+    revalidatePermissionPaths();
+}
+
+export async function updateStaffRoleBaseRoleAction(formData: FormData) {
+    await ensureCanManageMembers();
+
+    const roleId = String(formData.get("roleId") || "").trim();
+    const baseRole = parseProjectRole(formData.get("baseRole"));
+    if (!roleId) throw new Error("Missing role id.");
+
+    await db.staffRole.update({
+        where: { id: roleId },
+        data: { baseRole },
+    });
+
+    await db.projectMember.updateMany({
+        where: { staffRoleId: roleId },
+        data: { role: baseRole },
+    });
+
+    revalidatePermissionPaths();
+}
+
+export async function deleteStaffRoleAction(formData: FormData) {
+    await ensureCanManageMembers();
+
+    const roleId = String(formData.get("roleId") || "").trim();
+    if (!roleId) throw new Error("Missing role id.");
+
+    const role = await db.staffRole.findUnique({
+        where: { id: roleId },
+        select: {
+            isSystem: true,
+            _count: { select: { members: true } },
+        },
+    });
+    if (!role) throw new Error("Role not found.");
+    if (role.isSystem) throw new Error("System roles cannot be deleted.");
+    if (role._count.members > 0) throw new Error("Cannot delete a role assigned to members.");
+
+    await db.staffRole.delete({ where: { id: roleId } });
+    revalidatePermissionPaths();
+}
+
+export async function toggleStaffRolePermissionAction(formData: FormData) {
+    await ensureCanManageMembers();
+
+    const roleId = String(formData.get("roleId") || "").trim();
+    const key = parseStaffPermissionKey(formData.get("permissionKey"));
+    if (!roleId) throw new Error("Missing role id.");
+
+    const role = await db.staffRole.findUnique({
+        where: { id: roleId },
+        select: { permissions: true },
+    });
+    if (!role) throw new Error("Role not found.");
+
+    const current = normalizeStaffPanelPermissions(role.permissions);
+    const next = setStaffPermissionValue(current, key, !getStaffPermissionValue(current, key));
+
+    await db.staffRole.update({
+        where: { id: roleId },
+        data: { permissions: next },
+    });
+
+    revalidatePermissionPaths();
+}
+
+export async function assignMemberStaffRoleAction(formData: FormData) {
+    await ensureCanManageMembers();
+
+    const memberId = String(formData.get("memberId") || "").trim();
+    const staffRoleId = String(formData.get("staffRoleId") || "").trim();
+    if (!memberId) throw new Error("Missing member id.");
+    if (!staffRoleId) throw new Error("Missing staff role id.");
+
+    const staffRole = await db.staffRole.findUnique({
+        where: { id: staffRoleId },
+        select: { id: true, baseRole: true },
+    });
+    if (!staffRole) throw new Error("Staff role not found.");
+
+    await db.projectMember.update({
+        where: { id: memberId },
+        data: {
+            staffRoleId: staffRole.id,
+            role: parseProjectRole(staffRole.baseRole),
+        },
+    });
+
+    revalidatePermissionPaths();
+}
+
+export async function toggleMemberStaffPermissionOverrideAction(formData: FormData) {
+    await ensureCanManageMembers();
+
+    const memberId = String(formData.get("memberId") || "").trim();
+    const key = parseStaffPermissionKey(formData.get("permissionKey"));
+    if (!memberId) throw new Error("Missing member id.");
+
+    const member = await db.projectMember.findUnique({
+        where: { id: memberId },
+        select: {
+            staffPermissionOverrides: true,
+            staffRole: { select: { permissions: true } },
+        },
+    });
+    if (!member) throw new Error("Member not found.");
+
+    const rolePermissions = normalizeStaffPanelPermissions(member.staffRole?.permissions);
+    const effectivePermissions = mergeStaffPanelPermissions(
+        rolePermissions,
+        member.staffPermissionOverrides
+    );
+    const next = setStaffPermissionValue(
+        effectivePermissions,
+        key,
+        !getStaffPermissionValue(effectivePermissions, key)
+    );
+
+    await db.projectMember.update({
+        where: { id: memberId },
+        data: { staffPermissionOverrides: next },
+    });
+
+    revalidatePermissionPaths();
+}
+
+export async function clearMemberStaffPermissionOverridesAction(formData: FormData) {
+    await ensureCanManageMembers();
+
+    const memberId = String(formData.get("memberId") || "").trim();
+    if (!memberId) throw new Error("Missing member id.");
+
+    await db.projectMember.update({
+        where: { id: memberId },
+        data: { staffPermissionOverrides: Prisma.JsonNull },
+    });
+
+    revalidatePermissionPaths();
 }
 
 export async function getMentionableUsers() {

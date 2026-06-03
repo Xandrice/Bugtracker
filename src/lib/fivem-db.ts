@@ -90,6 +90,8 @@ export type StaffToolsSnapshot = {
   vehicleCapabilities: VehicleTableCapabilities | null;
   economy: StaffEconomyStats | null;
   players: StaffPlayer[];
+  selectedPlayer: StaffPlayer | null;
+  selectedPlayerVehicles: StaffVehicle[];
   vehicles: StaffVehicle[];
   stats: {
     totalPlayers: number | null;
@@ -652,6 +654,57 @@ function resolveVehicleStoredValue(
   return toBoolean(raw);
 }
 
+function mapPlayerRow(row: Record<string, unknown>, capabilities: PlayerTableCapabilities): StaffPlayer {
+  const identifier = normalizeText(row[capabilities.idColumn]) || "unknown";
+  const displayName = resolvePlayerDisplayName(row, capabilities);
+  const charInfo = resolvePlayerCharInfo(row, capabilities);
+  const fullRow = normalizeRowForDisplay(row);
+  const { cash, bank } = resolvePlayerMoney(row, capabilities);
+  const job = capabilities.jobColumn ? normalizeText(row[capabilities.jobColumn]) : null;
+  const banned = capabilities.bannedColumn ? toBoolean(row[capabilities.bannedColumn]) : null;
+  const whitelisted = capabilities.whitelistedColumn
+    ? toBoolean(row[capabilities.whitelistedColumn])
+    : null;
+
+  return {
+    identifier,
+    displayName,
+    charInfo,
+    fullRow,
+    job,
+    cash,
+    bank,
+    banned,
+    whitelisted,
+  };
+}
+
+function mapVehicleRow(row: Record<string, unknown>, capabilities: VehicleTableCapabilities): StaffVehicle {
+  const key = normalizeText(row[capabilities.keyColumn]) || "unknown";
+  const ownerIdentifier = capabilities.ownerColumn
+    ? normalizeText(row[capabilities.ownerColumn])
+    : null;
+  const plate = capabilities.plateColumn ? normalizeText(row[capabilities.plateColumn]) : null;
+  const model = resolveVehicleModel(row, capabilities);
+  const garage = capabilities.garageColumn ? normalizeText(row[capabilities.garageColumn]) : null;
+  const stored = resolveVehicleStoredValue(row, capabilities);
+  const impounded = capabilities.impoundedColumn
+    ? toBoolean(row[capabilities.impoundedColumn])
+    : null;
+  const state = capabilities.stateColumn ? normalizeText(row[capabilities.stateColumn]) : null;
+
+  return {
+    key,
+    ownerIdentifier,
+    plate,
+    model,
+    garage,
+    stored,
+    impounded,
+    state,
+  };
+}
+
 async function fetchPlayers(
   capabilities: PlayerTableCapabilities,
   search: string,
@@ -669,31 +722,23 @@ async function fetchPlayers(
   `;
 
   const rows = await queryRows<RowDataPacket>(sql, [...params, limit]);
-  return rows.map((row) => {
-    const plain = row as Record<string, unknown>;
-    const identifier = normalizeText(plain[capabilities.idColumn]) || "unknown";
-    const displayName = resolvePlayerDisplayName(plain, capabilities);
-    const charInfo = resolvePlayerCharInfo(plain, capabilities);
-    const fullRow = normalizeRowForDisplay(plain);
-    const { cash, bank } = resolvePlayerMoney(plain, capabilities);
-    const job = capabilities.jobColumn ? normalizeText(plain[capabilities.jobColumn]) : null;
-    const banned = capabilities.bannedColumn ? toBoolean(plain[capabilities.bannedColumn]) : null;
-    const whitelisted = capabilities.whitelistedColumn
-      ? toBoolean(plain[capabilities.whitelistedColumn])
-      : null;
+  return rows.map((row) => mapPlayerRow(row as Record<string, unknown>, capabilities));
+}
 
-    return {
-      identifier,
-      displayName,
-      charInfo,
-      fullRow,
-      job,
-      cash,
-      bank,
-      banned,
-      whitelisted,
-    };
-  });
+async function fetchPlayerByIdentifier(
+  capabilities: PlayerTableCapabilities,
+  identifier: string
+): Promise<StaffPlayer | null> {
+  const sql = `
+    SELECT *
+    FROM ${quoteIdentifier(capabilities.tableName)}
+    WHERE ${quoteIdentifier(capabilities.idColumn)} = ?
+    LIMIT 1
+  `;
+
+  const rows = await queryRows<RowDataPacket>(sql, [identifier]);
+  const row = rows[0];
+  return row ? mapPlayerRow(row as Record<string, unknown>, capabilities) : null;
 }
 
 async function fetchVehicles(
@@ -727,32 +772,42 @@ async function fetchVehicles(
   `;
 
   const rows = await queryRows<RowDataPacket>(sql, [...params, limit]);
-  return rows.map((row) => {
-    const plain = row as Record<string, unknown>;
-    const key = normalizeText(plain[capabilities.keyColumn]) || "unknown";
-    const ownerIdentifier = capabilities.ownerColumn
-      ? normalizeText(plain[capabilities.ownerColumn])
-      : null;
-    const plate = capabilities.plateColumn ? normalizeText(plain[capabilities.plateColumn]) : null;
-    const model = resolveVehicleModel(plain, capabilities);
-    const garage = capabilities.garageColumn ? normalizeText(plain[capabilities.garageColumn]) : null;
-    const stored = resolveVehicleStoredValue(plain, capabilities);
-    const impounded = capabilities.impoundedColumn
-      ? toBoolean(plain[capabilities.impoundedColumn])
-      : null;
-    const state = capabilities.stateColumn ? normalizeText(plain[capabilities.stateColumn]) : null;
+  return rows.map((row) => mapVehicleRow(row as Record<string, unknown>, capabilities));
+}
 
-    return {
-      key,
-      ownerIdentifier,
-      plate,
-      model,
-      garage,
-      stored,
-      impounded,
-      state,
-    };
-  });
+async function fetchVehiclesByOwner(
+  capabilities: VehicleTableCapabilities,
+  ownerIdentifier: string,
+  limit: number
+): Promise<StaffVehicle[]> {
+  if (!capabilities.ownerColumn) return [];
+
+  const selectedColumns = buildSelectColumns([
+    capabilities.keyColumn,
+    capabilities.ownerColumn,
+    capabilities.plateColumn,
+    capabilities.modelColumn,
+    capabilities.garageColumn,
+    capabilities.storedColumn,
+    capabilities.stateColumn,
+    capabilities.impoundedColumn,
+    capabilities.vehicleJsonColumn,
+    capabilities.updatedAtColumn,
+  ]);
+
+  const sqlColumns = selectedColumns.map((column) => quoteIdentifier(column)).join(", ");
+  const orderByColumn = capabilities.updatedAtColumn || capabilities.keyColumn;
+
+  const sql = `
+    SELECT ${sqlColumns}
+    FROM ${quoteIdentifier(capabilities.tableName)}
+    WHERE ${quoteIdentifier(capabilities.ownerColumn)} = ?
+    ORDER BY ${quoteIdentifier(orderByColumn)} DESC
+    LIMIT ?
+  `;
+
+  const rows = await queryRows<RowDataPacket>(sql, [ownerIdentifier, limit]);
+  return rows.map((row) => mapVehicleRow(row as Record<string, unknown>, capabilities));
 }
 
 function sumByAliases(
@@ -882,6 +937,7 @@ async function fetchCurrentFieldValue(
 export async function getStaffToolsSnapshot(input?: {
   playerSearch?: string;
   vehicleSearch?: string;
+  selectedPlayerIdentifier?: string;
   limit?: number;
   includeEconomy?: boolean;
 }): Promise<StaffToolsSnapshot> {
@@ -894,6 +950,8 @@ export async function getStaffToolsSnapshot(input?: {
       vehicleCapabilities: null,
       economy: null,
       players: [],
+      selectedPlayer: null,
+      selectedPlayerVehicles: [],
       vehicles: [],
       stats: { totalPlayers: null, totalVehicles: null, bannedPlayers: null },
     };
@@ -905,10 +963,26 @@ export async function getStaffToolsSnapshot(input?: {
     const schema = await getSchemaSnapshot();
     const playerCapabilities = detectPlayerCapabilities(schema);
     const vehicleCapabilities = detectVehicleCapabilities(schema);
+    const selectedPlayerIdentifier = input?.selectedPlayerIdentifier?.trim();
 
-    const [players, vehicles, economy, totalPlayers, totalVehicles, bannedPlayers] = await Promise.all([
+    const [
+      players,
+      vehicles,
+      selectedPlayer,
+      selectedPlayerVehicles,
+      economy,
+      totalPlayers,
+      totalVehicles,
+      bannedPlayers,
+    ] = await Promise.all([
       playerCapabilities ? fetchPlayers(playerCapabilities, input?.playerSearch || "", limit) : Promise.resolve([]),
       vehicleCapabilities ? fetchVehicles(vehicleCapabilities, input?.vehicleSearch || "", limit) : Promise.resolve([]),
+      playerCapabilities && selectedPlayerIdentifier
+        ? fetchPlayerByIdentifier(playerCapabilities, selectedPlayerIdentifier)
+        : Promise.resolve(null),
+      vehicleCapabilities?.ownerColumn && selectedPlayerIdentifier
+        ? fetchVehiclesByOwner(vehicleCapabilities, selectedPlayerIdentifier, 25)
+        : Promise.resolve([]),
       includeEconomy && playerCapabilities ? fetchEconomyStats(playerCapabilities) : Promise.resolve(null),
       playerCapabilities ? countRows(playerCapabilities.tableName) : Promise.resolve(null),
       vehicleCapabilities ? countRows(vehicleCapabilities.tableName) : Promise.resolve(null),
@@ -927,6 +1001,8 @@ export async function getStaffToolsSnapshot(input?: {
       vehicleCapabilities,
       economy,
       players,
+      selectedPlayer,
+      selectedPlayerVehicles,
       vehicles,
       stats: {
         totalPlayers,
@@ -942,6 +1018,8 @@ export async function getStaffToolsSnapshot(input?: {
       vehicleCapabilities: null,
       economy: null,
       players: [],
+      selectedPlayer: null,
+      selectedPlayerVehicles: [],
       vehicles: [],
       stats: { totalPlayers: null, totalVehicles: null, bannedPlayers: null },
     };
@@ -1018,6 +1096,51 @@ export async function toggleVehicleStorageState(vehicleKey: string): Promise<voi
     LIMIT 1
   `;
   const result = await execute(sql, [updateValue, vehicleKey]);
+  if (result.affectedRows < 1) {
+    throw new Error("No vehicle row was updated.");
+  }
+}
+
+export async function putVehicleInGarage(vehicleKey: string, garageName: string): Promise<void> {
+  const garage = garageName.trim();
+  if (!garage) {
+    throw new Error("Garage name is required.");
+  }
+  if (garage.length > 100) {
+    throw new Error("Garage name must be 100 characters or fewer.");
+  }
+
+  const schema = await getSchemaSnapshot();
+  const capabilities = detectVehicleCapabilities(schema);
+  if (!capabilities) {
+    throw new Error("Could not locate a vehicle table in the FiveM database.");
+  }
+
+  if (!capabilities.garageColumn) {
+    throw new Error("The detected vehicle table does not expose a garage column.");
+  }
+
+  const storageColumn = capabilities.storedColumn || capabilities.stateColumn;
+  if (!storageColumn) {
+    throw new Error("The detected vehicle table does not expose a stored/state column.");
+  }
+
+  const currentStorageValue = await fetchCurrentFieldValue(
+    capabilities.tableName,
+    capabilities.keyColumn,
+    vehicleKey,
+    storageColumn
+  );
+  const storedValue = coerceBooleanForDatabase(currentStorageValue, true);
+
+  const sql = `
+    UPDATE ${quoteIdentifier(capabilities.tableName)}
+    SET ${quoteIdentifier(capabilities.garageColumn)} = ?,
+        ${quoteIdentifier(storageColumn)} = ?
+    WHERE ${quoteIdentifier(capabilities.keyColumn)} = ?
+    LIMIT 1
+  `;
+  const result = await execute(sql, [garage, storedValue, vehicleKey]);
   if (result.affectedRows < 1) {
     throw new Error("No vehicle row was updated.");
   }

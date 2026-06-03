@@ -21,7 +21,19 @@ import {
 } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 
-function navItems(canViewLogs: boolean, canAccessStaffTools: boolean) {
+type StaffToolAccess = {
+  players: boolean;
+  vehicles: boolean;
+  economy: boolean;
+};
+
+function navItems(canViewLogs: boolean, staffToolAccess: StaffToolAccess) {
+  const staffToolItems = [
+    ...(staffToolAccess.players ? [{ name: "Players", href: "/staff-tools/players", icon: Users }] : []),
+    ...(staffToolAccess.vehicles ? [{ name: "Vehicles", href: "/staff-tools/vehicles", icon: Car }] : []),
+    ...(staffToolAccess.economy ? [{ name: "Economy", href: "/staff-tools/economy", icon: Coins }] : []),
+  ];
+
   return [
   {
     title: "Dashboard",
@@ -46,15 +58,11 @@ function navItems(canViewLogs: boolean, canAccessStaffTools: boolean) {
       ...(canViewLogs ? [{ name: "Logs", href: "/logs", icon: Logs }] : []),
     ],
   },
-  ...(canAccessStaffTools
+  ...(staffToolItems.length > 0
     ? [
         {
           title: "Staff tools",
-          items: [
-            { name: "Players", href: "/staff-tools/players", icon: Users },
-            { name: "Vehicles", href: "/staff-tools/vehicles", icon: Car },
-            { name: "Economy", href: "/staff-tools/economy", icon: Coins },
-          ],
+          items: staffToolItems,
         },
       ]
     : []),
@@ -72,15 +80,15 @@ function navItems(canViewLogs: boolean, canAccessStaffTools: boolean) {
 export function LeftSidebar({
   isLoggedIn,
   canViewLogs = false,
-  canAccessStaffTools = false,
+  staffToolAccess = { players: false, vehicles: false, economy: false },
 }: {
   isLoggedIn: boolean;
   canViewLogs?: boolean;
-  canAccessStaffTools?: boolean;
+  staffToolAccess?: StaffToolAccess;
 }) {
   const pathname = usePathname();
   const groups = isLoggedIn
-    ? navItems(canViewLogs, canAccessStaffTools)
+    ? navItems(canViewLogs, staffToolAccess)
     : [
         {
           title: "Work",

@@ -181,10 +181,28 @@ model Note {
 }
 
 model ProjectMember {
-  id        String   @id @default(cuid())
-  discordId String   @unique
-  role      String   @default("Member")
-  createdAt DateTime @default(now())
+  id                       String     @id @default(cuid())
+  discordId                String     @unique
+  role                     String     @default("Member")
+  staffRoleId              String?
+  staffPermissionOverrides Json?
+  createdAt                DateTime   @default(now())
+
+  staffRole StaffRole? @relation(fields: [staffRoleId], references: [id], onDelete: SetNull)
+
+  @@index([staffRoleId])
+}
+
+model StaffRole {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  baseRole    String   @default("Member")
+  permissions Json
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members ProjectMember[]
 }
 
 model AppSetting {

@@ -17,7 +17,13 @@ import { LeftSidebar } from "@/components/layout/LeftSidebar";
 import { GlobalSearchTrigger } from "@/components/layout/GlobalSearch";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { auth } from "@/../auth";
-import { canAccessStaffTools, canViewLogs, getPermissionContext } from "@/lib/permissions";
+import {
+    canViewLogs,
+    canViewStaffEconomy,
+    canViewStaffPlayers,
+    canViewStaffVehicles,
+    getPermissionContext,
+} from "@/lib/permissions";
 import { SITE_METADATA_DESCRIPTION, SITE_METADATA_TITLE } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -33,7 +39,11 @@ export default async function RootLayout({
     const session = await auth();
     const permissionContext = await getPermissionContext(session?.user?.id);
     const showLogs = canViewLogs(permissionContext);
-    const showStaffTools = canAccessStaffTools(permissionContext);
+    const staffToolAccess = {
+        players: canViewStaffPlayers(permissionContext),
+        vehicles: canViewStaffVehicles(permissionContext),
+        economy: canViewStaffEconomy(permissionContext),
+    };
 
     return (
         <html lang="en" suppressHydrationWarning className="h-full">
@@ -62,7 +72,7 @@ export default async function RootLayout({
                             <LeftSidebar
                                 isLoggedIn={!!session?.user?.id}
                                 canViewLogs={showLogs}
-                                canAccessStaffTools={showStaffTools}
+                                staffToolAccess={staffToolAccess}
                             />
                             <main className="flex-1 min-h-0 overflow-y-auto bg-background">
                                 {children}

@@ -4,11 +4,14 @@ import { auth } from "@/../auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
-  canAccessStaffTools,
+  canManageStaffPlayers,
+  canManageStaffVehicles,
+  canRefreshStaffSchema,
   getPermissionContext,
   requirePermission,
 } from "@/lib/permissions";
 import {
+  putVehicleInGarage,
   refreshFiveMSchemaCache,
   togglePlayerFlag,
   toggleVehicleStorageState,
@@ -18,50 +21,69 @@ function redirectToSignIn(): never {
   redirect("/api/auth/signin?callbackUrl=/staff-tools");
 }
 
-async function ensureStaffAccess() {
+async function ensureStaffPermission(allowed: (permissions: Awaited<ReturnType<typeof getPermissionContext>>) => boolean) {
   const session = await auth();
   if (!session?.user?.id) redirectToSignIn();
 
   const permissions = await getPermissionContext(session.user.id);
   const denied = requirePermission(
-    canAccessStaffTools(permissions),
+    allowed(permissions),
     "You do not have permission to access staff tools."
   );
   if (denied) throw new Error(denied.error);
 }
 
+function revalidateStaffToolPages() {
+  revalidatePath("/staff-tools");
+  revalidatePath("/staff-tools/players");
+  revalidatePath("/staff-tools/vehicles");
+  revalidatePath("/staff-tools/economy");
+}
+
 export async function togglePlayerBanAction(formData: FormData) {
-  await ensureStaffAccess();
+  await ensureStaffPermission(canManageStaffPlayers);
 
   const identifier = String(formData.get("playerIdentifier") || "").trim();
   if (!identifier) throw new Error("Missing player identifier.");
 
   await togglePlayerFlag(identifier, "banned");
-  revalidatePath("/staff-tools");
+  revalidateStaffToolPages();
 }
 
 export async function togglePlayerWhitelistAction(formData: FormData) {
-  await ensureStaffAccess();
+  await ensureStaffPermission(canManageStaffPlayers);
 
   const identifier = String(formData.get("playerIdentifier") || "").trim();
   if (!identifier) throw new Error("Missing player identifier.");
 
   await togglePlayerFlag(identifier, "whitelisted");
-  revalidatePath("/staff-tools");
+  revalidateStaffToolPages();
 }
 
 export async function toggleVehicleStorageAction(formData: FormData) {
-  await ensureStaffAccess();
+  await ensureStaffPermission(canManageStaffVehicles);
 
   const vehicleKey = String(formData.get("vehicleKey") || "").trim();
   if (!vehicleKey) throw new Error("Missing vehicle key.");
 
   await toggleVehicleStorageState(vehicleKey);
-  revalidatePath("/staff-tools");
+  revalidateStaffToolPages();
+}
+
+export async function putAwayVehicleAction(formData: FormData) {
+  await ensureStaffPermission(canManageStaffVehicles);
+
+  const vehicleKey = String(formData.get("vehicleKey") || "").trim();
+  const garageName = String(formData.get("garageName") || "").trim();
+  if (!vehicleKey) throw new Error("Missing vehicle key.");
+  if (!garageName) throw new Error("Missing garage name.");
+
+  await putVehicleInGarage(vehicleKey, garageName);
+  revalidateStaffToolPages();
 }
 
 export async function refreshStaffSchemaAction() {
-  await ensureStaffAccess();
+  await ensureStaffPermission(canRefreshStaffSchema);
   await refreshFiveMSchemaCache();
-  revalidatePath("/staff-tools");
+  revalidateStaffToolPages();
 }
