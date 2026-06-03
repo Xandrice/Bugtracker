@@ -7,7 +7,6 @@ import { redirect } from "next/navigation";
 import {
   canManageAnnouncements,
   canManageIncidents,
-  canManageReleases,
   canManageReports,
   getPermissionContext,
   requirePermission,
@@ -243,66 +242,6 @@ export async function updateIncidentStatus(formData: FormData) {
   revalidatePath("/incidents");
   revalidatePath(`/incidents/${id}`);
   revalidatePath("/");
-}
-
-// ---------- Releases ----------
-
-export async function createRelease(formData: FormData) {
-  const actor = await getActor();
-  if (!actor) redirectToSignIn();
-
-  const denied = requirePermission(canManageReleases(actor.permissions));
-  if (denied) throw new Error(denied.error);
-
-  const name = (formData.get("name") as string | null)?.trim();
-  const description = (formData.get("description") as string | null)?.trim();
-  const targetDateRaw = formData.get("targetDate") as string | null;
-  if (!name) throw new Error("Name required");
-
-  const release = await (db as any).release.create({
-    data: {
-      name,
-      description: description || null,
-      targetDate: targetDateRaw ? new Date(targetDateRaw) : null,
-      authorId: actor.userId,
-    },
-  });
-
-  revalidatePath("/releases");
-  redirect(`/releases/${release.id}`);
-}
-
-export async function linkIssueToRelease(formData: FormData) {
-  const actor = await getActor();
-  if (!actor) redirectToSignIn();
-
-  const denied = requirePermission(canManageReleases(actor.permissions));
-  if (denied) throw new Error(denied.error);
-
-  const releaseId = formData.get("releaseId") as string | null;
-  const issueRefRaw = (formData.get("issueRef") as string | null)?.trim();
-  if (!releaseId || !issueRefRaw) throw new Error("Missing fields");
-
-  const cleaned = issueRefRaw.replace(/^#/, "").toLowerCase();
-  let issue = await db.issue.findUnique({
-    where: { publicKey: cleaned },
-    select: { id: true },
-  });
-  if (!issue) {
-    issue = await db.issue.findUnique({
-      where: { id: issueRefRaw },
-      select: { id: true },
-    });
-  }
-  if (!issue) throw new Error("Issue not found");
-
-  await (db as any).releaseIssue.upsert({
-    where: { releaseId_issueId: { releaseId, issueId: issue.id } },
-    create: { releaseId, issueId: issue.id },
-    update: {},
-  });
-
-  revalidatePath(`/releases/${releaseId}`);
 }
 
 // ---------- Player reports ----------

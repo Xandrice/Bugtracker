@@ -2,7 +2,6 @@ export const NOTE_THREAD_CATEGORIES = [
   { id: "GENERAL", label: "General" },
   { id: "DEV", label: "Development" },
   { id: "OPS", label: "Operations" },
-  { id: "RELEASES", label: "Releases" },
   { id: "INCIDENTS", label: "Incidents" },
   { id: "IDEAS", label: "Ideas" },
 ] as const;

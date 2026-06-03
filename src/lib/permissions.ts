@@ -199,10 +199,6 @@ export function canManageIncidents(context: PermissionContext | null): boolean {
   return hasRole(context, new Set([...MANAGE_ROLES, "Moderator" as ProjectRole]));
 }
 
-export function canManageReleases(context: PermissionContext | null): boolean {
-  return hasRole(context, new Set([...MANAGE_ROLES, "Developer" as ProjectRole]));
-}
-
 export function canManageReports(context: PermissionContext | null): boolean {
   return hasRole(context, new Set([...MANAGE_ROLES, "Moderator" as ProjectRole]));
 }

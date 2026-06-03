@@ -13,7 +13,6 @@ import {
   Settings2,
   Plus,
   AlertTriangle,
-  Rocket,
   Shield,
   Logs,
   Car,
@@ -53,7 +52,6 @@ function navItems(canViewLogs: boolean, staffToolAccess: StaffToolAccess) {
     title: "Operations",
     items: [
       { name: "Incidents", href: "/incidents", icon: AlertTriangle },
-      { name: "Releases", href: "/releases", icon: Rocket },
       { name: "Player reports", href: "/reports", icon: Shield },
       ...(canViewLogs ? [{ name: "Logs", href: "/logs", icon: Logs }] : []),
     ],
