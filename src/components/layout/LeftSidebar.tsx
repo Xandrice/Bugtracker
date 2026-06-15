@@ -52,7 +52,7 @@ function navItems(canViewLogs: boolean, staffToolAccess: StaffToolAccess) {
     title: "Operations",
     items: [
       { name: "Incidents", href: "/incidents", icon: AlertTriangle },
-      { name: "Player reports", href: "/reports", icon: Shield },
+      { name: "Mod log", href: "/reports", icon: Shield },
       ...(canViewLogs ? [{ name: "Logs", href: "/logs", icon: Logs }] : []),
     ],
   },

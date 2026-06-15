@@ -12,6 +12,10 @@ import {
   requirePermission,
 } from "@/lib/permissions";
 import { formatIssueRef } from "@/lib/issue-ids";
+import { getAppBaseUrl, sendDiscordChannelMessage } from "@/lib/discord";
+import { getStaffUsers } from "@/lib/staff";
+
+const MODLOG_CHANNEL_KEY = "discord.modlog.channel";
 
 function redirectToSignIn(): never {
   redirect("/api/auth/signin");
@@ -29,12 +33,12 @@ async function getActor() {
 
 export async function globalSearch(query: string) {
   const session = await auth();
-  if (!session?.user?.id) return { issues: [], notes: [], members: [] };
+  if (!session?.user?.id) return { issues: [], notes: [], members: [], reports: [] };
 
   const q = query.trim();
-  if (!q || q.length < 2) return { issues: [], notes: [], members: [] };
+  if (!q || q.length < 2) return { issues: [], notes: [], members: [], reports: [] };
 
-  const [issues, notes, members] = await Promise.all([
+  const [issues, notes, members, reports] = await Promise.all([
     db.issue.findMany({
       where: {
         OR: [
@@ -62,6 +66,28 @@ export async function globalSearch(query: string) {
       where: { discordId: { contains: q } },
       take: 5,
     }),
+    (db as any).playerReport.findMany({
+      where: {
+        OR: [
+          { title: { contains: q, mode: "insensitive" } },
+          { description: { contains: q, mode: "insensitive" } },
+          { subjectName: { contains: q, mode: "insensitive" } },
+          { accusedPlayer: { contains: q, mode: "insensitive" } },
+          { reporterName: { contains: q, mode: "insensitive" } },
+          { subjectDiscordId: { contains: q } },
+        ],
+      },
+      take: 6,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        category: true,
+        subjectName: true,
+        subjectDiscordId: true,
+      },
+      orderBy: { updatedAt: "desc" },
+    }),
   ]);
 
   return {
@@ -87,6 +113,14 @@ export async function globalSearch(query: string) {
       discordId: m.discordId,
       role: m.role,
       href: "/members",
+    })),
+    reports: reports.map((r: any) => ({
+      id: r.id,
+      title: r.title,
+      status: r.status,
+      category: r.category,
+      subject: r.subjectName || r.subjectDiscordId || null,
+      href: `/reports/${r.id}`,
     })),
   };
 }
@@ -254,6 +288,8 @@ export async function createPlayerReport(formData: FormData) {
   const description = (formData.get("description") as string | null)?.trim();
   const reporterName = (formData.get("reporterName") as string | null)?.trim();
   const accusedPlayer = (formData.get("accusedPlayer") as string | null)?.trim();
+  const subjectDiscordId = (formData.get("subjectDiscordId") as string | null)?.trim();
+  const subjectName = (formData.get("subjectName") as string | null)?.trim();
   const category = (formData.get("category") as string | null) || "OTHER";
   const evidenceLinks = (formData.get("evidenceLinks") as string | null)?.trim();
 
@@ -265,14 +301,113 @@ export async function createPlayerReport(formData: FormData) {
       description: description || null,
       reporterName: reporterName || null,
       accusedPlayer: accusedPlayer || null,
+      subjectDiscordId: subjectDiscordId || null,
+      subjectName: subjectName || null,
       category,
       evidenceLinks: evidenceLinks || null,
       reporterId: actor.userId,
     },
   });
 
+  await postModLogToDiscord({
+    reportId: report.id,
+    title,
+    description: description || null,
+    category,
+    subjectDiscordId: subjectDiscordId || null,
+    subjectName: subjectName || null,
+    loggedBy: actor.session.user?.name || "Staff",
+  });
+
   revalidatePath("/reports");
   redirect(`/reports/${report.id}`);
+}
+
+async function postModLogToDiscord(entry: {
+  reportId: string;
+  title: string;
+  description: string | null;
+  category: string;
+  subjectDiscordId: string | null;
+  subjectName: string | null;
+  loggedBy: string;
+}) {
+  try {
+    const setting = await (db as any).appSetting.findUnique({
+      where: { key: MODLOG_CHANNEL_KEY },
+      select: { value: true },
+    });
+    const channelId = (setting?.value || "").trim();
+    if (!channelId) return;
+
+    const subjectLine = entry.subjectDiscordId
+      ? `<@${entry.subjectDiscordId}>${entry.subjectName ? ` (${entry.subjectName})` : ""} \`${entry.subjectDiscordId}\``
+      : entry.subjectName || "Unknown member";
+
+    const link = `${getAppBaseUrl()}/reports/${entry.reportId}`;
+    const parts = [
+      "**📋 New mod-log entry**",
+      `**${entry.title}**`,
+      `Member: ${subjectLine}`,
+      `Category: ${entry.category}`,
+      ...(entry.description ? [entry.description.slice(0, 1500)] : []),
+      `Logged by ${entry.loggedBy}`,
+      link,
+    ];
+
+    await sendDiscordChannelMessage(channelId, parts.join("\n"));
+  } catch (error) {
+    // Notifying Discord is best-effort; never block the entry from being saved.
+    console.error("Failed to post mod-log entry to Discord", error);
+  }
+}
+
+// ---------- Mod-log settings ----------
+
+export async function getModLogSettings() {
+  const session = await auth();
+  if (!session?.user?.id) return { channelId: "" };
+
+  const setting = await (db as any).appSetting.findUnique({
+    where: { key: MODLOG_CHANNEL_KEY },
+    select: { value: true },
+  });
+  return { channelId: setting?.value || "" };
+}
+
+export async function saveModLogSettings(input: { channelId?: string }) {
+  const actor = await getActor();
+  if (!actor) redirectToSignIn();
+
+  const denied = requirePermission(canManageReports(actor.permissions));
+  if (denied) throw new Error(denied.error);
+
+  const channelId = (input.channelId || "").trim();
+  if (channelId) {
+    await (db as any).appSetting.upsert({
+      where: { key: MODLOG_CHANNEL_KEY },
+      create: { key: MODLOG_CHANNEL_KEY, value: channelId },
+      update: { value: channelId },
+    });
+  } else {
+    await (db as any).appSetting.deleteMany({ where: { key: MODLOG_CHANNEL_KEY } });
+  }
+
+  revalidatePath("/settings");
+  return { channelId };
+}
+
+export async function getModLogMembers() {
+  const session = await auth();
+  if (!session?.user?.id) return [];
+
+  const staff = await getStaffUsers();
+  return staff
+    .filter((member) => !!member.discordId)
+    .map((member) => ({
+      discordId: member.discordId as string,
+      name: member.name,
+    }));
 }
 
 export async function updatePlayerReportStatus(formData: FormData) {

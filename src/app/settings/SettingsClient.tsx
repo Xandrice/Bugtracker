@@ -14,6 +14,7 @@ import {
     toggleStaffRolePermissionAction,
     updateStaffRoleBaseRoleAction,
 } from "@/app/actions";
+import { getModLogSettings, saveModLogSettings } from "@/app/staff-actions";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -94,9 +95,11 @@ export function SettingsClient({
     const [isExporting, setIsExporting] = useState<false | "json" | "csv">(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSavingForums, setIsSavingForums] = useState(false);
+    const [isSavingModLog, setIsSavingModLog] = useState(false);
 
     const [suggestionsForumId, setSuggestionsForumId] = useState("");
     const [bugsForumId, setBugsForumId] = useState("");
+    const [modLogChannelId, setModLogChannelId] = useState("");
 
     useEffect(() => {
         setMounted(true);
@@ -105,6 +108,10 @@ export function SettingsClient({
                 const settings = await getDiscordForumSettings();
                 setSuggestionsForumId(settings.suggestionsForumId);
                 setBugsForumId(settings.bugsForumId);
+            } catch {}
+            try {
+                const modLog = await getModLogSettings();
+                setModLogChannelId(modLog.channelId);
             } catch {}
         })();
     }, []);
@@ -118,6 +125,18 @@ export function SettingsClient({
             alert("Failed to save Discord forum settings.");
         } finally {
             setIsSavingForums(false);
+        }
+    };
+
+    const saveModLogChannel = async () => {
+        setIsSavingModLog(true);
+        try {
+            await saveModLogSettings({ channelId: modLogChannelId });
+            alert("Mod-log channel saved.");
+        } catch {
+            alert("Failed to save mod-log channel.");
+        } finally {
+            setIsSavingModLog(false);
         }
     };
 
@@ -245,6 +264,43 @@ export function SettingsClient({
                                 >
                                     {isSavingForums && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                                     {isSavingForums ? "Saving..." : "Save Discord forums"}
+                                </Button>
+                            </CardBody>
+                        </Card>
+                    )}
+
+                    {activeTab === "general" && (
+                        <Card>
+                            <CardHeader>
+                                <div className="space-y-1">
+                                    <CardTitle>Mod log</CardTitle>
+                                    <p className="text-xs text-muted-foreground">
+                                        New mod-log entries are posted to this Discord channel. Leave blank to
+                                        disable notifications.
+                                    </p>
+                                </div>
+                            </CardHeader>
+                            <CardBody className="space-y-4">
+                                <FieldRow
+                                    label="Mod-log channel ID"
+                                    hint="Right-click the channel in Discord → Copy Channel ID (requires Developer Mode). The bot must be able to post there."
+                                >
+                                    <Input
+                                        value={modLogChannelId}
+                                        onChange={(e) => setModLogChannelId(e.target.value)}
+                                        className="font-mono"
+                                        placeholder="e.g. 112233445566778899"
+                                    />
+                                </FieldRow>
+                                <Button
+                                    type="button"
+                                    onClick={saveModLogChannel}
+                                    disabled={isSavingModLog}
+                                    variant="primary"
+                                    size="md"
+                                >
+                                    {isSavingModLog && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                                    {isSavingModLog ? "Saving..." : "Save mod-log channel"}
                                 </Button>
                             </CardBody>
                         </Card>

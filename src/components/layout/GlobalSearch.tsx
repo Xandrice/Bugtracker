@@ -62,7 +62,7 @@ export function GlobalSearchDialog() {
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search issues, docs, members…"
+            placeholder="Search issues, docs, members, mod log…"
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-subtle-foreground"
           />
           {isPending && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
@@ -122,7 +122,7 @@ export function GlobalSearchDialog() {
           )}
 
           {results && results.members.length > 0 && (
-            <section>
+            <section className="mb-3">
               <h3 className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Members
               </h3>
@@ -139,11 +139,41 @@ export function GlobalSearchDialog() {
             </section>
           )}
 
+          {results && results.reports.length > 0 && (
+            <section>
+              <h3 className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Mod log
+              </h3>
+              {results.reports.map((item: {
+                id: string;
+                title: string;
+                status: string;
+                category: string;
+                subject: string | null;
+                href: string;
+              }) => (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  className="block rounded-md px-2 py-1.5 hover:bg-muted"
+                >
+                  {item.title}
+                  {item.subject && (
+                    <span className="text-[11px] text-muted-foreground"> · {item.subject}</span>
+                  )}
+                  <span className="text-[11px] text-muted-foreground"> · {item.status}</span>
+                </Link>
+              ))}
+            </section>
+          )}
+
           {query.trim().length >= 2 &&
             results &&
             results.issues.length === 0 &&
             results.notes.length === 0 &&
             results.members.length === 0 &&
+            results.reports.length === 0 &&
             !isPending && (
               <p className="px-2 py-4 text-xs text-muted-foreground">
                 No results for &ldquo;{query}&rdquo;

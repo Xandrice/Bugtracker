@@ -5,6 +5,7 @@ import { getStaffUsers } from "@/lib/staff";
 import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardBody } from "@/components/ui/Card";
 import { MarkdownContent } from "@/components/ui/MarkdownContent";
+import { Avatar } from "@/components/ui/Avatar";
 import { canManageReports, getPermissionContext } from "@/lib/permissions";
 import { updatePlayerReportStatus } from "@/app/staff-actions";
 import { Button } from "@/components/ui/Button";
@@ -28,17 +29,43 @@ export default async function ReportDetailPage({
   });
   if (!report) notFound();
 
+  let subjectAccount: { name: string | null; image: string | null } | null = null;
+  if (report.subjectDiscordId) {
+    const account = await db.account.findFirst({
+      where: { provider: "discord", providerAccountId: report.subjectDiscordId },
+      include: { user: true },
+    });
+    if (account?.user) {
+      subjectAccount = { name: account.user.name, image: account.user.image };
+    }
+  }
+  const subjectName = report.subjectName || subjectAccount?.name || report.accusedPlayer || null;
+
   return (
     <PageContainer className="max-w-3xl">
       <PageHeader title={report.title} description={`Status: ${report.status}`} />
       <Card>
         <CardBody className="space-y-3">
+          {(report.subjectDiscordId || subjectName) && (
+            <div className="flex items-center gap-2.5 rounded-md border border-border bg-surface-2 px-3 py-2">
+              <Avatar name={subjectName} src={subjectAccount?.image} size="md" />
+              <div className="leading-tight">
+                <p className="text-sm font-medium text-foreground">
+                  {subjectName || "Unknown member"}
+                </p>
+                {report.subjectDiscordId && (
+                  <p className="font-mono text-[11px] text-muted-foreground">
+                    {report.subjectDiscordId}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
           {report.description && <MarkdownContent content={report.description} />}
           <div className="grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-            {report.reporterName && <p>Reporter: {report.reporterName}</p>}
-            {report.accusedPlayer && <p>Accused: {report.accusedPlayer}</p>}
+            {report.reporterName && <p>Source: {report.reporterName}</p>}
             <p>Category: {report.category}</p>
-            <p>Filed by: {report.reporter?.name || "Staff"}</p>
+            <p>Logged by: {report.reporter?.name || "Staff"}</p>
           </div>
           {report.evidenceLinks && (
             <pre className="rounded-md border border-border bg-muted p-3 text-xs whitespace-pre-wrap">

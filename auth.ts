@@ -10,6 +10,25 @@ const devAuthUsername = process.env.DEV_AUTH_USERNAME || "dev"
 const devAuthPassword = process.env.DEV_AUTH_PASSWORD || "dev"
 const enableDevAutoAuth = isDev && process.env.DEV_AUTO_AUTH !== "false"
 
+function discordAvatarUrl(profile: unknown): string | null {
+    if (typeof profile !== "object" || profile === null) return null
+    const { id, avatar } = profile as { id?: unknown; avatar?: unknown }
+    if (typeof id !== "string" || typeof avatar !== "string" || !avatar) return null
+    const format = avatar.startsWith("a_") ? "gif" : "png"
+    return `https://cdn.discordapp.com/avatars/${id}/${avatar}.${format}`
+}
+
+function discordDisplayName(profile: unknown): string | null {
+    if (typeof profile !== "object" || profile === null) return null
+    const { global_name: globalName, username } = profile as {
+        global_name?: unknown
+        username?: unknown
+    }
+    if (typeof globalName === "string" && globalName) return globalName
+    if (typeof username === "string" && username) return username
+    return null
+}
+
 const nextAuth = NextAuth({
     adapter: PrismaAdapter(db),
     providers: [
@@ -49,9 +68,39 @@ const nextAuth = NextAuth({
     session: { strategy: "jwt" },
     trustHost: true,
     callbacks: {
-        async signIn({ user, account }) {
+        async signIn({ user, account, profile }) {
             if (account?.provider === "discord" && account.providerAccountId) {
                 const discordId = account.providerAccountId;
+
+                // Refresh the stored avatar/name so Discord profile changes
+                // (e.g. a new profile picture) are reflected on every login.
+                const image = discordAvatarUrl(profile);
+                const name = discordDisplayName(profile);
+                if (image) user.image = image;
+                if (name) user.name = name;
+                try {
+                    const existingAccount = await db.account.findUnique({
+                        where: {
+                            provider_providerAccountId: {
+                                provider: "discord",
+                                providerAccountId: discordId,
+                            },
+                        },
+                        select: { userId: true },
+                    });
+                    if (existingAccount?.userId && (image || name)) {
+                        await db.user.update({
+                            where: { id: existingAccount.userId },
+                            data: {
+                                ...(image ? { image } : {}),
+                                ...(name ? { name } : {}),
+                            },
+                        });
+                    }
+                } catch {
+                    // Non-fatal: failing to refresh the avatar should not block sign-in.
+                }
+
                 const member = await (db as any).projectMember.findUnique({
                     where: { discordId }
                 });

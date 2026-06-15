@@ -336,8 +336,8 @@ export default async function DashboardPage() {
         >
           <CheckCircle2 className="h-5 w-5 text-success" />
           <div>
-            <div className="text-sm font-medium text-foreground">Player reports</div>
-            <div className="text-xs text-muted-foreground">Moderation queue</div>
+            <div className="text-sm font-medium text-foreground">Mod log</div>
+            <div className="text-xs text-muted-foreground">Member interaction history</div>
           </div>
         </Link>
       </div>
