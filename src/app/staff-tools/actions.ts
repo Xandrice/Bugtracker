@@ -4,6 +4,7 @@ import { auth } from "@/../auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
+  canAccessAnyStaffTool,
   canManageStaffPlayers,
   canManageStaffVehicles,
   canRefreshStaffSchema,
@@ -16,9 +17,11 @@ import {
   togglePlayerFlag,
   toggleVehicleStorageState,
 } from "@/lib/fivem-db";
+import { captureMetricSnapshot } from "@/lib/staff-snapshots";
+import { discordSignInUrl } from "@/lib/auth-urls";
 
-function redirectToSignIn(): never {
-  redirect("/api/auth/signin?callbackUrl=/staff-tools");
+function redirectToSignIn(callbackUrl = "/staff-tools"): never {
+  redirect(discordSignInUrl(callbackUrl));
 }
 
 async function ensureStaffPermission(allowed: (permissions: Awaited<ReturnType<typeof getPermissionContext>>) => boolean) {
@@ -86,4 +89,10 @@ export async function refreshStaffSchemaAction() {
   await ensureStaffPermission(canRefreshStaffSchema);
   await refreshFiveMSchemaCache();
   revalidateStaffToolPages();
+}
+
+export async function captureSnapshotAction() {
+  await ensureStaffPermission(canAccessAnyStaffTool);
+  await captureMetricSnapshot();
+  revalidatePath("/staff-tools/dashboard");
 }

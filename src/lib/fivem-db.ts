@@ -57,6 +57,7 @@ export type StaffPlayer = {
   charInfo: string | null;
   fullRow: Record<string, unknown>;
   job: string | null;
+  jobLabel: string | null;
   cash: number | null;
   bank: number | null;
   banned: boolean | null;
@@ -81,6 +82,62 @@ export type StaffEconomyStats = {
   totalBank: number | null;
   totalKnownMoney: number | null;
   accountTotals: Record<string, number>;
+};
+
+export type LabeledValue = {
+  label: string;
+  value: string;
+};
+
+export type StaffSkill = {
+  name: string;
+  level: number | null;
+  statLevel: number | null;
+  xp: number | null;
+};
+
+export type StaffGroup = {
+  group: string;
+  type: string;
+  grade: number | null;
+};
+
+export type StaffBan = {
+  reason: string | null;
+  bannedBy: string | null;
+  expireLabel: string | null;
+  active: boolean;
+};
+
+export type StaffCriminalRecord = {
+  mugshot: string | null;
+  hasWarrant: boolean;
+  notes: string | null;
+};
+
+export type StaffPlayerDetail = {
+  identifier: string;
+  displayName: string;
+  license: string | null;
+  banned: boolean | null;
+  whitelisted: boolean | null;
+  isDead: boolean | null;
+  hasWarrant: boolean;
+  jobLabel: string | null;
+  gangLabel: string | null;
+  identity: LabeledValue[];
+  job: LabeledValue[];
+  gang: LabeledValue[];
+  money: LabeledValue[];
+  character: LabeledValue[];
+  vehicles: StaffVehicle[];
+  skills: StaffSkill[];
+  groups: StaffGroup[];
+  criminal: StaffCriminalRecord | null;
+  bans: StaffBan[];
+  raw: Record<string, unknown>;
+  supportsBanToggle: boolean;
+  supportsWhitelistToggle: boolean;
 };
 
 export type StaffToolsSnapshot = {
@@ -347,6 +404,61 @@ function toNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+// Recursively parse JSON that may be stored as a string (sometimes double
+// encoded) inside longtext/text columns so the UI never has to render raw blobs.
+function deepParseJson(value: unknown): unknown {
+  if (value == null) return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const looksJson =
+      (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+      (trimmed.startsWith("[") && trimmed.endsWith("]"));
+    if (looksJson) {
+      try {
+        return deepParseJson(JSON.parse(trimmed));
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  }
+  if (value instanceof Date) return value.toISOString();
+  if (Buffer.isBuffer(value)) return `0x${value.toString("hex")}`;
+  if (Array.isArray(value)) return value.map((entry) => deepParseJson(entry));
+  if (typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+        key,
+        deepParseJson(entry),
+      ])
+    );
+  }
+  return value;
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  const parsed = deepParseJson(value);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    return parsed as Record<string, unknown>;
+  }
+  return null;
+}
+
+// Derive a readable job/gang label like "EMS · Chief of Medicine" from a QBCore
+// job blob ({ label, name, grade: { name } }).
+function jobLabel(value: unknown): string | null {
+  const parsed = asObject(value);
+  if (!parsed) return normalizeText(value);
+  const label = normalizeText(parsed.label) || normalizeText(parsed.name);
+  const grade = asObject(parsed.grade);
+  const gradeName = grade ? normalizeText(grade.name) : null;
+  if (label && gradeName && label.toLowerCase() !== gradeName.toLowerCase()) {
+    return `${label} · ${gradeName}`;
+  }
+  return label || gradeName || null;
 }
 
 function toBoolean(value: unknown): boolean | null {
@@ -661,6 +773,7 @@ function mapPlayerRow(row: Record<string, unknown>, capabilities: PlayerTableCap
   const fullRow = normalizeRowForDisplay(row);
   const { cash, bank } = resolvePlayerMoney(row, capabilities);
   const job = capabilities.jobColumn ? normalizeText(row[capabilities.jobColumn]) : null;
+  const jobLabelValue = capabilities.jobColumn ? jobLabel(row[capabilities.jobColumn]) : null;
   const banned = capabilities.bannedColumn ? toBoolean(row[capabilities.bannedColumn]) : null;
   const whitelisted = capabilities.whitelistedColumn
     ? toBoolean(row[capabilities.whitelistedColumn])
@@ -672,6 +785,7 @@ function mapPlayerRow(row: Record<string, unknown>, capabilities: PlayerTableCap
     charInfo,
     fullRow,
     job,
+    jobLabel: jobLabelValue,
     cash,
     bank,
     banned,
@@ -1023,6 +1137,557 @@ export async function getStaffToolsSnapshot(input?: {
       vehicles: [],
       stats: { totalPlayers: null, totalVehicles: null, bannedPlayers: null },
     };
+  }
+}
+
+function findTable(schema: SchemaSnapshot, names: string[]): TableSchema | null {
+  for (const name of names) {
+    const table = schema.byName.get(name.toLowerCase());
+    if (table) return table;
+  }
+  return null;
+}
+
+// Row keys keep their original database casing (e.g. `hasWarrant`, `citizenID`),
+// so look up fields case-insensitively.
+function getField(row: Record<string, unknown>, name: string): unknown {
+  if (name in row) return row[name];
+  const lower = name.toLowerCase();
+  for (const key of Object.keys(row)) {
+    if (key.toLowerCase() === lower) return row[key];
+  }
+  return undefined;
+}
+
+function capitalize(value: string): string {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function formatScalar(value: unknown): string | null {
+  if (value == null) return null;
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : null;
+  if (value instanceof Date) return value.toLocaleString();
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
+}
+
+function pushLabeled(out: LabeledValue[], label: string, value: unknown) {
+  const text = formatScalar(value);
+  if (text != null) out.push({ label, value: text });
+}
+
+function formatCurrency(value: unknown): string | null {
+  const num = toNumber(value);
+  if (num == null) return null;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(num);
+}
+
+function formatGender(value: unknown): string | null {
+  const num = toNumber(value);
+  if (num === 0) return "Male";
+  if (num === 1) return "Female";
+  return normalizeText(value);
+}
+
+function buildIdentity(charinfo: Record<string, unknown> | null): LabeledValue[] {
+  const out: LabeledValue[] = [];
+  if (!charinfo) return out;
+  pushLabeled(out, "First name", charinfo.firstname);
+  pushLabeled(out, "Last name", charinfo.lastname);
+  pushLabeled(out, "Gender", formatGender(charinfo.gender));
+  pushLabeled(out, "Date of birth", charinfo.birthdate);
+  pushLabeled(out, "Nationality", charinfo.nationality);
+  const height = toNumber(charinfo.height);
+  if (height != null) out.push({ label: "Height", value: `${Math.round(height)} cm` });
+  pushLabeled(out, "Phone", charinfo.phone);
+  pushLabeled(out, "Bank account", charinfo.account);
+  pushLabeled(out, "Backstory", charinfo.backstory);
+  return out;
+}
+
+function buildJobDetails(job: Record<string, unknown> | null): LabeledValue[] {
+  const out: LabeledValue[] = [];
+  if (!job) return out;
+  pushLabeled(out, "Name", normalizeText(job.label) || normalizeText(job.name));
+  const grade = asObject(job.grade);
+  if (grade) {
+    pushLabeled(out, "Rank", normalizeText(grade.name));
+    pushLabeled(out, "Grade", grade.level);
+  }
+  if (typeof job.onduty === "boolean") out.push({ label: "On duty", value: job.onduty ? "Yes" : "No" });
+  if (typeof job.isboss === "boolean") out.push({ label: "Boss", value: job.isboss ? "Yes" : "No" });
+  pushLabeled(out, "Paycheck", formatCurrency(job.payment));
+  return out;
+}
+
+const KNOWN_MONEY_ACCOUNTS = ["cash", "bank", "crypto", "rene"];
+
+function buildMoney(money: Record<string, unknown> | null): LabeledValue[] {
+  const out: LabeledValue[] = [];
+  if (!money) return out;
+  pushLabeled(out, "Cash", formatCurrency(money.cash));
+  pushLabeled(out, "Bank", formatCurrency(money.bank));
+  if (money.crypto != null) pushLabeled(out, "Crypto", money.crypto);
+  if (money.rene != null) pushLabeled(out, "Rene", money.rene);
+  for (const [key, value] of Object.entries(money)) {
+    if (KNOWN_MONEY_ACCOUNTS.includes(key.toLowerCase())) continue;
+    pushLabeled(out, capitalize(key), formatCurrency(value) ?? value);
+  }
+  return out;
+}
+
+function buildCharacter(
+  metadata: Record<string, unknown> | null,
+  row: Record<string, unknown>
+): LabeledValue[] {
+  const out: LabeledValue[] = [];
+  const meta = metadata || {};
+  pushLabeled(out, "Blood type", meta.bloodtype ?? getField(row, "bloodtype"));
+  pushLabeled(out, "Fingerprint", meta.fingerprint ?? getField(row, "fingerprint"));
+  pushLabeled(out, "Callsign", meta.callsign);
+
+  const licences = asObject(meta.licences);
+  if (licences) {
+    const enabled = Object.entries(licences)
+      .filter(([, value]) => value === true)
+      .map(([key]) => capitalize(key));
+    if (enabled.length) out.push({ label: "Licenses", value: enabled.join(", ") });
+  }
+
+  const hunger = toNumber(meta.hunger);
+  if (hunger != null) out.push({ label: "Hunger", value: `${Math.round(hunger)}%` });
+  const thirst = toNumber(meta.thirst);
+  if (thirst != null) out.push({ label: "Thirst", value: `${Math.round(thirst)}%` });
+  const stress = toNumber(meta.stress);
+  if (stress != null) out.push({ label: "Stress", value: `${Math.round(stress)}%` });
+
+  pushLabeled(out, "Health", getField(row, "health"));
+  pushLabeled(out, "Armor", getField(row, "armor"));
+  pushLabeled(out, "Phone number", getField(row, "phone_number"));
+
+  const jailTime = toNumber(getField(row, "jail_time"));
+  if (jailTime != null && jailTime > 0) {
+    out.push({ label: "Jail time", value: String(jailTime) });
+    pushLabeled(out, "Jail type", getField(row, "jail_type"));
+  }
+
+  pushLabeled(out, "Last updated", getField(row, "last_updated"));
+  pushLabeled(out, "Last logout", getField(row, "last_logged_out"));
+  return out;
+}
+
+async function fetchPlayerRawRow(
+  capabilities: PlayerTableCapabilities,
+  identifier: string
+): Promise<Record<string, unknown> | null> {
+  const sql = `
+    SELECT *
+    FROM ${quoteIdentifier(capabilities.tableName)}
+    WHERE ${quoteIdentifier(capabilities.idColumn)} = ?
+    LIMIT 1
+  `;
+  const rows = await queryRows<RowDataPacket>(sql, [identifier]);
+  return rows[0] ? (rows[0] as Record<string, unknown>) : null;
+}
+
+async function fetchPlayerSkills(table: TableSchema, identifier: string): Promise<StaffSkill[]> {
+  const idColumn = pickFirst(table.columnSet, ["citizenid", "citizenID", "uniqueid", "id"]) || "citizenid";
+  const sql = `
+    SELECT *
+    FROM ${quoteIdentifier(table.tableName)}
+    WHERE ${quoteIdentifier(idColumn)} = ?
+    LIMIT 1
+  `;
+  const rows = await queryRows<RowDataPacket>(sql, [identifier]);
+  const row = rows[0] as Record<string, unknown> | undefined;
+  if (!row) return [];
+
+  const out: StaffSkill[] = [];
+  for (const [key, value] of Object.entries(row)) {
+    if (key.toLowerCase() === idColumn.toLowerCase()) continue;
+    const parsed = asObject(value);
+    if (!parsed) continue;
+    out.push({
+      name: capitalize(key),
+      level: toNumber(parsed.level),
+      statLevel: toNumber(parsed.statlevel),
+      xp: toNumber(parsed.xp),
+    });
+  }
+  return out;
+}
+
+async function fetchPlayerGroups(table: TableSchema, identifier: string): Promise<StaffGroup[]> {
+  const idColumn = pickFirst(table.columnSet, ["citizenid", "citizenID"]) || "citizenid";
+  const sql = `
+    SELECT *
+    FROM ${quoteIdentifier(table.tableName)}
+    WHERE ${quoteIdentifier(idColumn)} = ?
+  `;
+  const rows = await queryRows<RowDataPacket>(sql, [identifier]);
+  return rows.map((raw) => {
+    const row = raw as Record<string, unknown>;
+    return {
+      group: normalizeText(getField(row, "group")) || "",
+      type: normalizeText(getField(row, "type")) || "",
+      grade: toNumber(getField(row, "grade")),
+    };
+  });
+}
+
+async function fetchCriminalRecord(
+  table: TableSchema,
+  identifier: string
+): Promise<StaffCriminalRecord | null> {
+  const idColumn = pickFirst(table.columnSet, ["uniqueid", "citizenid", "id"]) || "uniqueid";
+  const sql = `
+    SELECT *
+    FROM ${quoteIdentifier(table.tableName)}
+    WHERE ${quoteIdentifier(idColumn)} = ?
+    LIMIT 1
+  `;
+  const rows = await queryRows<RowDataPacket>(sql, [identifier]);
+  const row = rows[0] as Record<string, unknown> | undefined;
+  if (!row) return null;
+  return {
+    mugshot: normalizeText(getField(row, "mugshot")),
+    hasWarrant: toBoolean(getField(row, "hasWarrant")) ?? false,
+    notes: normalizeText(getField(row, "notes")),
+  };
+}
+
+function formatBanExpire(expire: number | null): { label: string; active: boolean } {
+  if (expire == null || expire === 0) return { label: "Permanent", active: true };
+  const ms = expire > 1e12 ? expire : expire * 1000;
+  return { label: new Date(ms).toLocaleString(), active: ms > Date.now() };
+}
+
+async function fetchPlayerBans(table: TableSchema, license: string | null): Promise<StaffBan[]> {
+  if (!license) return [];
+  const licenseColumn = pickFirst(table.columnSet, ["license"]);
+  if (!licenseColumn) return [];
+
+  const sql = `
+    SELECT *
+    FROM ${quoteIdentifier(table.tableName)}
+    WHERE ${quoteIdentifier(licenseColumn)} = ?
+  `;
+  const rows = await queryRows<RowDataPacket>(sql, [license]);
+  return rows.map((raw) => {
+    const row = raw as Record<string, unknown>;
+    const { label, active } = formatBanExpire(toNumber(getField(row, "expire")));
+    return {
+      reason: normalizeText(getField(row, "reason")),
+      bannedBy: normalizeText(getField(row, "bannedby")),
+      expireLabel: label,
+      active,
+    };
+  });
+}
+
+export async function getStaffPlayerDetail(identifier: string): Promise<StaffPlayerDetail | null> {
+  const trimmed = identifier.trim();
+  if (!trimmed) return null;
+  if (!hasFiveMDbConfig()) return null;
+
+  const schema = await getSchemaSnapshot();
+  const playerCaps = detectPlayerCapabilities(schema);
+  if (!playerCaps) return null;
+
+  const row = await fetchPlayerRawRow(playerCaps, trimmed);
+  if (!row) return null;
+
+  const vehicleCaps = detectVehicleCapabilities(schema);
+  const skillsTable = findTable(schema, ["player_skills"]);
+  const groupsTable = findTable(schema, ["player_groups"]);
+  const criminalTable = findTable(schema, ["mdt_criminals"]);
+  const bansTable = findTable(schema, ["bans"]);
+
+  const license = normalizeText(getField(row, "license"));
+
+  const charinfo = asObject(getField(row, playerCaps.profileJsonColumn || "charinfo"));
+  const job = asObject(getField(row, playerCaps.jobColumn || "job"));
+  const gang = asObject(getField(row, "gang"));
+  const money = asObject(getField(row, playerCaps.moneyJsonColumn || "money"));
+  const metadata = asObject(getField(row, "metadata"));
+
+  const [vehicles, skills, groups, criminal, bans] = await Promise.all([
+    vehicleCaps?.ownerColumn ? fetchVehiclesByOwner(vehicleCaps, trimmed, 50) : Promise.resolve([]),
+    skillsTable ? fetchPlayerSkills(skillsTable, trimmed) : Promise.resolve([]),
+    groupsTable ? fetchPlayerGroups(groupsTable, trimmed) : Promise.resolve([]),
+    criminalTable ? fetchCriminalRecord(criminalTable, trimmed) : Promise.resolve(null),
+    bansTable ? fetchPlayerBans(bansTable, license) : Promise.resolve([]),
+  ]);
+
+  let banned: boolean | null;
+  if (playerCaps.bannedColumn) {
+    banned = toBoolean(getField(row, playerCaps.bannedColumn));
+  } else if (bansTable) {
+    banned = bans.some((ban) => ban.active);
+  } else {
+    banned = null;
+  }
+
+  const whitelisted = playerCaps.whitelistedColumn
+    ? toBoolean(getField(row, playerCaps.whitelistedColumn))
+    : null;
+
+  return {
+    identifier: normalizeText(getField(row, playerCaps.idColumn)) || trimmed,
+    displayName: resolvePlayerDisplayName(row, playerCaps),
+    license,
+    banned,
+    whitelisted,
+    isDead: toBoolean(getField(row, "isdead")),
+    hasWarrant: criminal?.hasWarrant ?? false,
+    jobLabel: jobLabel(job),
+    gangLabel: jobLabel(gang),
+    identity: buildIdentity(charinfo),
+    job: buildJobDetails(job),
+    gang: buildJobDetails(gang),
+    money: buildMoney(money),
+    character: buildCharacter(metadata, row),
+    vehicles,
+    skills,
+    groups,
+    criminal,
+    bans,
+    raw: normalizeRowForDisplay(row),
+    supportsBanToggle: !!playerCaps.bannedColumn,
+    supportsWhitelistToggle: !!playerCaps.whitelistedColumn,
+  };
+}
+
+export type MetricCount = { name: string; count: number };
+export type WealthBucket = { bucket: string; count: number };
+export type TopPlayer = { identifier: string; name: string; total: number };
+
+export type DashboardMetrics = {
+  configured: boolean;
+  connectionError: string | null;
+  generatedAt: string;
+  players: {
+    total: number;
+    dead: number;
+    jailed: number;
+    activeLast7d: number;
+    activeLast30d: number;
+  };
+  economy: {
+    totalCash: number;
+    totalBank: number;
+    totalCrypto: number;
+    total: number;
+    distribution: WealthBucket[];
+    topPlayers: TopPlayer[];
+  };
+  jobs: {
+    byJob: MetricCount[];
+    onDuty: number;
+    offDuty: number;
+    topGangs: MetricCount[];
+  };
+  vehicles: {
+    total: number;
+    byGarage: MetricCount[];
+    topModels: MetricCount[];
+    stored: number;
+    outside: number;
+    impounded: number;
+    financed: number;
+  };
+};
+
+function bumpCount(map: Map<string, number>, key: string) {
+  map.set(key, (map.get(key) ?? 0) + 1);
+}
+
+function topCounts(map: Map<string, number>, limit: number): MetricCount[] {
+  return Array.from(map.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+}
+
+function emptyDashboardMetrics(configured: boolean): DashboardMetrics {
+  return {
+    configured,
+    connectionError: null,
+    generatedAt: new Date().toISOString(),
+    players: { total: 0, dead: 0, jailed: 0, activeLast7d: 0, activeLast30d: 0 },
+    economy: {
+      totalCash: 0,
+      totalBank: 0,
+      totalCrypto: 0,
+      total: 0,
+      distribution: [],
+      topPlayers: [],
+    },
+    jobs: { byJob: [], onDuty: 0, offDuty: 0, topGangs: [] },
+    vehicles: {
+      total: 0,
+      byGarage: [],
+      topModels: [],
+      stored: 0,
+      outside: 0,
+      impounded: 0,
+      financed: 0,
+    },
+  };
+}
+
+// Computes current-state aggregate metrics from the FiveM database for the
+// analytics dashboard. Reductions run in JS so the logic stays robust across
+// different QBCore/ESX-style schemas rather than relying on JSON SQL functions.
+export async function getDashboardMetrics(): Promise<DashboardMetrics> {
+  const metrics = emptyDashboardMetrics(hasFiveMDbConfig());
+  if (!metrics.configured) return metrics;
+
+  const now = Date.now();
+  const DAY = 24 * 60 * 60 * 1000;
+
+  try {
+    const schema = await getSchemaSnapshot();
+    const playerCaps = detectPlayerCapabilities(schema);
+    const vehicleCaps = detectVehicleCapabilities(schema);
+
+    if (playerCaps) {
+      const rows = await queryRows<RowDataPacket>(
+        `SELECT * FROM ${quoteIdentifier(playerCaps.tableName)} LIMIT 10000`
+      );
+      metrics.players.total = rows.length;
+
+      const jobMap = new Map<string, number>();
+      const gangMap = new Map<string, number>();
+      const wealth = [0, 0, 0, 0, 0];
+      const topList: TopPlayer[] = [];
+
+      for (const raw of rows) {
+        const row = raw as Record<string, unknown>;
+
+        const money = asObject(getField(row, playerCaps.moneyJsonColumn || "money"));
+        const cash =
+          toNumber(money?.cash) ??
+          (playerCaps.cashColumn ? toNumber(getField(row, playerCaps.cashColumn)) : null) ??
+          0;
+        const bank =
+          toNumber(money?.bank) ??
+          (playerCaps.bankColumn ? toNumber(getField(row, playerCaps.bankColumn)) : null) ??
+          0;
+        const crypto = toNumber(money?.crypto) ?? 0;
+        metrics.economy.totalCash += cash;
+        metrics.economy.totalBank += bank;
+        metrics.economy.totalCrypto += crypto;
+
+        const total = cash + bank;
+        if (total < 10000) wealth[0]++;
+        else if (total < 50000) wealth[1]++;
+        else if (total < 250000) wealth[2]++;
+        else if (total < 1000000) wealth[3]++;
+        else wealth[4]++;
+
+        topList.push({
+          identifier: normalizeText(getField(row, playerCaps.idColumn)) || "?",
+          name: resolvePlayerDisplayName(row, playerCaps),
+          total,
+        });
+
+        const job = asObject(getField(row, playerCaps.jobColumn || "job"));
+        const jobName = (job ? normalizeText(job.label) || normalizeText(job.name) : null) || "Unknown";
+        bumpCount(jobMap, jobName);
+        if (job && job.onduty === true) metrics.jobs.onDuty++;
+        else metrics.jobs.offDuty++;
+
+        const gang = asObject(getField(row, "gang"));
+        if (gang) {
+          const gangName = normalizeText(gang.label) || normalizeText(gang.name);
+          const rawName = normalizeText(gang.name);
+          if (gangName && (!rawName || rawName.toLowerCase() !== "none")) {
+            bumpCount(gangMap, gangName);
+          }
+        }
+
+        const metadata = asObject(getField(row, "metadata"));
+        if (toBoolean(getField(row, "isdead")) === true || metadata?.isdead === true) {
+          metrics.players.dead++;
+        }
+        const jailTime = toNumber(getField(row, "jail_time")) ?? toNumber(metadata?.injail);
+        if (jailTime && jailTime > 0) metrics.players.jailed++;
+
+        const updated = getField(row, playerCaps.updatedAtColumn || "last_updated");
+        const ts =
+          updated instanceof Date
+            ? updated.getTime()
+            : typeof updated === "string"
+              ? Date.parse(updated)
+              : NaN;
+        if (Number.isFinite(ts)) {
+          if (now - ts <= 7 * DAY) metrics.players.activeLast7d++;
+          if (now - ts <= 30 * DAY) metrics.players.activeLast30d++;
+        }
+      }
+
+      metrics.economy.total = metrics.economy.totalCash + metrics.economy.totalBank;
+      metrics.economy.distribution = [
+        { bucket: "< $10k", count: wealth[0] },
+        { bucket: "$10k–50k", count: wealth[1] },
+        { bucket: "$50k–250k", count: wealth[2] },
+        { bucket: "$250k–1M", count: wealth[3] },
+        { bucket: "$1M+", count: wealth[4] },
+      ];
+      metrics.economy.topPlayers = topList.sort((a, b) => b.total - a.total).slice(0, 8);
+      metrics.jobs.byJob = topCounts(jobMap, 12);
+      metrics.jobs.topGangs = topCounts(gangMap, 8);
+    }
+
+    if (vehicleCaps) {
+      const rows = await queryRows<RowDataPacket>(
+        `SELECT * FROM ${quoteIdentifier(vehicleCaps.tableName)} LIMIT 20000`
+      );
+      metrics.vehicles.total = rows.length;
+
+      const garageMap = new Map<string, number>();
+      const modelMap = new Map<string, number>();
+
+      for (const raw of rows) {
+        const row = raw as Record<string, unknown>;
+        const garage =
+          (vehicleCaps.garageColumn ? normalizeText(getField(row, vehicleCaps.garageColumn)) : null) ||
+          normalizeText(getField(row, "garage")) ||
+          normalizeText(getField(row, "garage_id")) ||
+          "Unknown";
+        bumpCount(garageMap, garage);
+
+        const model = resolveVehicleModel(row, vehicleCaps) || "Unknown";
+        bumpCount(modelMap, model);
+
+        const stored = resolveVehicleStoredValue(row, vehicleCaps);
+        if (stored === true) metrics.vehicles.stored++;
+        else if (stored === false) metrics.vehicles.outside++;
+
+        const impound = normalizeText(getField(row, "impound"));
+        const impoundData = normalizeText(getField(row, "impound_data"));
+        if ((impound && impound.toLowerCase() !== "no") || (impoundData && impoundData.length > 2)) {
+          metrics.vehicles.impounded++;
+        }
+        if (toBoolean(getField(row, "financed")) === true) metrics.vehicles.financed++;
+      }
+
+      metrics.vehicles.byGarage = topCounts(garageMap, 12);
+      metrics.vehicles.topModels = topCounts(modelMap, 12);
+    }
+
+    return metrics;
+  } catch (error) {
+    metrics.connectionError =
+      error instanceof Error ? error.message : "Unable to query FiveM database.";
+    return metrics;
   }
 }
 

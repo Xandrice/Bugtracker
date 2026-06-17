@@ -6,10 +6,11 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { formatIssueRef } from "@/lib/issue-ids";
+import { discordSignInUrl } from "@/lib/auth-urls";
 
 export default async function MyIssuesPage() {
     const session = await auth();
-    if (!session?.user?.id) redirect("/api/auth/signin?callbackUrl=/issues/me");
+    if (!session?.user?.id) redirect(discordSignInUrl("/issues/me"));
 
     const rawIssues = await db.issue.findMany({
         where: { assigneeId: session.user.id },

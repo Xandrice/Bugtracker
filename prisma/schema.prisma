@@ -211,6 +211,22 @@ model AppSetting {
   value String
 }
 
+// Periodic snapshots of FiveM server metrics for trend/history charts on the
+// staff analytics dashboard. Captured on a schedule (cron) and on demand.
+model MetricSnapshot {
+  id            String   @id @default(cuid())
+  capturedAt    DateTime @default(now())
+  totalPlayers  Int      @default(0)
+  totalCash     Float    @default(0)
+  totalBank     Float    @default(0)
+  totalMoney    Float    @default(0)
+  totalVehicles Int      @default(0)
+  // Full metric payload for richer historical breakdowns.
+  data          Json?
+
+  @@index([capturedAt])
+}
+
 model IssueActivity {
   id        String   @id @default(cuid())
   issueId   String

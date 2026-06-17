@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Shield, UserCircle, Settings, LogOut } from "lucide-react";
+import { Shield, Settings, LogOut } from "lucide-react";
 import { auth } from "@/../auth";
+import { SignInButton } from "@/components/auth/SignInButton";
 import { db } from "@/lib/db";
 import { ThemeToggle } from "./ThemeToggle";
 import { SITE_NAME } from "@/lib/site";
@@ -91,13 +92,7 @@ export async function TopNavbar() {
                         </div>
                     </details>
                 ) : (
-                    <Link
-                        href="/api/auth/signin?callbackUrl=/issues"
-                        className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 h-7 text-xs font-medium text-foreground hover:bg-muted"
-                    >
-                        <UserCircle className="h-3.5 w-3.5" />
-                        Sign in
-                    </Link>
+                    <SignInButton callbackUrl="/issues" />
                 )}
             </div>
         </header>

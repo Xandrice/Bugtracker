@@ -14,11 +14,12 @@ import {
 import { formatIssueRef } from "@/lib/issue-ids";
 import { getAppBaseUrl, sendDiscordChannelMessage } from "@/lib/discord";
 import { getStaffUsers } from "@/lib/staff";
+import { discordSignInUrl } from "@/lib/auth-urls";
 
 const MODLOG_CHANNEL_KEY = "discord.modlog.channel";
 
-function redirectToSignIn(): never {
-  redirect("/api/auth/signin");
+function redirectToSignIn(callbackUrl = "/"): never {
+  redirect(discordSignInUrl(callbackUrl));
 }
 
 async function getActor() {

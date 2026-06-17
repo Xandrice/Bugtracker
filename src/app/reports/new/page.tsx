@@ -7,10 +7,11 @@ import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ReportSubjectFields } from "./ReportSubjectFields";
+import { discordSignInUrl } from "@/lib/auth-urls";
 
 export default async function NewReportPage() {
   const session = await auth();
-  if (!session?.user?.id) redirect("/api/auth/signin?callbackUrl=/reports/new");
+  if (!session?.user?.id) redirect(discordSignInUrl("/reports/new"));
 
   const members = await getModLogMembers();
 

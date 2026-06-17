@@ -17,6 +17,7 @@ import {
   Logs,
   Car,
   Coins,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 
@@ -27,7 +28,9 @@ type StaffToolAccess = {
 };
 
 function navItems(canViewLogs: boolean, staffToolAccess: StaffToolAccess) {
+  const anyStaffTool = staffToolAccess.players || staffToolAccess.vehicles || staffToolAccess.economy;
   const staffToolItems = [
+    ...(anyStaffTool ? [{ name: "Dashboard", href: "/staff-tools/dashboard", icon: BarChart3 }] : []),
     ...(staffToolAccess.players ? [{ name: "Players", href: "/staff-tools/players", icon: Users }] : []),
     ...(staffToolAccess.vehicles ? [{ name: "Vehicles", href: "/staff-tools/vehicles", icon: Car }] : []),
     ...(staffToolAccess.economy ? [{ name: "Economy", href: "/staff-tools/economy", icon: Coins }] : []),

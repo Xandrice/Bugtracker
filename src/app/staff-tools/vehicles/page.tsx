@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Car, Coins, RefreshCcw, Shield, Users } from "lucide-react";
+import { BarChart3, Car, Coins, RefreshCcw, Shield, Users } from "lucide-react";
 import { auth } from "@/../auth";
 import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -17,6 +17,7 @@ import {
   requirePermission,
 } from "@/lib/permissions";
 import { getStaffToolsSnapshot } from "@/lib/fivem-db";
+import { discordSignInUrl } from "@/lib/auth-urls";
 import { putAwayVehicleAction, refreshStaffSchemaAction, toggleVehicleStorageAction } from "../actions";
 
 function boolLabel(value: boolean | null, trueLabel: string, falseLabel: string) {
@@ -32,7 +33,7 @@ export default async function StaffVehiclesPage({
 }) {
   const session = await auth();
   if (!session?.user?.id) {
-    redirect("/api/auth/signin?callbackUrl=/staff-tools/vehicles");
+    redirect(discordSignInUrl("/staff-tools/vehicles"));
   }
 
   const permissions = await getPermissionContext(session.user.id);
@@ -80,6 +81,13 @@ export default async function StaffVehiclesPage({
         icon={<Car className="h-4 w-4" />}
         actions={
           <div className="flex items-center gap-2">
+            <Link
+              href="/staff-tools/dashboard"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:border-border-strong"
+            >
+              <BarChart3 className="h-3.5 w-3.5" />
+              Dashboard
+            </Link>
             {showPlayersLink && (
               <Link
                 href="/staff-tools/players"

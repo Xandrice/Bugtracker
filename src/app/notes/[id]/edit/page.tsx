@@ -13,6 +13,7 @@ import { PageContainer } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardFooter, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FieldRow, Input, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { discordSignInUrl } from "@/lib/auth-urls";
 
 export default async function EditThreadPage({
     params,
@@ -22,7 +23,7 @@ export default async function EditThreadPage({
     const { id } = await params;
     const session = await auth();
     if (!session?.user?.id) {
-        redirect(`/api/auth/signin?callbackUrl=/notes/${id}/edit`);
+        redirect(discordSignInUrl(`/notes/${id}/edit`));
     }
 
     const thread = await db.note.findFirst({

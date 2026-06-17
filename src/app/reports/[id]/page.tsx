@@ -9,6 +9,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { canManageReports, getPermissionContext } from "@/lib/permissions";
 import { updatePlayerReportStatus } from "@/app/staff-actions";
 import { Button } from "@/components/ui/Button";
+import { discordSignInUrl } from "@/lib/auth-urls";
 
 export default async function ReportDetailPage({
   params,
@@ -17,7 +18,7 @@ export default async function ReportDetailPage({
 }) {
   const { id } = await params;
   const session = await auth();
-  if (!session?.user?.id) redirect("/api/auth/signin?callbackUrl=/reports");
+  if (!session?.user?.id) redirect(discordSignInUrl("/reports"));
 
   const permissions = await getPermissionContext(session.user.id);
   const canManage = canManageReports(permissions);
