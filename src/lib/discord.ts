@@ -25,6 +25,84 @@ export function getAppBaseUrl() {
         || "http://localhost:3000";
 }
 
+export type DiscordUserProfile = {
+    id: string;
+    username: string;
+    globalName: string | null;
+    avatar: string | null;
+    image: string;
+};
+
+export function buildDiscordAvatarUrl(discordId: string, avatarHash: string | null | undefined): string | null {
+    if (!avatarHash) return null;
+    const format = avatarHash.startsWith("a_") ? "gif" : "png";
+    return `https://cdn.discordapp.com/avatars/${discordId}/${avatarHash}.${format}`;
+}
+
+export function buildDiscordDefaultAvatarUrl(discordId: string): string {
+    const index = Number((BigInt(discordId) >> BigInt(22)) % BigInt(6));
+    return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
+}
+
+export function resolveDiscordAvatarUrl(
+    discordId: string,
+    avatarHash: string | null | undefined
+): string {
+    return buildDiscordAvatarUrl(discordId, avatarHash) ?? buildDiscordDefaultAvatarUrl(discordId);
+}
+
+function normalizeDiscordUserProfile(payload: unknown): DiscordUserProfile | null {
+    if (!isRecord(payload)) return null;
+    const id = typeof payload.id === "string" ? payload.id : null;
+    const username = typeof payload.username === "string" ? payload.username : null;
+    if (!id || !username) return null;
+
+    const globalName =
+        typeof payload.global_name === "string" && payload.global_name
+            ? payload.global_name
+            : null;
+    const avatar = typeof payload.avatar === "string" ? payload.avatar : null;
+
+    return {
+        id,
+        username,
+        globalName,
+        avatar,
+        image: resolveDiscordAvatarUrl(id, avatar),
+    };
+}
+
+export async function fetchDiscordUser(discordId: string): Promise<DiscordUserProfile | null> {
+    if (!discordId || !getDiscordToken()) return null;
+
+    try {
+        const response = await discordApi(`/users/${discordId}`, {
+            method: "GET",
+            cache: "no-store",
+        });
+        if (!response || !response.ok) return null;
+        const payload = await response.json();
+        return normalizeDiscordUserProfile(payload);
+    } catch (error) {
+        console.error("Error fetching Discord user profile", discordId, error);
+        return null;
+    }
+}
+
+export async function fetchDiscordUsers(
+    discordIds: string[]
+): Promise<Map<string, DiscordUserProfile>> {
+    const uniqueIds = [...new Set(discordIds.filter(Boolean))];
+    const results = await Promise.all(
+        uniqueIds.map(async (discordId) => {
+            const profile = await fetchDiscordUser(discordId);
+            return profile ? ([discordId, profile] as const) : null;
+        })
+    );
+
+    return new Map(results.filter((entry): entry is [string, DiscordUserProfile] => entry !== null));
+}
+
 export async function sendDiscordDM(discordId: string, content: string) {
     const token = process.env.DISCORD_BOT_TOKEN;
     if (!token) {

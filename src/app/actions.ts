@@ -30,6 +30,7 @@ import {
 } from "@/lib/staff-permissions";
 import { recordActivity } from "@/lib/activity";
 import { discordSignInUrl } from "@/lib/auth-urls";
+import { syncProjectMemberProfileByDiscordId } from "@/lib/member-profiles";
 
 const ALLOWED_STATUS = ["BACKLOG", "OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const;
 const ALLOWED_PRIORITY = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
@@ -985,6 +986,12 @@ export async function addProjectMember(formData: FormData) {
             staffRoleId: staffRole?.id ?? null,
         }
     });
+
+    try {
+        await syncProjectMemberProfileByDiscordId(discordId);
+    } catch {
+        // Profile sync is best-effort when adding a member.
+    }
 
     revalidatePermissionPaths();
 }

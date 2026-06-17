@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { cn } from "./cn";
 
 interface AvatarProps {
@@ -15,12 +18,15 @@ const SIZES = {
 };
 
 export function Avatar({ name, src, size = "sm", className }: AvatarProps) {
+    const [failed, setFailed] = useState(false);
     const initial = name?.trim().charAt(0).toUpperCase() || "?";
-    if (src) {
+
+    if (src && !failed) {
         return (
             <img
                 src={src}
                 alt={name || "User"}
+                onError={() => setFailed(true)}
                 className={cn(
                     "rounded-full border border-border object-cover bg-muted shrink-0",
                     SIZES[size],
@@ -29,6 +35,7 @@ export function Avatar({ name, src, size = "sm", className }: AvatarProps) {
             />
         );
     }
+
     return (
         <span
             className={cn(

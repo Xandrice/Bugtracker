@@ -41,6 +41,7 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
+  lastSeenAt    DateTime?
   accounts      Account[]
   sessions      Session[]
 
@@ -186,6 +187,9 @@ model ProjectMember {
   role                     String     @default("Member")
   staffRoleId              String?
   staffPermissionOverrides Json?
+  discordDisplayName       String?
+  discordAvatar            String?
+  profileSyncedAt          DateTime?
   createdAt                DateTime   @default(now())
 
   staffRole StaffRole? @relation(fields: [staffRoleId], references: [id], onDelete: SetNull)

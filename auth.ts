@@ -4,6 +4,7 @@ import Discord from "next-auth/providers/discord"
 import Credentials from "next-auth/providers/credentials"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import { db } from "./src/lib/db"
+import { buildDiscordAvatarUrl, resolveDiscordAvatarUrl } from "./src/lib/discord"
 
 const isDev = process.env.NODE_ENV !== "production"
 const devAuthUsername = process.env.DEV_AUTH_USERNAME || "dev"
@@ -13,9 +14,11 @@ const enableDevAutoAuth = isDev && process.env.DEV_AUTO_AUTH !== "false"
 function discordAvatarUrl(profile: unknown): string | null {
     if (typeof profile !== "object" || profile === null) return null
     const { id, avatar } = profile as { id?: unknown; avatar?: unknown }
-    if (typeof id !== "string" || typeof avatar !== "string" || !avatar) return null
-    const format = avatar.startsWith("a_") ? "gif" : "png"
-    return `https://cdn.discordapp.com/avatars/${id}/${avatar}.${format}`
+    if (typeof id !== "string") return null
+    if (typeof avatar !== "string" || !avatar) {
+        return resolveDiscordAvatarUrl(id, null)
+    }
+    return buildDiscordAvatarUrl(id, avatar)
 }
 
 function discordDisplayName(profile: unknown): string | null {
@@ -88,12 +91,13 @@ const nextAuth = NextAuth({
                         },
                         select: { userId: true },
                     });
-                    if (existingAccount?.userId && (image || name)) {
+                    if (existingAccount?.userId) {
                         await db.user.update({
                             where: { id: existingAccount.userId },
                             data: {
                                 ...(image ? { image } : {}),
                                 ...(name ? { name } : {}),
+                                lastSeenAt: new Date(),
                             },
                         });
                     }
@@ -143,8 +147,28 @@ async function getOrCreateDevUser() {
     })
 }
 
+const LAST_SEEN_TOUCH_MS = 10 * 60 * 1000;
+
+async function touchLastSeen(userId: string) {
+    const cutoff = new Date(Date.now() - LAST_SEEN_TOUCH_MS);
+    try {
+        await db.user.updateMany({
+            where: {
+                id: userId,
+                OR: [{ lastSeenAt: null }, { lastSeenAt: { lt: cutoff } }],
+            },
+            data: { lastSeenAt: new Date() },
+        });
+    } catch {
+        // Non-fatal: presence tracking should not block requests.
+    }
+}
+
 export const auth = async (): Promise<Session | null> => {
     const session = await nextAuthAuth()
+    if (session?.user?.id) {
+        void touchLastSeen(session.user.id);
+    }
     if (session?.user?.id || !enableDevAutoAuth) return session
 
     let devUser: Awaited<ReturnType<typeof getOrCreateDevUser>> | null = null
