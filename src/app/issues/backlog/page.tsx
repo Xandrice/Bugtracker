@@ -47,6 +47,7 @@ export default async function BacklogIssuesPage() {
         dueDate: i.dueDate ?? undefined,
         resourceName: i.resourceName ?? undefined,
         storyPoints: i.storyPoints ?? undefined,
+        parentIssueId: i.parentIssueId ?? null,
         parentIssueRef: i.parentIssue
             ? formatIssueRef(i.parentIssue.publicKey, i.parentIssue.id)
             : null,

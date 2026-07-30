@@ -5,6 +5,8 @@ import Link from "next/link";
 import {
     ArrowDown,
     ArrowUp,
+    ChevronDown,
+    ChevronRight,
     Filter,
     Loader2,
     Search,
@@ -93,6 +95,7 @@ export interface IssueSnippet {
     dueDate?: Date | null;
     resourceName?: string | null;
     storyPoints?: number | null;
+    parentIssueId?: string | null;
     parentIssueRef?: string | null;
     subtaskCount?: number;
 }
@@ -125,11 +128,21 @@ export function DataGrid({
     const [assigneeFilter, setAssigneeFilter] = useState<string>("ALL");
     const [search, setSearch] = useState("");
     const [pendingIssueId, setPendingIssueId] = useState<string | null>(null);
+    const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
     const [isPending, startTransition] = useTransition();
 
     useEffect(() => {
         setLocalIssues(issues);
     }, [issues]);
+
+    const toggleExpanded = (issueId: string) => {
+        setExpandedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(issueId)) next.delete(issueId);
+            else next.add(issueId);
+            return next;
+        });
+    };
 
     useEffect(() => {
         setLocalSavedViews(savedViews);
@@ -217,25 +230,41 @@ export function DataGrid({
         );
     };
 
-    const sortedAndFilteredIssues = useMemo(() => {
-        let filtered = localIssues;
+    const issueIds = useMemo(
+        () => new Set(localIssues.map((issue) => issue.id)),
+        [localIssues]
+    );
 
-        if (statusFilter !== "ALL") filtered = filtered.filter((i) => i.status === statusFilter);
-        if (typeFilter !== "ALL") filtered = filtered.filter((i) => i.type === typeFilter);
+    const childrenByParentId = useMemo(() => {
+        const map = new Map<string, IssueSnippet[]>();
+        for (const issue of localIssues) {
+            if (!issue.parentIssueId || !issueIds.has(issue.parentIssueId)) continue;
+            const list = map.get(issue.parentIssueId) ?? [];
+            list.push(issue);
+            map.set(issue.parentIssueId, list);
+        }
+        return map;
+    }, [localIssues, issueIds]);
+
+    const matchesFilters = (issue: IssueSnippet, q: string) => {
+        if (statusFilter !== "ALL" && issue.status !== statusFilter) return false;
+        if (typeFilter !== "ALL" && issue.type !== typeFilter) return false;
         if (assigneeFilter !== "ALL") {
-            if (assigneeFilter === "UNASSIGNED") filtered = filtered.filter((i) => !i.assignee);
-            else filtered = filtered.filter((i) => i.assignee?.id === assigneeFilter);
+            if (assigneeFilter === "UNASSIGNED") {
+                if (issue.assignee) return false;
+            } else if (issue.assignee?.id !== assigneeFilter) {
+                return false;
+            }
         }
-        if (search.trim()) {
-            const q = search.trim().toLowerCase();
-            filtered = filtered.filter(
-                (i) =>
-                    i.title.toLowerCase().includes(q) ||
-                    formatIssueRef(i.publicKey, i.id).toLowerCase().includes(q)
-            );
+        if (q) {
+            const ref = formatIssueRef(issue.publicKey, issue.id).toLowerCase();
+            if (!issue.title.toLowerCase().includes(q) && !ref.includes(q)) return false;
         }
+        return true;
+    };
 
-        if (!sortConfig) return filtered;
+    const sortIssues = (list: IssueSnippet[]) => {
+        if (!sortConfig) return list;
 
         const priorityOrder: Record<IssuePriority, number> = {
             LOW: 1,
@@ -244,7 +273,7 @@ export function DataGrid({
             URGENT: 4,
         };
 
-        return [...filtered].sort((a, b) => {
+        return [...list].sort((a, b) => {
             if (sortConfig.key === "priority") {
                 const aVal = priorityOrder[a.priority] || 0;
                 const bVal = priorityOrder[b.priority] || 0;
@@ -278,7 +307,79 @@ export function DataGrid({
             if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
             return 0;
         });
-    }, [localIssues, sortConfig, statusFilter, typeFilter, assigneeFilter, search]);
+    };
+
+    const { visibleRows, rootCount } = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        const roots = localIssues.filter(
+            (issue) => !issue.parentIssueId || !issueIds.has(issue.parentIssueId)
+        );
+
+        const matchedRoots = roots.filter((root) => {
+            if (matchesFilters(root, q)) return true;
+            if (!q) return false;
+            const children = childrenByParentId.get(root.id) ?? [];
+            return children.some((child) => matchesFilters(child, q));
+        });
+
+        const sortedRoots = sortIssues(matchedRoots);
+        const rows: Array<{
+            issue: IssueSnippet;
+            depth: 0 | 1;
+            childCount: number;
+        }> = [];
+
+        for (const root of sortedRoots) {
+            const children = sortIssues(childrenByParentId.get(root.id) ?? []);
+            rows.push({ issue: root, depth: 0, childCount: children.length });
+            if (!expandedIds.has(root.id) || children.length === 0) continue;
+
+            const visibleChildren =
+                q && !matchesFilters(root, q)
+                    ? children.filter((child) => matchesFilters(child, q))
+                    : children;
+
+            for (const child of visibleChildren) {
+                rows.push({ issue: child, depth: 1, childCount: 0 });
+            }
+        }
+
+        return { visibleRows: rows, rootCount: sortedRoots.length };
+        // matchesFilters/sortIssues close over filter + sort state
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+        localIssues,
+        issueIds,
+        childrenByParentId,
+        sortConfig,
+        statusFilter,
+        typeFilter,
+        assigneeFilter,
+        search,
+        expandedIds,
+    ]);
+
+    // When search matches a subtask but not its parent, auto-expand the parent.
+    useEffect(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return;
+
+        setExpandedIds((prev) => {
+            let changed = false;
+            const next = new Set(prev);
+            for (const [parentId, children] of childrenByParentId) {
+                const parent = localIssues.find((issue) => issue.id === parentId);
+                if (!parent || matchesFilters(parent, q)) continue;
+                if (!children.some((child) => matchesFilters(child, q))) continue;
+                if (!next.has(parentId)) {
+                    next.add(parentId);
+                    changed = true;
+                }
+            }
+            return changed ? next : prev;
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search, childrenByParentId, localIssues, statusFilter, typeFilter, assigneeFilter]);
 
     const runWorkflowUpdate = (
         issueId: string,
@@ -416,7 +517,7 @@ export function DataGrid({
                     )}
 
                     <div className={cn("text-[11px] text-subtle-foreground", !hasActiveFilters && "ml-auto")}>
-                        {sortedAndFilteredIssues.length} of {localIssues.length}
+                        {rootCount} of {localIssues.filter((i) => !i.parentIssueId || !issueIds.has(i.parentIssueId)).length}
                     </div>
 
                     {localSavedViews.length > 0 && (
@@ -526,7 +627,7 @@ export function DataGrid({
                             </tr>
                         </thead>
                         <tbody>
-                            {sortedAndFilteredIssues.length === 0 ? (
+                            {visibleRows.length === 0 ? (
                                 <tr>
                                     <td
                                         colSpan={9}
@@ -536,13 +637,17 @@ export function DataGrid({
                                     </td>
                                 </tr>
                             ) : (
-                                sortedAndFilteredIssues.map((issue) => {
+                                visibleRows.map(({ issue, depth, childCount }) => {
                                     const issueRef = formatIssueRef(issue.publicKey, issue.id);
                                     const updating = isPending && pendingIssueId === issue.id;
+                                    const isExpanded = expandedIds.has(issue.id);
                                     return (
                                         <tr
                                             key={issue.id}
-                                            className="group border-b border-border last:border-b-0 hover:bg-muted/40 transition-colors"
+                                            className={cn(
+                                                "group border-b border-border last:border-b-0 hover:bg-muted/40 transition-colors",
+                                                depth > 0 && "bg-muted/15"
+                                            )}
                                         >
                                             <td className="px-3 py-1.5">
                                                 <Link
@@ -566,23 +671,65 @@ export function DataGrid({
                                                 />
                                             </td>
                                             <td className="px-3 py-1.5">
-                                                <Link
-                                                    href={`/issues/${issueRef}`}
-                                                    className="block truncate max-w-[520px] text-sm font-medium text-foreground transition-colors group-hover:text-primary"
+                                                <div
+                                                    className={cn(
+                                                        "flex items-center gap-1 min-w-0 max-w-[520px]",
+                                                        depth > 0 && "pl-5"
+                                                    )}
                                                 >
-                                                    {issue.parentIssueRef && (
-                                                        <span className="mr-1.5 text-[10px] font-mono text-subtle-foreground">
-                                                            ↳ {issue.parentIssueRef}
-                                                        </span>
+                                                    {depth === 0 && childCount > 0 ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                toggleExpanded(issue.id);
+                                                            }}
+                                                            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-subtle-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                                            aria-expanded={isExpanded}
+                                                            aria-label={
+                                                                isExpanded
+                                                                    ? "Collapse subtasks"
+                                                                    : "Expand subtasks"
+                                                            }
+                                                            title={
+                                                                isExpanded
+                                                                    ? "Collapse subtasks"
+                                                                    : "Expand subtasks"
+                                                            }
+                                                        >
+                                                            {isExpanded ? (
+                                                                <ChevronDown className="h-3.5 w-3.5" />
+                                                            ) : (
+                                                                <ChevronRight className="h-3.5 w-3.5" />
+                                                            )}
+                                                        </button>
+                                                    ) : (
+                                                        <span className="inline-block h-5 w-5 shrink-0" />
                                                     )}
-                                                    {issue.title}
-                                                    {!!issue.subtaskCount && issue.subtaskCount > 0 && (
-                                                        <span className="ml-2 inline-flex items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground align-middle">
-                                                            {issue.subtaskCount} subtask
-                                                            {issue.subtaskCount === 1 ? "" : "s"}
-                                                        </span>
-                                                    )}
-                                                </Link>
+                                                    <Link
+                                                        href={`/issues/${issueRef}`}
+                                                        className="min-w-0 truncate text-sm font-medium text-foreground transition-colors group-hover:text-primary"
+                                                    >
+                                                        {depth > 0 ? (
+                                                            <span className="mr-1.5 text-[10px] font-normal text-subtle-foreground">
+                                                                ↳
+                                                            </span>
+                                                        ) : (
+                                                            issue.parentIssueRef && (
+                                                                <span className="mr-1.5 text-[10px] font-mono text-subtle-foreground">
+                                                                    ↳ {issue.parentIssueRef}
+                                                                </span>
+                                                            )
+                                                        )}
+                                                        {issue.title}
+                                                        {depth === 0 && childCount > 0 && (
+                                                            <span className="ml-2 inline-flex items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground align-middle">
+                                                                {childCount} subtask
+                                                                {childCount === 1 ? "" : "s"}
+                                                            </span>
+                                                        )}
+                                                    </Link>
+                                                </div>
                                             </td>
                                             <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
                                                 <Select

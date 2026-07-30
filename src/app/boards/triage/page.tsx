@@ -36,6 +36,7 @@ export default async function BugTriagePage() {
         assignee: null,
         updatedAt: i.updatedAt,
         dueDate: i.dueDate ?? undefined,
+        parentIssueId: i.parentIssueId ?? null,
         parentIssueRef: i.parentIssue
             ? formatIssueRef(i.parentIssue.publicKey, i.parentIssue.id)
             : null,
