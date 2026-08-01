@@ -2,9 +2,10 @@
 
 import { ArrowLeft, Save, Loader2, Calendar } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createIssue } from "@/app/actions";
 import { useFormStatus } from "react-dom";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { PageContainer } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardFooter, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FieldRow, Input, Textarea } from "@/components/ui/Input";
@@ -14,6 +15,8 @@ import {
     PRIORITY_OPTIONS,
     SEVERITY_OPTIONS,
     TYPE_OPTIONS,
+    normalizeType,
+    type IssueType,
 } from "@/lib/issue-tokens";
 
 function SubmitButton() {
@@ -42,11 +45,12 @@ const SEVERITY_HINT: Record<string, string> = {
     BLOCKER: "Affects nearly everyone and prevents the server or feature from being used.",
 };
 
-export default function NewIssuePage() {
+function NewIssueForm({ initialType }: { initialType: IssueType }) {
     const [severity, setSeverity] = useState("MINOR");
-    const [type, setType] = useState("BUG");
+    const [type, setType] = useState(initialType);
     const [priority, setPriority] = useState("MEDIUM");
     const [label, setLabel] = useState("");
+    const isBug = type === "BUG";
 
     return (
         <PageContainer className="max-w-3xl">
@@ -59,13 +63,15 @@ export default function NewIssuePage() {
             </Link>
 
             <form action={createIssue}>
+                {!isBug && <input type="hidden" name="severity" value="MINOR" />}
                 <Card>
                     <CardHeader>
                         <div className="space-y-1">
                             <CardTitle>New issue</CardTitle>
                             <p className="text-xs text-muted-foreground">
-                                Submit a bug, feature request, or task. Include resource name and steps to
-                                reproduce when relevant.
+                                {isBug
+                                    ? "Report a bug with repro steps and severity so it can be triaged quickly."
+                                    : "Submit a task or feature request. Switch type to Bug for the full report form."}
                             </p>
                         </div>
                     </CardHeader>
@@ -74,17 +80,21 @@ export default function NewIssuePage() {
                             <Input
                                 id="title"
                                 name="title"
-                                placeholder="E.g. Police MDT fails to load when off duty"
+                                placeholder={
+                                    isBug
+                                        ? "E.g. Police MDT fails to load when off duty"
+                                        : "E.g. Add inventory weight indicator"
+                                }
                                 required
                             />
                         </FieldRow>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className={`grid grid-cols-1 gap-3 ${isBug ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
                             <FieldRow label="Type" htmlFor="type">
                                 <Select
                                     name="type"
                                     value={type}
-                                    onChange={setType}
+                                    onChange={(v) => setType(normalizeType(v))}
                                     options={TYPE_OPTIONS}
                                     size="md"
                                 />
@@ -98,42 +108,81 @@ export default function NewIssuePage() {
                                     size="md"
                                 />
                             </FieldRow>
-                            <FieldRow label="Severity" htmlFor="severity" hint={SEVERITY_HINT[severity]}>
-                                <Select
-                                    name="severity"
-                                    value={severity}
-                                    onChange={setSeverity}
-                                    options={SEVERITY_OPTIONS}
-                                    size="md"
-                                />
-                            </FieldRow>
+                            {isBug && (
+                                <FieldRow label="Severity" htmlFor="severity" hint={SEVERITY_HINT[severity]}>
+                                    <Select
+                                        name="severity"
+                                        value={severity}
+                                        onChange={setSeverity}
+                                        options={SEVERITY_OPTIONS}
+                                        size="md"
+                                    />
+                                </FieldRow>
+                            )}
                         </div>
+
+                        {isBug && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <FieldRow label="Resource name" htmlFor="resourceName">
+                                    <Input
+                                        id="resourceName"
+                                        name="resourceName"
+                                        placeholder="e.g. police-mdt"
+                                    />
+                                </FieldRow>
+                                <FieldRow label="Label / category" htmlFor="label">
+                                    <Select
+                                        name="label"
+                                        value={label}
+                                        onChange={setLabel}
+                                        options={LABEL_OPTIONS}
+                                        size="md"
+                                    />
+                                </FieldRow>
+                            </div>
+                        )}
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <FieldRow label="Tags" htmlFor="tags">
                                 <Input
                                     id="tags"
                                     name="tags"
-                                    placeholder="resource:police-mdt, ui, lua"
+                                    placeholder={
+                                        isBug
+                                            ? "resource:police-mdt, ui, lua"
+                                            : "frontend, docs, qol"
+                                    }
                                 />
                             </FieldRow>
-                            <FieldRow label="Label / category" htmlFor="label">
-                                <Select
-                                    name="label"
-                                    value={label}
-                                    onChange={setLabel}
-                                    options={LABEL_OPTIONS}
-                                    size="md"
-                                />
-                            </FieldRow>
+                            {!isBug && (
+                                <FieldRow label="Label / category" htmlFor="label">
+                                    <Select
+                                        name="label"
+                                        value={label}
+                                        onChange={setLabel}
+                                        options={LABEL_OPTIONS}
+                                        size="md"
+                                    />
+                                </FieldRow>
+                            )}
+                            {isBug && (
+                                <FieldRow label="Due date" htmlFor="dueDate">
+                                    <div className="relative">
+                                        <Calendar className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-subtle-foreground" />
+                                        <Input id="dueDate" name="dueDate" type="date" className="pl-8" />
+                                    </div>
+                                </FieldRow>
+                            )}
                         </div>
 
-                        <FieldRow label="Due date" htmlFor="dueDate">
-                            <div className="relative">
-                                <Calendar className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-subtle-foreground" />
-                                <Input id="dueDate" name="dueDate" type="date" className="pl-8" />
-                            </div>
-                        </FieldRow>
+                        {!isBug && (
+                            <FieldRow label="Due date" htmlFor="dueDate">
+                                <div className="relative">
+                                    <Calendar className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-subtle-foreground" />
+                                    <Input id="dueDate" name="dueDate" type="date" className="pl-8" />
+                                </div>
+                            </FieldRow>
+                        )}
 
                         <FieldRow
                             label="Discord forum post (optional)"
@@ -153,18 +202,34 @@ export default function NewIssuePage() {
                                 id="description"
                                 name="description"
                                 rows={5}
-                                placeholder="What happened or what do you want? Be specific."
+                                placeholder={
+                                    isBug
+                                        ? "What happened? Include error messages if you have them."
+                                        : "What do you want built or changed? Be specific."
+                                }
                             />
                         </FieldRow>
 
-                        <FieldRow label="Steps to reproduce (bugs)" htmlFor="reproductionSteps">
-                            <Textarea
-                                id="reproductionSteps"
-                                name="reproductionSteps"
-                                rows={4}
-                                placeholder="1. Go to… 2. Click… 3. See error"
-                            />
-                        </FieldRow>
+                        {isBug && (
+                            <>
+                                <FieldRow label="Steps to reproduce" htmlFor="reproductionSteps">
+                                    <Textarea
+                                        id="reproductionSteps"
+                                        name="reproductionSteps"
+                                        rows={4}
+                                        placeholder="1. Go to… 2. Click… 3. See error"
+                                    />
+                                </FieldRow>
+                                <FieldRow label="Expected behavior" htmlFor="expectedBehavior">
+                                    <Textarea
+                                        id="expectedBehavior"
+                                        name="expectedBehavior"
+                                        rows={3}
+                                        placeholder="What should have happened instead?"
+                                    />
+                                </FieldRow>
+                            </>
+                        )}
                     </CardBody>
                     <CardFooter>
                         <Link
@@ -178,5 +243,19 @@ export default function NewIssuePage() {
                 </Card>
             </form>
         </PageContainer>
+    );
+}
+
+function NewIssuePageInner() {
+    const searchParams = useSearchParams();
+    const initialType = normalizeType(searchParams.get("type") ?? "BUG");
+    return <NewIssueForm key={initialType} initialType={initialType} />;
+}
+
+export default function NewIssuePage() {
+    return (
+        <Suspense fallback={<PageContainer className="max-w-3xl"><Card><CardBody className="py-12 text-center text-sm text-muted-foreground">Loading…</CardBody></Card></PageContainer>}>
+            <NewIssuePageInner />
+        </Suspense>
     );
 }

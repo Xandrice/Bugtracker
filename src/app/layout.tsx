@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 import { TopNavbar } from "@/components/layout/TopNavbar";
 import { LeftSidebar } from "@/components/layout/LeftSidebar";
 import { GlobalSearchTrigger } from "@/components/layout/GlobalSearch";
+import { AppShellProviders } from "@/components/layout/AppShellProviders";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { auth } from "@/../auth";
 import {
@@ -66,20 +67,22 @@ export default async function RootLayout({
                     enableSystem
                     disableTransitionOnChange
                 >
-                    <div className="flex h-screen flex-col overflow-hidden">
-                        <TopNavbar />
-                        <div className="flex flex-1 min-h-0 overflow-hidden">
-                            <LeftSidebar
-                                isLoggedIn={!!session?.user?.id}
-                                canViewLogs={showLogs}
-                                staffToolAccess={staffToolAccess}
-                            />
-                            <main className="flex-1 min-h-0 overflow-y-auto bg-background">
-                                {children}
-                            </main>
+                    <AppShellProviders canCreate={!!session?.user?.id}>
+                        <div className="flex h-screen flex-col overflow-hidden">
+                            <TopNavbar />
+                            <div className="flex flex-1 min-h-0 overflow-hidden">
+                                <LeftSidebar
+                                    isLoggedIn={!!session?.user?.id}
+                                    canViewLogs={showLogs}
+                                    staffToolAccess={staffToolAccess}
+                                />
+                                <main className="flex-1 min-h-0 overflow-y-auto bg-background">
+                                    {children}
+                                </main>
+                            </div>
+                            <GlobalSearchTrigger />
                         </div>
-                        <GlobalSearchTrigger />
-                    </div>
+                    </AppShellProviders>
                 </ThemeProvider>
             </body>
         </html>

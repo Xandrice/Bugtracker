@@ -371,7 +371,7 @@ export async function createIssue(formData: FormData) {
         action: "CREATED",
     });
 
-    redirect("/issues");
+    await redirectToIssue(issue.id);
 }
 
 export async function updateIssueStatus(issueId: string, status: string) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -12,19 +12,30 @@ import {
     useSensor,
     useSensors,
 } from "@dnd-kit/core";
-import { GripVertical } from "lucide-react";
+import { ChevronDown, ChevronRight, GripVertical } from "lucide-react";
 import { updateIssueWorkflow } from "@/app/actions";
 import { formatIssueRef } from "@/lib/issue-ids";
 import { cn } from "@/components/ui/cn";
 import { Badge } from "@/components/ui/Badge";
+import { Select } from "@/components/ui/Select";
 import {
     PRIORITY_META,
     STATUS_META,
+    STATUS_OPTIONS,
     TYPE_META,
     type IssuePriority,
     type IssueStatus,
     type IssueType,
 } from "@/lib/issue-tokens";
+
+export type KanbanSubtask = {
+    id: string;
+    publicKey: string | null;
+    title: string;
+    status: IssueStatus;
+    priority: IssuePriority;
+    type: IssueType;
+};
 
 export type KanbanIssue = {
     id: string;
@@ -33,6 +44,10 @@ export type KanbanIssue = {
     status: IssueStatus;
     priority: IssuePriority;
     type: IssueType;
+    parentIssueId: string | null;
+    /** Shown when this card is an orphaned subtask (parent not on board). */
+    orphanParentRef?: string | null;
+    subtasks: KanbanSubtask[];
 };
 
 const COLUMNS: { status: IssueStatus; title: string }[] = [
@@ -43,6 +58,76 @@ const COLUMNS: { status: IssueStatus; title: string }[] = [
     { status: "DONE", title: "Done" },
 ];
 
+const VALID_STATUS = ["BACKLOG", "OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const;
+
+function normalizeIssueStatus(status: string): IssueStatus {
+    return (VALID_STATUS as readonly string[]).includes(status)
+        ? (status as IssueStatus)
+        : "OPEN";
+}
+
+function SubtaskRow({
+    subtask,
+    interactive,
+}: {
+    subtask: KanbanSubtask;
+    interactive: boolean;
+}) {
+    const router = useRouter();
+    const [pending, startTransition] = useTransition();
+    const issueRef = formatIssueRef(subtask.publicKey, subtask.id);
+    const status = normalizeIssueStatus(subtask.status);
+    const meta = STATUS_META[status];
+
+    const onStatusChange = (next: string) => {
+        if (!interactive || next === status) return;
+        startTransition(async () => {
+            const res = await updateIssueWorkflow(subtask.id, { status: next });
+            if (res?.error) {
+                alert(res.error);
+                return;
+            }
+            router.refresh();
+        });
+    };
+
+    return (
+        <div className="flex items-center gap-1.5 rounded border border-transparent px-1.5 py-1 hover:border-border hover:bg-muted/40">
+            {interactive ? (
+                <div className="w-[7.5rem] shrink-0">
+                    <Select
+                        value={status}
+                        onChange={onStatusChange}
+                        options={STATUS_OPTIONS}
+                        size="xs"
+                        disabled={pending}
+                        aria-label={`Status for ${subtask.title}`}
+                    />
+                </div>
+            ) : (
+                <span
+                    className={cn(
+                        "shrink-0",
+                        status === "DONE" ? "text-success" : "text-muted-foreground"
+                    )}
+                    title={meta.label}
+                >
+                    {meta.icon}
+                </span>
+            )}
+            <Link
+                href={`/issues/${issueRef}`}
+                className={cn(
+                    "min-w-0 flex-1 truncate text-[11px] text-foreground hover:text-primary",
+                    status === "DONE" && "text-muted-foreground line-through"
+                )}
+            >
+                {subtask.title}
+            </Link>
+        </div>
+    );
+}
+
 function KanbanCard({
     issue,
     interactive,
@@ -50,6 +135,7 @@ function KanbanCard({
     issue: KanbanIssue;
     interactive: boolean;
 }) {
+    const [expanded, setExpanded] = useState(false);
     const issueRef = formatIssueRef(issue.publicKey, issue.id);
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
         id: issue.id,
@@ -75,6 +161,9 @@ function KanbanCard({
 
     const typeMeta = TYPE_META[wfType];
     const priorityMeta = PRIORITY_META[wfPriority];
+    const subtaskTotal = issue.subtasks.length;
+    const subtaskDone = issue.subtasks.filter((s) => normalizeIssueStatus(s.status) === "DONE").length;
+    const hasSubtasks = subtaskTotal > 0;
 
     return (
         <div
@@ -108,6 +197,16 @@ function KanbanCard({
                         <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
                             {priorityMeta.icon} {priorityMeta.short}
                         </span>
+                        {hasSubtasks && (
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                {subtaskDone}/{subtaskTotal}
+                            </span>
+                        )}
+                        {issue.orphanParentRef && (
+                            <span className="text-[10px] text-subtle-foreground">
+                                ↳ {issue.orphanParentRef}
+                            </span>
+                        )}
                     </div>
                     <Link
                         href={`/issues/${issueRef}`}
@@ -115,6 +214,35 @@ function KanbanCard({
                     >
                         {issue.title}
                     </Link>
+
+                    {hasSubtasks && (
+                        <div className="pt-0.5">
+                            <button
+                                type="button"
+                                onClick={() => setExpanded((v) => !v)}
+                                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                                aria-expanded={expanded}
+                            >
+                                {expanded ? (
+                                    <ChevronDown className="h-3 w-3" />
+                                ) : (
+                                    <ChevronRight className="h-3 w-3" />
+                                )}
+                                {subtaskTotal} subtask{subtaskTotal === 1 ? "" : "s"}
+                            </button>
+                            {expanded && (
+                                <div className="mt-1.5 space-y-0.5 border-l border-border pl-2">
+                                    {issue.subtasks.map((sub) => (
+                                        <SubtaskRow
+                                            key={sub.id}
+                                            subtask={sub}
+                                            interactive={interactive}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -173,6 +301,12 @@ export function MainKanbanBoard({
     const router = useRouter();
     const [pending, startTransition] = useTransition();
 
+    /** Roots only for columns; subtasks live nested under parents. */
+    const rootIssues = useMemo(
+        () => issues.filter((i) => !i.parentIssueId || i.orphanParentRef),
+        [issues]
+    );
+
     const byStatus = useMemo(() => {
         const map: Record<IssueStatus, KanbanIssue[]> = {
             BACKLOG: [],
@@ -181,14 +315,12 @@ export function MainKanbanBoard({
             REVIEW: [],
             DONE: [],
         };
-        for (const issue of issues) {
-            const s = (["BACKLOG", "OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const).includes(issue.status)
-                ? issue.status
-                : "OPEN";
+        for (const issue of rootIssues) {
+            const s = normalizeIssueStatus(issue.status);
             map[s].push({ ...issue, status: s });
         }
         return map;
-    }, [issues]);
+    }, [rootIssues]);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -203,15 +335,12 @@ export function MainKanbanBoard({
         const issueId = String(active.id);
         const overId = String(over.id);
         let nextStatus: IssueStatus | null = null;
-        if (["BACKLOG", "OPEN", "IN_PROGRESS", "REVIEW", "DONE"].includes(overId)) {
+        if ((VALID_STATUS as readonly string[]).includes(overId)) {
             nextStatus = overId as IssueStatus;
         } else {
-            const targetIssue = issues.find((i) => i.id === overId);
+            const targetIssue = rootIssues.find((i) => i.id === overId);
             if (targetIssue) {
-                const s = targetIssue.status;
-                nextStatus = (["BACKLOG", "OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const).includes(s)
-                    ? s
-                    : "OPEN";
+                nextStatus = normalizeIssueStatus(targetIssue.status);
             }
         }
         if (!nextStatus) return;

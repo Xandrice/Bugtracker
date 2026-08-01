@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, X, Loader2 } from "lucide-react";
+import { Plus, X, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
 import {
     PRIORITY_OPTIONS,
@@ -38,6 +37,7 @@ export function SubtasksPanel({
 }) {
     const [adding, setAdding] = useState(false);
     const [title, setTitle] = useState("");
+    const [showOptions, setShowOptions] = useState(false);
     const [type, setType] = useState<string>("TASK");
     const [priority, setPriority] = useState<string>("MEDIUM");
     const [submitting, setSubmitting] = useState(false);
@@ -45,6 +45,14 @@ export function SubtasksPanel({
     const total = subtasks.length;
     const done = subtasks.filter((s) => s.status === "DONE").length;
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+    const resetForm = () => {
+        setTitle("");
+        setType("TASK");
+        setPriority("MEDIUM");
+        setShowOptions(false);
+        setAdding(false);
+    };
 
     return (
         <div className="rounded-md border border-border bg-surface">
@@ -139,8 +147,7 @@ export function SubtasksPanel({
                         setSubmitting(true);
                         try {
                             await createSubtask(formData);
-                            setTitle("");
-                            setAdding(false);
+                            resetForm();
                         } finally {
                             setSubmitting(false);
                         }
@@ -148,6 +155,12 @@ export function SubtasksPanel({
                     className="space-y-2 border-t border-border bg-surface-2 p-3"
                 >
                     <input type="hidden" name="parentIssueId" value={parentIssueId} />
+                    {!showOptions && (
+                        <>
+                            <input type="hidden" name="type" value={type} />
+                            <input type="hidden" name="priority" value={priority} />
+                        </>
+                    )}
                     <Input
                         name="title"
                         value={title}
@@ -156,31 +169,42 @@ export function SubtasksPanel({
                         autoFocus
                         required
                     />
-                    <div className="grid grid-cols-2 gap-2">
-                        <Select
-                            name="type"
-                            value={type}
-                            onChange={setType}
-                            options={TYPE_OPTIONS}
-                            size="xs"
-                        />
-                        <Select
-                            name="priority"
-                            value={priority}
-                            onChange={setPriority}
-                            options={PRIORITY_OPTIONS}
-                            size="xs"
-                        />
-                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setShowOptions((v) => !v)}
+                        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                    >
+                        {showOptions ? (
+                            <ChevronDown className="h-3 w-3" />
+                        ) : (
+                            <ChevronRight className="h-3 w-3" />
+                        )}
+                        Type & priority
+                    </button>
+                    {showOptions && (
+                        <div className="grid grid-cols-2 gap-2">
+                            <Select
+                                name="type"
+                                value={type}
+                                onChange={setType}
+                                options={TYPE_OPTIONS}
+                                size="xs"
+                            />
+                            <Select
+                                name="priority"
+                                value={priority}
+                                onChange={setPriority}
+                                options={PRIORITY_OPTIONS}
+                                size="xs"
+                            />
+                        </div>
+                    )}
                     <div className="flex items-center justify-end gap-1.5">
                         <Button
                             type="button"
                             size="xs"
                             variant="ghost"
-                            onClick={() => {
-                                setAdding(false);
-                                setTitle("");
-                            }}
+                            onClick={resetForm}
                             disabled={submitting}
                         >
                             Cancel

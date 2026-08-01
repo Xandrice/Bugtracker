@@ -22,7 +22,7 @@ export default function DeleteIssueForm({ issueId }: { issueId: string }) {
         >
             <input type="hidden" name="issueId" value={issueId} />
             <p className="text-xs text-muted-foreground">
-                Permanently delete this issue, its subtasks, and notes.
+                Permanently delete this issue. Linked subtasks become standalone issues.
             </p>
             <Button type="submit" variant="danger" size="xs" disabled={isDeleting}>
                 {isDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}

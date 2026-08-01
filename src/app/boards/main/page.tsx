@@ -1,9 +1,28 @@
-import Link from "next/link";
-import { Plus } from "lucide-react";
 import { db } from "@/lib/db";
 import { auth } from "@/../auth";
-import { MainKanbanBoard, type KanbanIssue } from "./MainKanbanBoard";
+import { MainKanbanBoard, type KanbanIssue, type KanbanSubtask } from "./MainKanbanBoard";
+import { BoardNewIssueButton } from "./BoardNewIssueButton";
 import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
+import { formatIssueRef } from "@/lib/issue-ids";
+import type { IssuePriority, IssueStatus, IssueType } from "@/lib/issue-tokens";
+
+function mapSubtask(s: {
+    id: string;
+    publicKey: string | null;
+    title: string;
+    status: string;
+    priority: string;
+    type: string;
+}): KanbanSubtask {
+    return {
+        id: s.id,
+        publicKey: s.publicKey,
+        title: s.title,
+        status: s.status as IssueStatus,
+        priority: s.priority as IssuePriority,
+        type: s.type as IssueType,
+    };
+}
 
 export default async function MainBoardPage() {
     const session = await auth();
@@ -16,17 +35,46 @@ export default async function MainBoardPage() {
             status: true,
             priority: true,
             type: true,
+            parentIssueId: true,
+            parentIssue: {
+                select: { id: true, publicKey: true },
+            },
+            subtasks: {
+                orderBy: { createdAt: "asc" },
+                select: {
+                    id: true,
+                    publicKey: true,
+                    title: true,
+                    status: true,
+                    priority: true,
+                    type: true,
+                },
+            },
         },
     });
 
-    const issues: KanbanIssue[] = rawIssues.map((i) => ({
-        id: i.id,
-        publicKey: i.publicKey ?? null,
-        title: i.title,
-        status: i.status as KanbanIssue["status"],
-        priority: i.priority as KanbanIssue["priority"],
-        type: i.type as KanbanIssue["type"],
-    }));
+    const idSet = new Set(rawIssues.map((i) => i.id));
+
+    const issues: KanbanIssue[] = rawIssues.map((i) => {
+        const parentMissing = !!i.parentIssueId && !idSet.has(i.parentIssueId);
+        return {
+            id: i.id,
+            publicKey: i.publicKey ?? null,
+            title: i.title,
+            status: i.status as IssueStatus,
+            priority: i.priority as IssuePriority,
+            type: i.type as IssueType,
+            parentIssueId: i.parentIssueId,
+            orphanParentRef: parentMissing
+                ? formatIssueRef(i.parentIssue?.publicKey ?? null, i.parentIssueId!)
+                : null,
+            // Only attach subtasks on root cards (and orphans treated as roots).
+            subtasks:
+                !i.parentIssueId || parentMissing
+                    ? i.subtasks.map(mapSubtask)
+                    : [],
+        };
+    });
 
     const canDrag = !!session?.user?.id;
 
@@ -34,16 +82,8 @@ export default async function MainBoardPage() {
         <PageContainer>
             <PageHeader
                 title="Main board"
-                description="Drag cards between columns to update status."
-                actions={
-                    <Link
-                        href="/issues/new"
-                        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 h-8 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                    >
-                        <Plus className="h-3.5 w-3.5" />
-                        New issue
-                    </Link>
-                }
+                description="Drag parent cards between columns. Expand a card to manage its subtasks."
+                actions={<BoardNewIssueButton />}
             />
             {!canDrag && (
                 <p className="text-xs text-warning">

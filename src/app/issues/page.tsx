@@ -70,6 +70,7 @@ export default async function AllIssuesPage() {
             <DataGrid
                 issues={issues}
                 assignableUsers={assignableUsers}
+                defaultStatusFilter="ACTIVE"
                 savedViews={savedViews.map((v: any) => ({
                     id: v.id,
                     name: v.name,

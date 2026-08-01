@@ -106,6 +106,11 @@ interface DataGridProps {
     /** When provided, the assignee column becomes an inline dropdown. */
     assignableUsers?: UserSnippet[];
     savedViews?: Array<{ id: string; name: string; filters: SavedViewFilters }>;
+    /**
+     * Initial status filter. Use `"ACTIVE"` to hide DONE issues by default.
+     * Clear resets to this value.
+     */
+    defaultStatusFilter?: string;
 }
 
 const EMPTY_SAVED_VIEWS: Array<{ id: string; name: string; filters: SavedViewFilters }> = [];
@@ -115,6 +120,7 @@ export function DataGrid({
     hideFilters = false,
     assignableUsers,
     savedViews = EMPTY_SAVED_VIEWS,
+    defaultStatusFilter = "ALL",
 }: DataGridProps) {
     const [localIssues, setLocalIssues] = useState(issues);
     const [localSavedViews, setLocalSavedViews] = useState(savedViews);
@@ -123,7 +129,7 @@ export function DataGrid({
         key: keyof IssueSnippet;
         direction: "asc" | "desc";
     } | null>(null);
-    const [statusFilter, setStatusFilter] = useState<string>("ALL");
+    const [statusFilter, setStatusFilter] = useState<string>(defaultStatusFilter);
     const [typeFilter, setTypeFilter] = useState<string>("ALL");
     const [assigneeFilter, setAssigneeFilter] = useState<string>("ALL");
     const [search, setSearch] = useState("");
@@ -149,7 +155,7 @@ export function DataGrid({
     }, [savedViews]);
 
     const applySavedView = (filters: SavedViewFilters) => {
-        setStatusFilter(filters.status || "ALL");
+        setStatusFilter(filters.status || defaultStatusFilter);
         setTypeFilter(filters.type || "ALL");
         setAssigneeFilter(filters.assignee || "ALL");
         setSearch(filters.search || "");
@@ -247,7 +253,11 @@ export function DataGrid({
     }, [localIssues, issueIds]);
 
     const matchesFilters = (issue: IssueSnippet, q: string) => {
-        if (statusFilter !== "ALL" && issue.status !== statusFilter) return false;
+        if (statusFilter === "ACTIVE") {
+            if (issue.status === "DONE") return false;
+        } else if (statusFilter !== "ALL" && issue.status !== statusFilter) {
+            return false;
+        }
         if (typeFilter !== "ALL" && issue.type !== typeFilter) return false;
         if (assigneeFilter !== "ALL") {
             if (assigneeFilter === "UNASSIGNED") {
@@ -437,7 +447,7 @@ export function DataGrid({
     };
 
     const hasActiveFilters =
-        statusFilter !== "ALL" ||
+        statusFilter !== defaultStatusFilter ||
         typeFilter !== "ALL" ||
         assigneeFilter !== "ALL" ||
         search.trim() !== "";
@@ -466,6 +476,7 @@ export function DataGrid({
                         value={statusFilter}
                         onChange={setStatusFilter}
                         options={[
+                            { value: "ACTIVE", label: "Status · Active" },
                             { value: "ALL", label: "Status · All" },
                             ...STATUS_OPTIONS,
                         ]}
@@ -504,7 +515,7 @@ export function DataGrid({
                         <button
                             type="button"
                             onClick={() => {
-                                setStatusFilter("ALL");
+                                setStatusFilter(defaultStatusFilter);
                                 setTypeFilter("ALL");
                                 setAssigneeFilter("ALL");
                                 setSearch("");
