@@ -7,7 +7,14 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/Section";
 import { BookOpenText, Logs, ShieldAlert } from "lucide-react";
 import { canViewLogs, getPermissionContext } from "@/lib/permissions";
-import { isVictoriaLogsConfigured, queryVictoriaLogs } from "@/lib/victorialogs";
+import {
+  getVictoriaLogsConnectionInfo,
+  isVictoriaLogsConfigured,
+  queryVictoriaLogs,
+  type VictoriaLogsAuthMode,
+  type VictoriaLogsDebug,
+  type VictoriaLogsFailureStage,
+} from "@/lib/victorialogs";
 
 type LogsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -40,6 +47,80 @@ function formatTime(raw: string | undefined): string {
 function truncate(value: string, max = 120): string {
   if (value.length <= max) return value;
   return `${value.slice(0, max - 1)}…`;
+}
+
+function formatAuthMode(mode: VictoriaLogsAuthMode): string {
+  switch (mode) {
+    case "bearer":
+      return "Bearer token";
+    case "basic":
+      return "Basic auth";
+    case "incomplete-basic":
+      return "Incomplete basic auth (username or password missing)";
+    default:
+      return "None";
+  }
+}
+
+function formatStage(stage: VictoriaLogsFailureStage | "ok"): string {
+  switch (stage) {
+    case "ok":
+      return "Connected";
+    case "config":
+      return "Configuration";
+    case "url":
+      return "URL parsing";
+    case "connect":
+      return "Connecting to host";
+    case "tls":
+      return "TLS handshake";
+    case "http":
+      return "HTTP response";
+    case "parse":
+      return "Parsing response";
+  }
+}
+
+function DebugRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[120px_1fr] gap-2 text-xs">
+      <dt className="text-subtle-foreground">{label}</dt>
+      <dd className="break-all font-mono text-foreground">{value}</dd>
+    </div>
+  );
+}
+
+function ConnectionDebug({ debug }: { debug: VictoriaLogsDebug }) {
+  return (
+    <dl className="space-y-1.5">
+      <DebugRow label="Failed at" value={formatStage(debug.stage)} />
+      {debug.endpoint ? <DebugRow label="Endpoint" value={debug.endpoint} /> : null}
+      {debug.host ? <DebugRow label="Host" value={debug.host} /> : null}
+      {debug.protocol ? <DebugRow label="Protocol" value={debug.protocol} /> : null}
+      <DebugRow label="Auth" value={formatAuthMode(debug.authMode)} />
+      <DebugRow
+        label="Tenant sent"
+        value={`${debug.accountId ?? "—"}:${debug.projectId ?? "—"}`}
+      />
+      {debug.elapsedMs != null ? <DebugRow label="Elapsed" value={`${debug.elapsedMs}ms`} /> : null}
+      {debug.httpStatus != null ? (
+        <DebugRow label="HTTP status" value={String(debug.httpStatus)} />
+      ) : null}
+      {debug.errorCode ? <DebugRow label="Error code" value={debug.errorCode} /> : null}
+      {debug.causeChain.length > 0 ? (
+        <div className="grid grid-cols-[120px_1fr] gap-2 text-xs">
+          <dt className="text-subtle-foreground">Cause chain</dt>
+          <dd className="space-y-1">
+            {debug.causeChain.map((line, idx) => (
+              <code key={`${idx}-${line}`} className="block break-all text-foreground">
+                {idx + 1}. {line}
+              </code>
+            ))}
+          </dd>
+        </div>
+      ) : null}
+    </dl>
+  );
 }
 
 const QUERY_EXAMPLES: Array<{ label: string; query: string }> = [
@@ -84,6 +165,7 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
   }
 
   const configured = isVictoriaLogsConfigured();
+  const connection = getVictoriaLogsConnectionInfo();
   const params = await searchParams;
 
   const query = readParam(params.q).trim() || "*";
@@ -148,10 +230,18 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
                 <CardDescription>
                   Use LogsQL in <code>q</code>. Time range accepts absolute or relative values (for
                   example, <code>1h</code> to <code>now</code>).
+                  {connection.host
+                    ? ` Querying ${connection.host} (${connection.protocol ?? "http"}, auth: ${formatAuthMode(connection.authMode).toLowerCase()}).`
+                    : ""}
                 </CardDescription>
               </div>
             </CardHeader>
             <CardBody>
+              {connection.urlIssue ? (
+                <p className="mb-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-muted-foreground">
+                  {connection.urlIssue}
+                </p>
+              ) : null}
               <form method="get" className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
                 <div className="space-y-1 md:col-span-2 xl:col-span-3">
                   <Label htmlFor="q">LogsQL query</Label>
@@ -227,7 +317,7 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
                 <CardTitle>Results</CardTitle>
                 <CardDescription>
                   {result?.error
-                    ? "The query failed. Check connection, credentials, and query syntax."
+                    ? `The query failed at ${formatStage(result.debug.stage).toLowerCase()}.`
                     : `Showing ${result?.entries.length || 0} entries.`}
                   {result?.requestDurationSeconds
                     ? ` Query duration: ${result.requestDurationSeconds}s.`
@@ -243,7 +333,18 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
             </CardHeader>
             <CardBody className="p-0">
               {result?.error ? (
-                <div className="px-4 py-3 text-xs text-danger">{result.error}</div>
+                <div className="space-y-3 px-4 py-3">
+                  <p className="text-xs text-danger">{result.error}</p>
+                  {result.debug.hint ? (
+                    <p className="text-xs text-muted-foreground">{result.debug.hint}</p>
+                  ) : null}
+                  <div className="rounded-md border border-border bg-muted/40 p-3">
+                    <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-subtle-foreground">
+                      Connection debug
+                    </p>
+                    <ConnectionDebug debug={result.debug} />
+                  </div>
+                </div>
               ) : (result?.entries.length || 0) === 0 ? (
                 <div className="px-4 py-8 text-center text-sm text-muted-foreground">
                   No logs matched this query.
