@@ -11,6 +11,7 @@ import {
   Fingerprint,
   Gavel,
   MessageSquare,
+  Package,
   ShieldAlert,
   Sparkles,
   User,
@@ -31,6 +32,11 @@ import {
   requirePermission,
 } from "@/lib/permissions";
 import { getStaffPlayerDetail } from "@/lib/fivem-db";
+import {
+  getStaffPlayerInventory,
+  type StaffInventoryContainer,
+  type StaffInventoryItem,
+} from "@/lib/fivem-inventory";
 import { discordSignInUrl } from "@/lib/auth-urls";
 import { togglePlayerBanAction, togglePlayerWhitelistAction } from "../../actions";
 
@@ -38,6 +44,79 @@ function boolBadge(value: boolean | null, trueLabel: string, falseLabel: string,
   if (value === true) return <Badge tone={trueTone}>{trueLabel}</Badge>;
   if (value === false) return <Badge tone="neutral">{falseLabel}</Badge>;
   return null;
+}
+
+function InventoryItemRow({ item }: { item: StaffInventoryItem }) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-border/60 py-1.5 last:border-b-0">
+      <div className="min-w-0">
+        <p className="truncate text-sm text-foreground">{item.label || item.name}</p>
+        {item.label && <p className="font-mono text-[11px] text-muted-foreground">{item.name}</p>}
+        {item.details.length > 0 && (
+          <p className="text-[11px] text-muted-foreground">{item.details.join(" · ")}</p>
+        )}
+      </div>
+      <span className="shrink-0 text-xs font-medium tabular-nums text-foreground">×{item.count}</span>
+    </div>
+  );
+}
+
+function InventorySection({
+  title,
+  containers,
+  emptyLabel,
+}: {
+  title: string;
+  containers: StaffInventoryContainer[];
+  emptyLabel: string;
+}) {
+  return (
+    <div>
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {title}
+      </p>
+      {containers.length === 0 ? (
+        <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+      ) : (
+        <div className="space-y-3">
+          {containers.map((container) => (
+            <div key={container.id} className="rounded-md border border-border bg-surface-2 p-3">
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium text-foreground">{container.title}</p>
+                  {container.subtitle && (
+                    <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                      {container.subtitle}
+                    </p>
+                  )}
+                </div>
+                <Badge tone="neutral">
+                  {container.totalItems} {container.totalItems === 1 ? "item" : "items"}
+                </Badge>
+              </div>
+              {container.items.length > 0 ? (
+                <div>
+                  {container.items.map((item, index) => (
+                    <InventoryItemRow
+                      key={`${container.id}-${item.slot ?? "x"}-${item.name}-${index}`}
+                      item={item}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Nothing stored.</p>
+              )}
+              {container.capped && (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Showing first {container.items.length} of {container.totalItems} items.
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default async function StaffPlayerDetailPage({
@@ -74,8 +153,15 @@ export default async function StaffPlayerDetailPage({
   }
 
   const canManage = canManageStaffPlayers(permissions);
-  const player = await getStaffPlayerDetail(identifier);
+  const [player, inventory] = await Promise.all([
+    getStaffPlayerDetail(identifier),
+    getStaffPlayerInventory(identifier),
+  ]);
   if (!player) notFound();
+
+  const showInventory =
+    !!inventory &&
+    (inventory.carried != null || inventory.stashes.length > 0 || inventory.vehicles.length > 0);
 
   // Fetch Discord account info if we have a Discord ID
   let discordAccount: { name: string | null; email: string | null; image: string | null } | null = null;
@@ -332,6 +418,50 @@ export default async function StaffPlayerDetailPage({
           )}
         </CardBody>
       </Card>
+
+      {showInventory && inventory && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-4 w-4 text-primary" />
+              Inventory
+            </CardTitle>
+          </CardHeader>
+          <CardBody className="space-y-5">
+            {inventory.carried && (
+              <InventorySection
+                title="Carried"
+                containers={[inventory.carried]}
+                emptyLabel="Nothing carried."
+              />
+            )}
+            {inventory.stashes.length > 0 && (
+              <div className={inventory.carried ? "border-t border-border pt-4" : undefined}>
+                <InventorySection
+                  title="Stashes"
+                  containers={inventory.stashes}
+                  emptyLabel="No linked stashes."
+                />
+              </div>
+            )}
+            {inventory.vehicles.length > 0 && (
+              <div
+                className={
+                  inventory.carried || inventory.stashes.length > 0
+                    ? "border-t border-border pt-4"
+                    : undefined
+                }
+              >
+                <InventorySection
+                  title="Vehicle trunks & gloveboxes"
+                  containers={inventory.vehicles}
+                  emptyLabel="No trunk or glovebox items."
+                />
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      )}
 
       {player.criminal && (
         <Card>
