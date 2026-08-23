@@ -6,6 +6,7 @@ import {
   CameraIcon,
   Coins,
   RefreshCcw,
+  History,
   Shield,
   Users,
 } from "lucide-react";
@@ -24,6 +25,8 @@ import {
 } from "@/lib/permissions";
 import { getDashboardMetrics } from "@/lib/fivem-db";
 import { getLatestSnapshotTime, getMetricHistory } from "@/lib/staff-snapshots";
+import { listRecentStaffAuditEvents } from "@/lib/staff-audit";
+import { StaffAuditList } from "@/components/staff/StaffAuditList";
 import {
   AreaTrendPanel,
   CHART_COLORS,
@@ -111,10 +114,11 @@ export default async function StaffDashboardPage() {
   const showVehiclesLink = canViewStaffVehicles(permissions);
   const showEconomyLink = canViewStaffEconomy(permissions);
 
-  const [metrics, history, lastSnapshot] = await Promise.all([
+  const [metrics, history, lastSnapshot, recentWrites] = await Promise.all([
     getDashboardMetrics(),
     getMetricHistory(30),
     getLatestSnapshotTime(),
+    listRecentStaffAuditEvents(15),
   ]);
 
   const cashVsBank = [
@@ -202,6 +206,22 @@ export default async function StaffDashboardPage() {
           </div>
         }
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <History className="h-4 w-4 text-primary" />
+            Recent staff writes
+          </CardTitle>
+        </CardHeader>
+        <CardBody>
+          <StaffAuditList
+            events={recentWrites}
+            showTarget
+            emptyLabel="No dashboard ban, whitelist, or garage/storage writes yet."
+          />
+        </CardBody>
+      </Card>
 
       {!metrics.configured && (
         <Card className="border-warning/30">

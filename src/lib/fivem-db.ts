@@ -1740,10 +1740,49 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   }
 }
 
+export type PlayerFlagToggleResult = {
+  identifier: string;
+  field: "banned" | "whitelisted";
+  oldValue: boolean;
+  newValue: boolean;
+};
+
+export type VehicleWriteResult = {
+  vehicleKey: string;
+  plate: string | null;
+  ownerIdentifier: string | null;
+  field: string;
+  oldValue: string | null;
+  newValue: string | null;
+};
+
+async function fetchVehicleRawRow(
+  capabilities: VehicleTableCapabilities,
+  vehicleKey: string
+): Promise<Record<string, unknown>> {
+  const sql = `
+    SELECT *
+    FROM ${quoteIdentifier(capabilities.tableName)}
+    WHERE ${quoteIdentifier(capabilities.keyColumn)} = ?
+    LIMIT 1
+  `;
+  const rows = await queryRows<RowDataPacket>(sql, [vehicleKey]);
+  const row = rows[0];
+  if (!row) {
+    throw new Error("Target record was not found.");
+  }
+  return row as Record<string, unknown>;
+}
+
+function formatStoredAuditValue(value: boolean | null): string | null {
+  if (value == null) return null;
+  return value ? "stored" : "out";
+}
+
 export async function togglePlayerFlag(
   identifier: string,
   flag: "banned" | "whitelisted"
-): Promise<void> {
+): Promise<PlayerFlagToggleResult> {
   const schema = await getSchemaSnapshot();
   const capabilities = detectPlayerCapabilities(schema);
   if (!capabilities) {
@@ -1761,7 +1800,8 @@ export async function togglePlayerFlag(
     identifier,
     targetColumn
   );
-  const nextValue = !(toBoolean(currentValue) ?? false);
+  const oldValue = toBoolean(currentValue) ?? false;
+  const nextValue = !oldValue;
   const updateValue = coerceBooleanForDatabase(currentValue, nextValue);
 
   const sql = `
@@ -1775,9 +1815,16 @@ export async function togglePlayerFlag(
   if (result.affectedRows < 1) {
     throw new Error("No player row was updated.");
   }
+
+  return {
+    identifier,
+    field: flag,
+    oldValue,
+    newValue: nextValue,
+  };
 }
 
-export async function toggleVehicleStorageState(vehicleKey: string): Promise<void> {
+export async function toggleVehicleStorageState(vehicleKey: string): Promise<VehicleWriteResult> {
   const schema = await getSchemaSnapshot();
   const capabilities = detectVehicleCapabilities(schema);
   if (!capabilities) {
@@ -1789,18 +1836,16 @@ export async function toggleVehicleStorageState(vehicleKey: string): Promise<voi
     throw new Error("The detected vehicle table does not expose a stored/state column.");
   }
 
-  const currentValue = await fetchCurrentFieldValue(
-    capabilities.tableName,
-    capabilities.keyColumn,
-    vehicleKey,
-    targetColumn
-  );
+  const row = await fetchVehicleRawRow(capabilities, vehicleKey);
+  const vehicle = mapVehicleRow(row, capabilities);
+  const currentValue = getField(row, targetColumn);
   const currentBool = capabilities.storedColumn
     ? toBoolean(currentValue)
     : typeof currentValue === "number"
       ? currentValue >= 1
       : toBoolean(currentValue);
-  const nextValue = !(currentBool ?? false);
+  const oldValue = currentBool ?? false;
+  const nextValue = !oldValue;
   const updateValue = coerceBooleanForDatabase(currentValue, nextValue);
 
   const sql = `
@@ -1813,9 +1858,21 @@ export async function toggleVehicleStorageState(vehicleKey: string): Promise<voi
   if (result.affectedRows < 1) {
     throw new Error("No vehicle row was updated.");
   }
+
+  return {
+    vehicleKey: vehicle.key,
+    plate: vehicle.plate,
+    ownerIdentifier: vehicle.ownerIdentifier,
+    field: "stored",
+    oldValue: formatStoredAuditValue(oldValue),
+    newValue: formatStoredAuditValue(nextValue),
+  };
 }
 
-export async function putVehicleInGarage(vehicleKey: string, garageName: string): Promise<void> {
+export async function putVehicleInGarage(
+  vehicleKey: string,
+  garageName: string
+): Promise<VehicleWriteResult> {
   const garage = garageName.trim();
   if (!garage) {
     throw new Error("Garage name is required.");
@@ -1839,12 +1896,9 @@ export async function putVehicleInGarage(vehicleKey: string, garageName: string)
     throw new Error("The detected vehicle table does not expose a stored/state column.");
   }
 
-  const currentStorageValue = await fetchCurrentFieldValue(
-    capabilities.tableName,
-    capabilities.keyColumn,
-    vehicleKey,
-    storageColumn
-  );
+  const row = await fetchVehicleRawRow(capabilities, vehicleKey);
+  const vehicle = mapVehicleRow(row, capabilities);
+  const currentStorageValue = getField(row, storageColumn);
   const storedValue = coerceBooleanForDatabase(currentStorageValue, true);
 
   const sql = `
@@ -1858,4 +1912,13 @@ export async function putVehicleInGarage(vehicleKey: string, garageName: string)
   if (result.affectedRows < 1) {
     throw new Error("No vehicle row was updated.");
   }
+
+  return {
+    vehicleKey: vehicle.key,
+    plate: vehicle.plate,
+    ownerIdentifier: vehicle.ownerIdentifier,
+    field: "garage",
+    oldValue: vehicle.garage,
+    newValue: garage,
+  };
 }

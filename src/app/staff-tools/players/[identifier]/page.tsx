@@ -10,6 +10,7 @@ import {
   FileText,
   Fingerprint,
   Gavel,
+  History,
   MessageSquare,
   ShieldAlert,
   Sparkles,
@@ -31,7 +32,9 @@ import {
   requirePermission,
 } from "@/lib/permissions";
 import { getStaffPlayerDetail } from "@/lib/fivem-db";
+import { listPlayerStaffAuditEvents } from "@/lib/staff-audit";
 import { discordSignInUrl } from "@/lib/auth-urls";
+import { StaffAuditList } from "@/components/staff/StaffAuditList";
 import { togglePlayerBanAction, togglePlayerWhitelistAction } from "../../actions";
 
 function boolBadge(value: boolean | null, trueLabel: string, falseLabel: string, trueTone: "danger" | "success" | "warning") {
@@ -76,6 +79,11 @@ export default async function StaffPlayerDetailPage({
   const canManage = canManageStaffPlayers(permissions);
   const player = await getStaffPlayerDetail(identifier);
   if (!player) notFound();
+  const auditEvents = await listPlayerStaffAuditEvents({
+    playerIdentifier: player.identifier,
+    vehicleKeys: player.vehicles.map((vehicle) => vehicle.key),
+    limit: 20,
+  });
 
   // Fetch Discord account info if we have a Discord ID
   let discordAccount: { name: string | null; email: string | null; image: string | null } | null = null;
@@ -459,6 +467,21 @@ export default async function StaffPlayerDetailPage({
           </CardBody>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <History className="h-4 w-4 text-primary" />
+            Recent staff writes
+          </CardTitle>
+        </CardHeader>
+        <CardBody>
+          <StaffAuditList
+            events={auditEvents}
+            emptyLabel="No dashboard ban, whitelist, or vehicle writes for this player yet."
+          />
+        </CardBody>
+      </Card>
 
       {canManage && (player.supportsBanToggle || player.supportsWhitelistToggle) && (
         <Card>

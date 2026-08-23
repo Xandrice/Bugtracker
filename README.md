@@ -143,6 +143,7 @@ curl -X POST https://tracker.example.com/api/issues \
   - `pnpm prisma db push` (no migration history), or
   - `pnpm prisma migrate deploy` (after baseline/migrations are set up).
 - Keeping Prisma out of build avoids accidental table drops in shared/existing databases.
+- Staff tools write audit (`StaffAuditEvent` — ban, whitelist, garage/storage toggles) is a Prisma table. Apply `prisma/migrations/20260823_staff_audit_events` with `pnpm prisma migrate deploy` or `pnpm prisma db push` **outside** `vercel-build` / `next build`. Do not add migrate to the Vercel build command.
 
 ### 5) Cut over from Render
 
