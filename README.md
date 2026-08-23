@@ -87,6 +87,48 @@ Optional:
 - If a linked thread is archived (`THREAD_UPDATE` with `archived=true`), the linked issue is auto-set to `DONE`.
 - Sync is one-way for close state: resolving in the tracker does not archive/close Discord threads.
 
+#### Public issue creation API
+
+Discord bots can create issues programmatically via `POST /api/issues`.
+
+**Auth:** Header `x-discord-webhook-secret` must match `DISCORD_WEBHOOK_SECRET`. Returns 401 if missing/wrong, 500 if env var unset.
+
+**JSON body:**
+- Required: `title` (string), `discordUserId` (Discord snowflake)
+- Optional: `description`, `type` (BUG|FEATURE|TASK, default BUG), `priority` (LOW|MEDIUM|HIGH|URGENT, default MEDIUM), `severity` (MINOR|MAJOR|CRITICAL|BLOCKER, default MINOR), `status` (BACKLOG|OPEN|IN_PROGRESS|REVIEW|DONE, default OPEN), `discordThreadId` or `discordPostId` (string or discord.com URL), `resourceName`, `serverVersion`, `reproductionSteps`, `expectedBehavior`, `environment`, `tags`, `label`, `discordUserName`, `discordUserAvatar`
+
+**Behavior:**
+- Discord-first: the bot creates or already has a forum thread. This API does NOT create a Discord thread.
+- If `discordThreadId` is already linked to an issue, returns 200 with existing issue (no duplicate).
+- After creating a new issue with a linked thread, posts a tracker notice via Discord.
+
+**Response:** 201 (new) or 200 (existing)
+```json
+{
+  "id": "...",
+  "publicKey": "...",
+  "url": "https://tracker.example.com/issues/abc123",
+  "title": "...",
+  "existing": false
+}
+```
+
+**Example:**
+```bash
+curl -X POST https://tracker.example.com/api/issues \
+  -H "Content-Type: application/json" \
+  -H "x-discord-webhook-secret: YOUR_SECRET" \
+  -d '{
+    "title": "Player spawn bug in new update",
+    "discordUserId": "123456789012345678",
+    "description": "Players spawn underground",
+    "type": "BUG",
+    "priority": "HIGH",
+    "severity": "MAJOR",
+    "discordThreadId": "987654321098765432"
+  }'
+```
+
 ### VictoriaLogs notes
 
 - Logs page endpoint: `/logs`
