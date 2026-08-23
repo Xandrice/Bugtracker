@@ -18,6 +18,7 @@ import {
   Car,
   Coins,
   BarChart3,
+  Banknote,
 } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { QuickCreateTrigger } from "@/components/issues/QuickCreateIssue";
@@ -35,6 +36,9 @@ function navItems(canViewLogs: boolean, staffToolAccess: StaffToolAccess) {
     ...(staffToolAccess.players ? [{ name: "Players", href: "/staff-tools/players", icon: Users }] : []),
     ...(staffToolAccess.vehicles ? [{ name: "Vehicles", href: "/staff-tools/vehicles", icon: Car }] : []),
     ...(staffToolAccess.economy ? [{ name: "Economy", href: "/staff-tools/economy", icon: Coins }] : []),
+    ...(staffToolAccess.players || staffToolAccess.economy
+      ? [{ name: "Compensation", href: "/staff-tools/compensation", icon: Banknote }]
+      : []),
   ];
 
   return [

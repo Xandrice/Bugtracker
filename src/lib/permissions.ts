@@ -231,6 +231,14 @@ export function canViewStaffEconomy(context: PermissionContext | null): boolean 
   return context?.staffPermissions.economy.view ?? false;
 }
 
+export function canViewCompensation(context: PermissionContext | null): boolean {
+  return canViewStaffPlayers(context) || canViewStaffEconomy(context);
+}
+
+export function canManageCompensation(context: PermissionContext | null): boolean {
+  return canManageStaffPlayers(context) || !!context?.isAdminLike;
+}
+
 export function canRefreshStaffSchema(context: PermissionContext | null): boolean {
   return context?.staffPermissions.schema.refresh ?? false;
 }
