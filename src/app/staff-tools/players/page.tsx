@@ -70,7 +70,7 @@ export default async function StaffPlayersPage({
     <PageContainer className="max-w-[1200px]">
       <PageHeader
         title="Staff tools · Players"
-        description="Search players and open a profile for full database details."
+        description="Search by character name, citizenid, Discord, license, or Steam, then open a profile."
         icon={<Users className="h-4 w-4" />}
         actions={
           <div className="flex items-center gap-2">
@@ -177,7 +177,7 @@ export default async function StaffPlayersPage({
                 <Input
                   name="playerQ"
                   defaultValue={playerQ}
-                  placeholder="Search by name, ID, or char info"
+                  placeholder="Name, citizenid, Discord, license, or Steam"
                   className="h-8 w-64 text-xs"
                 />
                 <Button size="sm" variant="outline" type="submit">
