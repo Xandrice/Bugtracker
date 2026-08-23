@@ -1,26 +1,19 @@
-import { DataGrid, IssueSnippet } from "@/components/views/DataGrid";
 import { auth } from "@/../auth";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { db } from "@/lib/db";
-import { getStaffUsers } from "@/lib/staff";
 import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { formatIssueRef } from "@/lib/issue-ids";
-import { canAssignIssues, getPermissionContext } from "@/lib/permissions";
 import {
     normalizePriority,
-    normalizeSeverity,
-    normalizeStatus,
     normalizeType,
 } from "@/lib/issue-tokens";
+import { ensureMissingBacklogRanks } from "@/lib/issue-backlog";
+import { BacklogRankedList, type BacklogIssue } from "./BacklogRankedList";
 
 export default async function BacklogIssuesPage() {
     const session = await auth();
-    const permissionContext = await getPermissionContext(session?.user?.id);
-    const assignableUsers =
-        session?.user?.id && canAssignIssues(permissionContext)
-            ? await getStaffUsers()
-            : [];
+    await ensureMissingBacklogRanks();
 
     const rawIssues = await db.issue.findMany({
         where: { status: "BACKLOG" },
@@ -29,41 +22,42 @@ export default async function BacklogIssuesPage() {
             parentIssue: { select: { id: true, publicKey: true } },
             _count: { select: { subtasks: true } },
         },
-        orderBy: { updatedAt: "desc" },
+        orderBy: [
+            { backlogRank: { sort: "asc", nulls: "last" } },
+            { id: "asc" },
+        ],
     });
 
-    const issues: IssueSnippet[] = rawIssues.map((i) => ({
+    const issues: BacklogIssue[] = rawIssues.map((i) => ({
         id: i.id,
         publicKey: i.publicKey ?? null,
         title: i.title,
         type: normalizeType(i.type),
-        status: normalizeStatus(i.status),
         priority: normalizePriority(i.priority),
-        severity: normalizeSeverity(i.severity),
         assignee: i.assignee
             ? { id: i.assignee.id, name: i.assignee.name, image: i.assignee.image }
             : null,
-        updatedAt: i.updatedAt,
         dueDate: i.dueDate ?? undefined,
-        resourceName: i.resourceName ?? undefined,
         storyPoints: i.storyPoints ?? undefined,
-        parentIssueId: i.parentIssueId ?? null,
         parentIssueRef: i.parentIssue
             ? formatIssueRef(i.parentIssue.publicKey, i.parentIssue.id)
             : null,
         subtaskCount: i._count?.subtasks ?? 0,
+        backlogRank: i.backlogRank ?? null,
     }));
+
+    const canRank = !!session?.user?.id;
 
     return (
         <PageContainer>
             <PageHeader
                 title="Backlog"
-                description="Lower-priority work that is parked outside active todo and triage queues."
+                description="Drag issues into a stable order. New backlog items land at the bottom."
                 actions={
                     session?.user?.id && (
                         <Link
-                            href="/issues/new"
-                            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 h-8 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                            href="/issues/new?status=BACKLOG"
+                            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                         >
                             <Plus className="h-3.5 w-3.5" />
                             New issue
@@ -71,7 +65,10 @@ export default async function BacklogIssuesPage() {
                     )
                 }
             />
-            <DataGrid issues={issues} assignableUsers={assignableUsers} />
+            {!canRank && (
+                <p className="text-xs text-warning">Sign in to reorder the backlog.</p>
+            )}
+            <BacklogRankedList issues={issues} interactive={canRank} />
         </PageContainer>
     );
 }

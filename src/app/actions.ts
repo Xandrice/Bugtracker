@@ -31,6 +31,7 @@ import {
 import { recordActivity } from "@/lib/activity";
 import { discordSignInUrl } from "@/lib/auth-urls";
 import { syncProjectMemberProfileByDiscordId } from "@/lib/member-profiles";
+import { nextBacklogRank, placeBacklogIssue, rankWhenEnteringBacklog } from "@/lib/issue-backlog";
 
 const ALLOWED_STATUS = ["BACKLOG", "OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const;
 const ALLOWED_PRIORITY = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
@@ -80,6 +81,7 @@ function revalidateIssuePaths(issueId: string) {
     revalidatePath("/");
     revalidatePath("/issues");
     revalidatePath("/issues/me");
+    revalidatePath("/issues/backlog");
     revalidatePath("/boards/triage");
     revalidatePath("/boards/main");
     revalidatePath(`/issues/${issueId}`);
@@ -267,6 +269,11 @@ export async function createIssue(formData: FormData) {
     const dueDateRaw = formData.get("dueDate") as string | null;
     const storyPointsRaw = formData.get("storyPoints") as string | null;
     const label = formData.get("label") as string | null;
+    const statusRaw = (formData.get("status") as string | null)?.trim();
+    const status =
+        statusRaw && (ALLOWED_STATUS as readonly string[]).includes(statusRaw)
+            ? statusRaw
+            : undefined;
     const discordPostRaw = (formData.get("discordPostId") as string | null)
         ?? (formData.get("discordThreadId") as string | null);
     const { postId: discordPostId, postLink: discordPostLink } = parseDiscordPostInput(discordPostRaw);
@@ -291,27 +298,33 @@ export async function createIssue(formData: FormData) {
         let createdIssue = null;
         for (let attempt = 0; attempt < 5 && !createdIssue; attempt += 1) {
             try {
-                createdIssue = await db.issue.create({
-                    data: {
-                        publicKey: generateIssuePublicKey(),
-                        title,
-                        description,
-                        type,
-                        priority,
-                        severity,
-                        environment,
-                        tags,
-                        resourceName: resourceName || undefined,
-                        serverVersion: serverVersion || undefined,
-                        reproductionSteps: reproductionSteps || undefined,
-                        expectedBehavior: expectedBehavior || undefined,
-                        dueDate: dueDateRaw ? new Date(dueDateRaw) : undefined,
-                        storyPoints: storyPointsRaw ? parseInt(storyPointsRaw, 10) : undefined,
-                        label: label || undefined,
-                        discordChannelId: undefined,
-                        discordThreadId: discordPostId || undefined,
-                        reporter: { connect: { id: reporterId } },
-                    }
+                createdIssue = await db.$transaction(async (tx) => {
+                    const backlogRank =
+                        status === "BACKLOG" ? await nextBacklogRank(tx) : undefined;
+                    return tx.issue.create({
+                        data: {
+                            publicKey: generateIssuePublicKey(),
+                            title,
+                            description,
+                            type,
+                            priority,
+                            severity,
+                            ...(status ? { status } : {}),
+                            environment,
+                            tags,
+                            resourceName: resourceName || undefined,
+                            serverVersion: serverVersion || undefined,
+                            reproductionSteps: reproductionSteps || undefined,
+                            expectedBehavior: expectedBehavior || undefined,
+                            dueDate: dueDateRaw ? new Date(dueDateRaw) : undefined,
+                            storyPoints: storyPointsRaw ? parseInt(storyPointsRaw, 10) : undefined,
+                            label: label || undefined,
+                            discordChannelId: undefined,
+                            discordThreadId: discordPostId || undefined,
+                            backlogRank,
+                            reporter: { connect: { id: reporterId } },
+                        },
+                    });
                 });
             } catch (error: any) {
                 // P2002 on publicKey means collision — retry with a fresh key.
@@ -361,6 +374,7 @@ export async function createIssue(formData: FormData) {
     }
 
     revalidatePath("/issues");
+    revalidatePath("/issues/backlog");
     revalidatePath("/boards/triage");
     revalidatePath("/boards/main");
     revalidatePath("/");
@@ -382,9 +396,21 @@ export async function updateIssueStatus(issueId: string, status: string) {
         return { error: "Invalid status" };
     }
 
-    await db.issue.update({
+    const previous = await db.issue.findUnique({
         where: { id: issueId },
-        data: { status }
+        select: { status: true, backlogRank: true },
+    });
+    if (!previous) return { error: "Issue not found" };
+
+    await db.$transaction(async (tx) => {
+        const data: Prisma.IssueUpdateInput = { status };
+        if (status === "BACKLOG" && previous.status !== "BACKLOG") {
+            data.backlogRank = await rankWhenEnteringBacklog(tx, previous.backlogRank);
+        }
+        await tx.issue.update({
+            where: { id: issueId },
+            data,
+        });
     });
 
     revalidateIssuePaths(issueId);
@@ -399,11 +425,11 @@ export async function updateIssueWorkflow(
 
     const previous = await db.issue.findUnique({
         where: { id: issueId },
-        select: { type: true, priority: true, severity: true, status: true },
+        select: { type: true, priority: true, severity: true, status: true, backlogRank: true },
     });
     if (!previous) return { error: "Issue not found" };
 
-    const data: Record<string, string> = {};
+    const data: Prisma.IssueUpdateInput = {};
 
     if (updates.type !== undefined) {
         if (!(ALLOWED_TYPE as readonly string[]).includes(updates.type)) {
@@ -437,14 +463,20 @@ export async function updateIssueWorkflow(
         return { error: "No updates provided" };
     }
 
-    await db.issue.update({
-        where: { id: issueId },
-        data
+    await db.$transaction(async (tx) => {
+        if (data.status === "BACKLOG" && previous.status !== "BACKLOG") {
+            data.backlogRank = await rankWhenEnteringBacklog(tx, previous.backlogRank);
+        }
+        await tx.issue.update({
+            where: { id: issueId },
+            data,
+        });
     });
 
     for (const [field, newValue] of Object.entries(data)) {
-        const oldValue = String((previous as any)[field] ?? "");
-        if (oldValue === newValue) continue;
+        if (field === "backlogRank") continue;
+        const oldValue = String((previous as Record<string, unknown>)[field] ?? "");
+        if (oldValue === String(newValue ?? "")) continue;
 
         await recordActivity({
             issueId,
@@ -452,13 +484,35 @@ export async function updateIssueWorkflow(
             action: field === "status" ? "STATUS_CHANGE" : "FIELD_CHANGE",
             field,
             oldValue,
-            newValue,
+            newValue: String(newValue ?? ""),
             actorName: actor.session.user?.name,
             notifyStatusChange: field === "status",
         });
     }
 
     revalidateIssuePaths(issueId);
+}
+
+export async function reorderBacklogIssue(
+    issueId: string,
+    afterId: string | null,
+    beforeId: string | null
+): Promise<{ error?: string } | void> {
+    const actor = await getActorContext();
+    if (!actor) return { error: "Unauthorized" };
+
+    if (!issueId) return { error: "Missing issue" };
+
+    const result = await placeBacklogIssue({
+        issueId,
+        afterId: afterId || null,
+        beforeId: beforeId || null,
+    });
+    if (result.error) return result;
+
+    revalidatePath("/issues/backlog");
+    revalidatePath("/issues");
+    revalidatePath("/boards/main");
 }
 
 export async function saveIssueWorkflow(formData: FormData) {
