@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getAppBaseUrl, sendDiscordChannelMessage } from "@/lib/discord";
+import {
+    authorizeDiscordWebhook,
+    getOrCreateUserFromDiscordId,
+    parseDiscordPostInput,
+} from "@/lib/discord-intake";
 import { formatIssueRef, generateIssuePublicKey } from "@/lib/issue-ids";
 import { recordActivity } from "@/lib/activity";
 import { nextBacklogRank } from "@/lib/issue-backlog";
@@ -32,64 +37,6 @@ type CreateIssueInput = {
     discordUserAvatar?: string | null;
 };
 
-function parseDiscordPostInput(value: string | null | undefined): { postId: string | null; postLink: string | null } {
-    const raw = (value || "").trim();
-    if (!raw) return { postId: null, postLink: null };
-
-    const match = raw.match(/^https?:\/\/discord\.com\/channels\/([0-9]+)\/([0-9]+)(?:\/[0-9]+)?/i);
-    if (match) {
-        return {
-            postId: match[2],
-            postLink: `https://discord.com/channels/${match[1]}/${match[2]}`,
-        };
-    }
-
-    const idMatch = raw.match(/^\d+$/);
-    if (!idMatch) return { postId: null, postLink: null };
-
-    const guildId = (process.env.DISCORD_GUILD_ID || "").trim();
-    const postLink = guildId ? `https://discord.com/channels/${guildId}/${raw}` : null;
-    return { postId: raw, postLink };
-}
-
-async function getOrCreateUserFromDiscordId(
-    discordId: string,
-    userName?: string | null,
-    userAvatar?: string | null
-) {
-    const existingAccount = await db.account.findUnique({
-        where: {
-            provider_providerAccountId: {
-                provider: "discord",
-                providerAccountId: discordId,
-            }
-        },
-        include: { user: true },
-    });
-
-    if (existingAccount?.user) {
-        return existingAccount.user;
-    }
-
-    const preferredName = userName || `Discord ${discordId}`;
-    const avatarHash = userAvatar as string | undefined;
-    const image = avatarHash ? `https://cdn.discordapp.com/avatars/${discordId}/${avatarHash}.png` : null;
-
-    return db.user.create({
-        data: {
-            name: preferredName,
-            image,
-            accounts: {
-                create: {
-                    provider: "discord",
-                    providerAccountId: discordId,
-                    type: "oauth",
-                }
-            }
-        }
-    });
-}
-
 function revalidateIssuePaths() {
     revalidatePath("/");
     revalidatePath("/issues");
@@ -100,22 +47,8 @@ function revalidateIssuePaths() {
 }
 
 export async function POST(req: Request) {
-    // Auth check
-    const secret = process.env.DISCORD_WEBHOOK_SECRET;
-    if (!secret) {
-        return NextResponse.json(
-            { error: "Server configuration error: DISCORD_WEBHOOK_SECRET not set" },
-            { status: 500 }
-        );
-    }
-
-    const headerSecret = req.headers.get("x-discord-webhook-secret");
-    if (!headerSecret || headerSecret !== secret) {
-        return NextResponse.json(
-            { error: "Unauthorized" },
-            { status: 401 }
-        );
-    }
+    const authError = authorizeDiscordWebhook(req);
+    if (authError) return authError;
 
     let body: Partial<CreateIssueInput>;
     try {
