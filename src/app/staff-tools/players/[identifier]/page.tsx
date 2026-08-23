@@ -6,18 +6,23 @@ import {
   Briefcase,
   Car,
   Coins,
+  ExternalLink,
+  FileText,
   Fingerprint,
   Gavel,
+  MessageSquare,
   ShieldAlert,
   Sparkles,
   User,
   Users,
 } from "lucide-react";
 import { auth } from "@/../auth";
+import { db } from "@/lib/db";
 import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Avatar } from "@/components/ui/Avatar";
 import { DataList, DataValue } from "@/components/staff/DataList";
 import {
   canManageStaffPlayers,
@@ -72,6 +77,43 @@ export default async function StaffPlayerDetailPage({
   const player = await getStaffPlayerDetail(identifier);
   if (!player) notFound();
 
+  // Fetch Discord account info if we have a Discord ID
+  let discordAccount: { name: string | null; email: string | null; image: string | null } | null = null;
+  if (player.discordId) {
+    const account = await db.account.findFirst({
+      where: { provider: "discord", providerAccountId: player.discordId },
+      include: { user: true },
+    });
+    if (account?.user) {
+      discordAccount = {
+        name: account.user.name,
+        email: account.user.email,
+        image: account.user.image,
+      };
+    }
+  }
+
+  // Fetch related mod-log entries (PlayerReports)
+  const modLogEntries = player.discordId
+    ? await db.playerReport.findMany({
+        where: { subjectDiscordId: player.discordId },
+        orderBy: { updatedAt: "desc" },
+        take: 10,
+        include: {
+          reporter: { select: { name: true } },
+          assignee: { select: { name: true } },
+          linkedIssues: {
+            include: {
+              issue: {
+                select: { id: true, publicKey: true, title: true },
+              },
+            },
+          },
+        },
+      })
+    : [];
+
+
   return (
     <PageContainer className="max-w-[1200px]">
       <Link
@@ -98,6 +140,50 @@ export default async function StaffPlayerDetailPage({
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {player.discordId && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-primary" />
+                Discord Identity
+              </CardTitle>
+            </CardHeader>
+            <CardBody>
+              {discordAccount ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={discordAccount.name} src={discordAccount.image} size="md" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{discordAccount.name}</p>
+                      {discordAccount.email && (
+                        <p className="text-xs text-muted-foreground">{discordAccount.email}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border bg-surface-2 p-2">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Discord ID
+                    </p>
+                    <p className="font-mono text-xs text-foreground">{player.discordId}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Discord ID found but no linked account in this dashboard.
+                  </p>
+                  <div className="rounded-md border border-border bg-surface-2 p-2">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Discord ID
+                    </p>
+                    <p className="font-mono text-xs text-foreground">{player.discordId}</p>
+                  </div>
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -307,6 +393,68 @@ export default async function StaffPlayerDetailPage({
                   Expires: {ban.expireLabel}
                 </p>
               </div>
+            ))}
+          </CardBody>
+        </Card>
+      )}
+
+      {modLogEntries.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                Mod Log
+                <span className="text-xs font-normal text-muted-foreground">
+                  ({modLogEntries.length})
+                </span>
+              </span>
+              <Link
+                href="/reports"
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
+              >
+                View all
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </CardTitle>
+          </CardHeader>
+          <CardBody className="space-y-2">
+            {modLogEntries.map((entry) => (
+              <Link
+                key={entry.id}
+                href={`/reports/${entry.id}`}
+                className="block rounded-md border border-border bg-surface-2 p-3 transition-colors hover:bg-muted"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{entry.title}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>Category: {entry.category}</span>
+                      <span>•</span>
+                      <span>By {entry.reporter?.name || "Staff"}</span>
+                      <span>•</span>
+                      <span>{new Date(entry.updatedAt).toLocaleDateString()}</span>
+                    </div>
+                    {entry.linkedIssues.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {entry.linkedIssues.map((link) => (
+                          <Link
+                            key={link.issueId}
+                            href={`/issues/${link.issue.publicKey || link.issue.id}`}
+                            className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {link.issue.publicKey || `#${link.issue.id.slice(0, 8)}`}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <Badge tone={entry.status === "CLOSED" ? "success" : "warning"}>
+                    {entry.status}
+                  </Badge>
+                </div>
+              </Link>
             ))}
           </CardBody>
         </Card>
