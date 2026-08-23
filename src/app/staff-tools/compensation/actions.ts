@@ -7,7 +7,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   canManageCompensation,
-  canViewCompensation,
   getPermissionContext,
   requirePermission,
 } from "@/lib/permissions";
