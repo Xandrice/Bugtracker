@@ -794,7 +794,12 @@ function detectIdentifierTables(
 
   return detected
     .sort((a, b) => b.score - a.score)
-    .map(({ score: _score, ...table }) => table);
+    .map((table) => ({
+      tableName: table.tableName,
+      joinPlayerColumn: table.joinPlayerColumn,
+      joinIdentifierColumn: table.joinIdentifierColumn,
+      searchColumns: table.searchColumns,
+    }));
 }
 
 function buildSelectColumns(columns: Array<string | null | undefined>): string[] {
@@ -1559,8 +1564,7 @@ function resolveFirstSeen(
   return (
     formatPresenceDate(metadata.first_seen) ||
     formatPresenceDate(metadata.firstseen) ||
-    formatPresenceDate(metadata.first_join) ||
-    formatPresenceDate(metadata.created)
+    formatPresenceDate(metadata.first_join)
   );
 }
 
