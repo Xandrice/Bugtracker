@@ -143,6 +143,8 @@ curl -X POST https://tracker.example.com/api/issues \
   - `pnpm prisma db push` (no migration history), or
   - `pnpm prisma migrate deploy` (after baseline/migrations are set up).
 - Keeping Prisma out of build avoids accidental table drops in shared/existing databases.
+- Do **not** run `prisma migrate` or `prisma db push` as part of `vercel-build` / `next build`.
+- The in-dashboard `Announcement` table is retired (Discord is the source of truth for staff announcements). Apply `prisma/migrations/20260823_drop_announcements` outside the Vercel build so the table is dropped.
 
 ### 5) Cut over from Render
 

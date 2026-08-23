@@ -1663,7 +1663,6 @@ export async function deleteAllProjectData() {
     // Clear all DB relations
     await (db as any).issueActivity.deleteMany({});
     await (db as any).savedView.deleteMany({});
-    await (db as any).announcement.deleteMany({});
     await (db as any).incidentIssue.deleteMany({});
     await (db as any).incident.deleteMany({});
     await (db as any).releaseIssue.deleteMany({});
