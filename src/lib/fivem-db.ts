@@ -119,6 +119,7 @@ export type StaffPlayerDetail = {
   identifier: string;
   displayName: string;
   license: string | null;
+  discordId: string | null;
   banned: boolean | null;
   whitelisted: boolean | null;
   isDead: boolean | null;
@@ -1159,6 +1160,52 @@ function getField(row: Record<string, unknown>, name: string): unknown {
   return undefined;
 }
 
+function extractDiscordId(row: Record<string, unknown>): string | null {
+  // Try to find Discord ID in various common FiveM identifier formats.
+  // 1. Check for a dedicated discord column
+  const discordField = normalizeText(getField(row, "discord"));
+  if (discordField) {
+    // Remove discord: prefix if present
+    return discordField.replace(/^discord:/, "");
+  }
+
+  // 2. Check identifiers column (QBCore/ESX often store as JSON array)
+  const identifiers = getField(row, "identifiers");
+  if (identifiers) {
+    let parsed: string[] | null = null;
+    if (typeof identifiers === "string") {
+      try {
+        parsed = JSON.parse(identifiers);
+      } catch {
+        // Try splitting by comma or newline
+        parsed = identifiers.split(/[,\n]/).map((s) => s.trim());
+      }
+    } else if (Array.isArray(identifiers)) {
+      parsed = identifiers.map(String);
+    }
+
+    if (parsed) {
+      for (const id of parsed) {
+        const match = id.match(/^discord:(\d+)$/);
+        if (match) return match[1];
+      }
+    }
+  }
+
+  // 3. Check for identifier or license fields that might contain discord: prefix
+  const identifier = normalizeText(getField(row, "identifier"));
+  if (identifier?.startsWith("discord:")) {
+    return identifier.replace(/^discord:/, "");
+  }
+
+  const license = normalizeText(getField(row, "license"));
+  if (license?.startsWith("discord:")) {
+    return license.replace(/^discord:/, "");
+  }
+
+  return null;
+}
+
 function capitalize(value: string): string {
   if (!value) return value;
   return value.charAt(0).toUpperCase() + value.slice(1);
@@ -1410,6 +1457,7 @@ export async function getStaffPlayerDetail(identifier: string): Promise<StaffPla
   const bansTable = findTable(schema, ["bans"]);
 
   const license = normalizeText(getField(row, "license"));
+  const discordId = extractDiscordId(row);
 
   const charinfo = asObject(getField(row, playerCaps.profileJsonColumn || "charinfo"));
   const job = asObject(getField(row, playerCaps.jobColumn || "job"));
@@ -1442,6 +1490,7 @@ export async function getStaffPlayerDetail(identifier: string): Promise<StaffPla
     identifier: normalizeText(getField(row, playerCaps.idColumn)) || trimmed,
     displayName: resolvePlayerDisplayName(row, playerCaps),
     license,
+    discordId,
     banned,
     whitelisted,
     isDead: toBoolean(getField(row, "isdead")),
