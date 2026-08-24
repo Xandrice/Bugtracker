@@ -2213,3 +2213,26 @@ export async function putVehicleInGarage(
     newValue: garage,
   };
 }
+
+export type FiveMSchemaTable = {
+  tableName: string;
+  columnSet: Set<string>;
+};
+
+export async function queryFiveMRows<T extends RowDataPacket>(
+  sql: string,
+  params: unknown[] = []
+): Promise<T[]> {
+  return queryRows<T>(sql, params);
+}
+
+export function quoteFiveMIdentifier(identifier: string): string {
+  return quoteIdentifier(identifier);
+}
+
+export async function getFiveMSchemaTable(name: string): Promise<FiveMSchemaTable | null> {
+  const schema = await getSchemaSnapshot();
+  const table = schema.byName.get(name.toLowerCase());
+  if (!table) return null;
+  return { tableName: table.tableName, columnSet: table.columnSet };
+}
