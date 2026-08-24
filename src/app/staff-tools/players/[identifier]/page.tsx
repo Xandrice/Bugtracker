@@ -197,10 +197,24 @@ export default async function StaffPlayerDetailPage({
     }
   }
 
-  // Fetch related mod-log entries (PlayerReports)
-  const modLogEntries = player.discordId
+  // Fetch related mod-log entries (PlayerReports), including Discord intake.
+  // Match the bare snowflake and a `discord:` prefix so bot/FiveM formats both attach.
+  const subjectDiscordIds = player.discordId
+    ? Array.from(
+        new Set(
+          [
+            player.discordId,
+            player.discordId.replace(/^discord:/i, ""),
+            player.discordId.startsWith("discord:")
+              ? player.discordId
+              : `discord:${player.discordId}`,
+          ].filter(Boolean)
+        )
+      )
+    : [];
+  const modLogEntries = subjectDiscordIds.length
     ? await db.playerReport.findMany({
-        where: { subjectDiscordId: player.discordId },
+        where: { subjectDiscordId: { in: subjectDiscordIds } },
         orderBy: { updatedAt: "desc" },
         take: 10,
         include: {

@@ -129,6 +129,50 @@ curl -X POST https://tracker.example.com/api/issues \
   }'
 ```
 
+#### Public player-report creation API
+
+Discord bots can create mod-log / player reports via `POST /api/reports`. Created rows attach to the player 360 when `subjectDiscordId` matches the player's Discord snowflake.
+
+**Auth:** Same as `POST /api/issues`. Header `x-discord-webhook-secret` must match `DISCORD_WEBHOOK_SECRET`. Returns 401 if missing/wrong, 500 if env var unset.
+
+**JSON body:**
+- Required: `title` (string), `discordUserId` (reporter Discord snowflake)
+- Strongly wanted: `subjectDiscordId` (accused player's Discord snowflake — this is what the player 360 uses)
+- Optional: `subjectName`, `accusedPlayer`, `description`, `category` (CONDUCT|WARNING|TOXICITY|HARASSMENT|CHEATING|OTHER, default OTHER), `evidenceLinks`, `discordThreadId` or `discordPostId` (string or discord.com URL), `discordUserName`, `discordUserAvatar`, `reporterName`
+
+**Behavior:**
+- Discord-first: the bot already has the ticket/thread. This API does NOT create a Discord thread or post back into Discord.
+- Resolves or creates the reporter `User` the same way as `POST /api/issues`.
+- If `discordThreadId` is already linked to a report, returns 200 with the existing report (no duplicate).
+- Thread id is stored on `PlayerReport.discordThreadId` (unique). Apply that column outside the Vercel build (`pnpm prisma migrate deploy` or `pnpm prisma db push`). A Discord thread link is also footnoted on `evidenceLinks` so it shows on `/reports/...`.
+
+**Response:** 201 (new) or 200 (existing)
+```json
+{
+  "id": "...",
+  "url": "https://tracker.example.com/reports/...",
+  "title": "...",
+  "existing": false
+}
+```
+
+**Example:**
+```bash
+curl -X POST https://tracker.example.com/api/reports \
+  -H "Content-Type: application/json" \
+  -H "x-discord-webhook-secret: YOUR_SECRET" \
+  -d '{
+    "title": "RDM at Legion",
+    "discordUserId": "111111111111111111",
+    "subjectDiscordId": "222222222222222222",
+    "subjectName": "Accused Player",
+    "description": "Random deathmatch after a traffic stop",
+    "category": "CONDUCT",
+    "evidenceLinks": "https://example.com/clip",
+    "discordThreadId": "987654321098765432"
+  }'
+```
+
 ### VictoriaLogs notes
 
 - Logs page endpoint: `/logs`

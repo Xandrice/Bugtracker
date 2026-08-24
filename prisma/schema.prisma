@@ -334,6 +334,8 @@ model PlayerReport {
   subjectName      String?
   category         String   @default("OTHER")
   evidenceLinks    String?
+  // Discord ticket/thread this intake row was created from (unique when set).
+  discordThreadId  String?  @unique
   status           String   @default("OPEN")
   reporterId       String
   reporter         User     @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
