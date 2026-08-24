@@ -5,11 +5,13 @@ import {
   ArrowLeft,
   Briefcase,
   Car,
+  Clock,
   Coins,
   ExternalLink,
   FileText,
   Fingerprint,
   Gavel,
+  History,
   MessageSquare,
   Package,
   ShieldAlert,
@@ -38,6 +40,7 @@ import {
   type StaffInventoryItem,
 } from "@/lib/fivem-inventory";
 import { discordSignInUrl } from "@/lib/auth-urls";
+import { StaffAuditList } from "@/components/staff/StaffAuditList";
 import { togglePlayerBanAction, togglePlayerWhitelistAction } from "../../actions";
 
 function boolBadge(value: boolean | null, trueLabel: string, falseLabel: string, trueTone: "danger" | "success" | "warning") {
@@ -158,6 +161,11 @@ export default async function StaffPlayerDetailPage({
     getStaffPlayerInventory(identifier),
   ]);
   if (!player) notFound();
+  const auditEvents = await listPlayerStaffAuditEvents({
+    playerIdentifier: player.identifier,
+    vehicleKeys: player.vehicles.map((vehicle) => vehicle.key),
+    limit: 20,
+  });
 
   const showInventory =
     !!inventory &&
@@ -226,6 +234,20 @@ export default async function StaffPlayerDetailPage({
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {player.presence.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-primary" />
+                Presence
+              </CardTitle>
+            </CardHeader>
+            <CardBody>
+              <DataList items={player.presence} emptyLabel="No presence data stored." />
+            </CardBody>
+          </Card>
+        )}
+
         {player.discordId && (
           <Card>
             <CardHeader>
@@ -589,6 +611,21 @@ export default async function StaffPlayerDetailPage({
           </CardBody>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <History className="h-4 w-4 text-primary" />
+            Recent staff writes
+          </CardTitle>
+        </CardHeader>
+        <CardBody>
+          <StaffAuditList
+            events={auditEvents}
+            emptyLabel="No dashboard ban, whitelist, or vehicle writes for this player yet."
+          />
+        </CardBody>
+      </Card>
 
       {canManage && (player.supportsBanToggle || player.supportsWhitelistToggle) && (
         <Card>

@@ -53,12 +53,12 @@ model User {
   notificationsCreated Notification[] @relation("NotificationActor")
   issueActivities IssueActivity[] @relation("ActivityActor")
   savedViews     SavedView[]
-  announcements  Announcement[] @relation("AnnouncementAuthor")
   incidents      Incident[]     @relation("IncidentReporter")
   assignedIncidents Incident[]  @relation("IncidentAssignee")
   releases       Release[]      @relation("ReleaseAuthor")
   playerReports  PlayerReport[] @relation("ReportReporter")
   assignedReports PlayerReport[] @relation("ReportAssignee")
+  staffAuditEvents StaffAuditEvent[] @relation("StaffAuditActor")
 }
 
 model VerificationToken {
@@ -116,10 +116,16 @@ model Issue {
   outgoingLinks IssueLink[] @relation("IssueLinkSource")
   incomingLinks IssueLink[] @relation("IssueLinkTarget")
 
+  // Lexicographic backlog order (smaller = higher on /issues/backlog).
+  // Kept when leaving BACKLOG so the issue can return near its old place;
+  // assigned at the end when first entering BACKLOG.
+  backlogRank String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([parentIssueId])
+  @@index([status, backlogRank])
 }
 
 model IssueLink {
@@ -258,21 +264,6 @@ model SavedView {
   @@index([userId])
 }
 
-model Announcement {
-  id          String    @id @default(cuid())
-  title       String
-  body        String
-  pinned      Boolean   @default(false)
-  audienceRole String?
-  expiresAt   DateTime?
-  authorId    String
-  author      User      @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@index([pinned, expiresAt])
-}
-
 model Incident {
   id          String   @id @default(cuid())
   title       String
@@ -361,4 +352,26 @@ model PlayerReportIssue {
   createdAt DateTime    @default(now())
 
   @@unique([reportId, issueId])
+}
+
+// Attributed log of staff dashboard writes that change the live FiveM DB
+// (ban, whitelist, garage/storage). Not issue activity and not txAdmin bans.
+model StaffAuditEvent {
+  id          String   @id @default(cuid())
+  actorId     String?
+  actor       User?    @relation("StaffAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorName   String
+  action      String
+  targetType  String
+  targetKey   String
+  targetLabel String?
+  playerKey   String?
+  field       String
+  oldValue    String?
+  newValue    String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([targetType, targetKey, createdAt])
+  @@index([playerKey, createdAt])
 }

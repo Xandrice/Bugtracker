@@ -2,6 +2,12 @@ import "server-only";
 
 import mysql from "mysql2/promise";
 import type { Pool, ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import {
+  expandIdentifierSearchTerms,
+  extractDiscordId,
+  formatPlaytimeDuration,
+  formatPresenceDate,
+} from "@/lib/fivem-player-identity";
 
 type ColumnInfo = {
   tableName: string;
@@ -33,6 +39,24 @@ type PlayerTableCapabilities = {
   bannedColumn: string | null;
   whitelistedColumn: string | null;
   updatedAtColumn: string | null;
+  userIdColumn: string | null;
+  licenseColumn: string | null;
+  license2Column: string | null;
+  discordColumn: string | null;
+  steamColumn: string | null;
+  identifiersJsonColumn: string | null;
+  playtimeColumn: string | null;
+  firstSeenColumn: string | null;
+  lastSeenColumn: string | null;
+  lastLoggedOutColumn: string | null;
+  searchColumns: string[];
+  identifierSearchColumns: string[];
+};
+
+type IdentifierTableCapabilities = {
+  tableName: string;
+  joinPlayerColumn: string;
+  joinIdentifierColumn: string;
   searchColumns: string[];
 };
 
@@ -120,6 +144,10 @@ export type StaffPlayerDetail = {
   displayName: string;
   license: string | null;
   discordId: string | null;
+  playtime: string | null;
+  firstSeen: string | null;
+  lastSeen: string | null;
+  presence: LabeledValue[];
   banned: boolean | null;
   whitelisted: boolean | null;
   isDead: boolean | null;
@@ -184,6 +212,33 @@ const PLAYER_BANK_COLUMNS = ["bank", "bank_balance"];
 const PLAYER_MONEY_JSON_COLUMNS = ["accounts", "money"];
 const PLAYER_BANNED_COLUMNS = ["banned", "is_banned", "ban"];
 const PLAYER_WHITELIST_COLUMNS = ["whitelisted", "whitelist", "is_whitelisted"];
+const PLAYER_USER_ID_COLUMNS = ["userid", "user_id"];
+const PLAYER_LICENSE_COLUMNS = ["license"];
+const PLAYER_LICENSE2_COLUMNS = ["license2"];
+const PLAYER_DISCORD_COLUMNS = ["discord", "discordid", "discord_id"];
+const PLAYER_STEAM_COLUMNS = ["steam", "steamid", "steam_id"];
+const PLAYER_IDENTIFIERS_JSON_COLUMNS = ["identifiers"];
+const PLAYER_PLAYTIME_COLUMNS = ["playtime", "play_time", "total_playtime"];
+const PLAYER_FIRST_SEEN_COLUMNS = ["first_seen", "firstseen", "first_join", "date_created", "created_at"];
+const PLAYER_LAST_SEEN_COLUMNS = ["last_seen", "lastseen", "last_active", "last_login", "lastlogin"];
+const PLAYER_LAST_LOGOUT_COLUMNS = ["last_logged_out", "last_logout"];
+const IDENTIFIER_TABLE_NAMES = [
+  "player_identifiers",
+  "users",
+  "identifiers",
+  "user_identifiers",
+  "ev_identifiers",
+];
+const IDENTIFIER_TABLE_SEARCH_COLUMNS = [
+  "discord",
+  "steam",
+  "license",
+  "license2",
+  "fivem",
+  "identifier",
+  "identifiers",
+  "username",
+];
 
 const VEHICLE_TABLE_NAMES = [
   "player_vehicles",
@@ -573,8 +628,27 @@ function detectPlayerCapabilities(schema: SchemaSnapshot): PlayerTableCapabiliti
   const bannedColumn = pickFirst(table.columnSet, PLAYER_BANNED_COLUMNS);
   const whitelistedColumn = pickFirst(table.columnSet, PLAYER_WHITELIST_COLUMNS);
   const updatedAtColumn = pickFirst(table.columnSet, UPDATED_AT_COLUMNS);
+  const userIdColumn = pickFirst(table.columnSet, PLAYER_USER_ID_COLUMNS);
+  const licenseColumn = pickFirst(table.columnSet, PLAYER_LICENSE_COLUMNS);
+  const license2Column = pickFirst(table.columnSet, PLAYER_LICENSE2_COLUMNS);
+  const discordColumn = pickFirst(table.columnSet, PLAYER_DISCORD_COLUMNS);
+  const steamColumn = pickFirst(table.columnSet, PLAYER_STEAM_COLUMNS);
+  const identifiersJsonColumn = pickFirst(table.columnSet, PLAYER_IDENTIFIERS_JSON_COLUMNS);
+  const playtimeColumn = pickFirst(table.columnSet, PLAYER_PLAYTIME_COLUMNS);
+  const firstSeenColumn = pickFirst(table.columnSet, PLAYER_FIRST_SEEN_COLUMNS);
+  const lastLoggedOutColumn = pickFirst(table.columnSet, PLAYER_LAST_LOGOUT_COLUMNS);
+  const lastSeenColumn =
+    pickFirst(table.columnSet, PLAYER_LAST_SEEN_COLUMNS) || lastLoggedOutColumn || updatedAtColumn;
 
   const searchColumns = unique([idColumn, displayNameColumn, firstNameColumn, lastNameColumn, jobColumn]);
+  const identifierSearchColumns = unique([
+    idColumn,
+    licenseColumn,
+    license2Column,
+    discordColumn,
+    steamColumn,
+    identifiersJsonColumn,
+  ]);
 
   return {
     tableName: table.tableName,
@@ -590,7 +664,18 @@ function detectPlayerCapabilities(schema: SchemaSnapshot): PlayerTableCapabiliti
     bannedColumn,
     whitelistedColumn,
     updatedAtColumn,
+    userIdColumn,
+    licenseColumn,
+    license2Column,
+    discordColumn,
+    steamColumn,
+    identifiersJsonColumn,
+    playtimeColumn,
+    firstSeenColumn,
+    lastSeenColumn,
+    lastLoggedOutColumn,
     searchColumns,
+    identifierSearchColumns,
   };
 }
 
@@ -649,6 +734,74 @@ function detectVehicleCapabilities(schema: SchemaSnapshot): VehicleTableCapabili
   };
 }
 
+function resolveIdentifierJoin(
+  playerCaps: PlayerTableCapabilities,
+  table: TableSchema
+): { playerColumn: string; identifierColumn: string } | null {
+  if (playerCaps.userIdColumn && table.columnSet.has(playerCaps.userIdColumn)) {
+    return { playerColumn: playerCaps.userIdColumn, identifierColumn: playerCaps.userIdColumn };
+  }
+  const identifierUserId = pickFirst(table.columnSet, PLAYER_USER_ID_COLUMNS);
+  if (playerCaps.userIdColumn && identifierUserId) {
+    return { playerColumn: playerCaps.userIdColumn, identifierColumn: identifierUserId };
+  }
+  if (table.columnSet.has(playerCaps.idColumn)) {
+    return { playerColumn: playerCaps.idColumn, identifierColumn: playerCaps.idColumn };
+  }
+  if (table.columnSet.has("citizenid") && playerCaps.idColumn === "citizenid") {
+    return { playerColumn: "citizenid", identifierColumn: "citizenid" };
+  }
+  const identifierLicense = pickFirst(table.columnSet, ["license", "license2"]);
+  if (playerCaps.licenseColumn && identifierLicense) {
+    return { playerColumn: playerCaps.licenseColumn, identifierColumn: identifierLicense };
+  }
+  return null;
+}
+
+function detectIdentifierTables(
+  schema: SchemaSnapshot,
+  playerCaps: PlayerTableCapabilities
+): IdentifierTableCapabilities[] {
+  const detected: Array<IdentifierTableCapabilities & { score: number }> = [];
+
+  for (const table of schema.tables) {
+    if (table.tableName === playerCaps.tableName) continue;
+
+    const join = resolveIdentifierJoin(playerCaps, table);
+    if (!join) continue;
+
+    const searchColumns = unique(
+      IDENTIFIER_TABLE_SEARCH_COLUMNS.filter((column) => table.columnSet.has(column))
+    );
+    if (searchColumns.length === 0) continue;
+
+    let score = 0;
+    if (IDENTIFIER_TABLE_NAMES.includes(table.tableName)) score += 6;
+    if (table.tableName.includes("identifier")) score += 3;
+    if (table.columnSet.has("discord")) score += 2;
+    if (table.columnSet.has("steam")) score += 1;
+    if (table.columnSet.has("license2") || table.columnSet.has("identifiers")) score += 1;
+    if (score <= 0) continue;
+
+    detected.push({
+      tableName: table.tableName,
+      joinPlayerColumn: join.playerColumn,
+      joinIdentifierColumn: join.identifierColumn,
+      searchColumns,
+      score,
+    });
+  }
+
+  return detected
+    .sort((a, b) => b.score - a.score)
+    .map((table) => ({
+      tableName: table.tableName,
+      joinPlayerColumn: table.joinPlayerColumn,
+      joinIdentifierColumn: table.joinIdentifierColumn,
+      searchColumns: table.searchColumns,
+    }));
+}
+
 function buildSelectColumns(columns: Array<string | null | undefined>): string[] {
   return unique(columns);
 }
@@ -659,6 +812,70 @@ function buildSearchWhere(search: string, columns: string[]): { clause: string; 
 
   const parts = columns.map((column) => `${quoteIdentifier(column)} LIKE ?`);
   const params = columns.map(() => `%${trimmed}%`);
+  return { clause: `WHERE ${parts.join(" OR ")}`, params };
+}
+
+function buildLikePredicates(
+  tableName: string,
+  columns: string[],
+  terms: string[]
+): { parts: string[]; params: string[] } {
+  const parts: string[] = [];
+  const params: string[] = [];
+  for (const column of columns) {
+    for (const term of terms) {
+      parts.push(
+        `${quoteIdentifier(tableName)}.${quoteIdentifier(column)} LIKE ?`
+      );
+      params.push(`%${term}%`);
+    }
+  }
+  return { parts, params };
+}
+
+function buildPlayerSearchWhere(
+  search: string,
+  capabilities: PlayerTableCapabilities,
+  identifierTables: IdentifierTableCapabilities[]
+): { clause: string; params: string[] } {
+  const trimmed = search.trim();
+  if (!trimmed) return { clause: "", params: [] };
+
+  const nameTerms = [trimmed];
+  const identifierTerms = expandIdentifierSearchTerms(trimmed);
+  const parts: string[] = [];
+  const params: string[] = [];
+
+  const nameMatch = buildLikePredicates(capabilities.tableName, capabilities.searchColumns, nameTerms);
+  parts.push(...nameMatch.parts);
+  params.push(...nameMatch.params);
+
+  const identifierMatch = buildLikePredicates(
+    capabilities.tableName,
+    capabilities.identifierSearchColumns,
+    identifierTerms
+  );
+  parts.push(...identifierMatch.parts);
+  params.push(...identifierMatch.params);
+
+  for (const identifierTable of identifierTables) {
+    const related = buildLikePredicates(
+      identifierTable.tableName,
+      identifierTable.searchColumns,
+      identifierTerms
+    );
+    if (related.parts.length === 0) continue;
+    parts.push(`EXISTS (
+      SELECT 1
+      FROM ${quoteIdentifier(identifierTable.tableName)}
+      WHERE ${quoteIdentifier(identifierTable.tableName)}.${quoteIdentifier(identifierTable.joinIdentifierColumn)}
+        = ${quoteIdentifier(capabilities.tableName)}.${quoteIdentifier(identifierTable.joinPlayerColumn)}
+        AND (${related.parts.join(" OR ")})
+    )`);
+    params.push(...related.params);
+  }
+
+  if (parts.length === 0) return { clause: "", params: [] };
   return { clause: `WHERE ${parts.join(" OR ")}`, params };
 }
 
@@ -823,9 +1040,10 @@ function mapVehicleRow(row: Record<string, unknown>, capabilities: VehicleTableC
 async function fetchPlayers(
   capabilities: PlayerTableCapabilities,
   search: string,
-  limit: number
+  limit: number,
+  identifierTables: IdentifierTableCapabilities[] = []
 ): Promise<StaffPlayer[]> {
-  const { clause, params } = buildSearchWhere(search, capabilities.searchColumns);
+  const { clause, params } = buildPlayerSearchWhere(search, capabilities, identifierTables);
   const orderByColumn = capabilities.updatedAtColumn || capabilities.idColumn;
 
   const sql = `
@@ -1078,6 +1296,9 @@ export async function getStaffToolsSnapshot(input?: {
     const schema = await getSchemaSnapshot();
     const playerCapabilities = detectPlayerCapabilities(schema);
     const vehicleCapabilities = detectVehicleCapabilities(schema);
+    const identifierTables = playerCapabilities
+      ? detectIdentifierTables(schema, playerCapabilities)
+      : [];
     const selectedPlayerIdentifier = input?.selectedPlayerIdentifier?.trim();
 
     const [
@@ -1090,7 +1311,9 @@ export async function getStaffToolsSnapshot(input?: {
       totalVehicles,
       bannedPlayers,
     ] = await Promise.all([
-      playerCapabilities ? fetchPlayers(playerCapabilities, input?.playerSearch || "", limit) : Promise.resolve([]),
+      playerCapabilities
+        ? fetchPlayers(playerCapabilities, input?.playerSearch || "", limit, identifierTables)
+        : Promise.resolve([]),
       vehicleCapabilities ? fetchVehicles(vehicleCapabilities, input?.vehicleSearch || "", limit) : Promise.resolve([]),
       playerCapabilities && selectedPlayerIdentifier
         ? fetchPlayerByIdentifier(playerCapabilities, selectedPlayerIdentifier)
@@ -1158,52 +1381,6 @@ function getField(row: Record<string, unknown>, name: string): unknown {
     if (key.toLowerCase() === lower) return row[key];
   }
   return undefined;
-}
-
-function extractDiscordId(row: Record<string, unknown>): string | null {
-  // Try to find Discord ID in various common FiveM identifier formats.
-  // 1. Check for a dedicated discord column
-  const discordField = normalizeText(getField(row, "discord"));
-  if (discordField) {
-    // Remove discord: prefix if present
-    return discordField.replace(/^discord:/, "");
-  }
-
-  // 2. Check identifiers column (QBCore/ESX often store as JSON array)
-  const identifiers = getField(row, "identifiers");
-  if (identifiers) {
-    let parsed: string[] | null = null;
-    if (typeof identifiers === "string") {
-      try {
-        parsed = JSON.parse(identifiers);
-      } catch {
-        // Try splitting by comma or newline
-        parsed = identifiers.split(/[,\n]/).map((s) => s.trim());
-      }
-    } else if (Array.isArray(identifiers)) {
-      parsed = identifiers.map(String);
-    }
-
-    if (parsed) {
-      for (const id of parsed) {
-        const match = id.match(/^discord:(\d+)$/);
-        if (match) return match[1];
-      }
-    }
-  }
-
-  // 3. Check for identifier or license fields that might contain discord: prefix
-  const identifier = normalizeText(getField(row, "identifier"));
-  if (identifier?.startsWith("discord:")) {
-    return identifier.replace(/^discord:/, "");
-  }
-
-  const license = normalizeText(getField(row, "license"));
-  if (license?.startsWith("discord:")) {
-    return license.replace(/^discord:/, "");
-  }
-
-  return null;
 }
 
 function capitalize(value: string): string {
@@ -1324,8 +1501,110 @@ function buildCharacter(
     pushLabeled(out, "Jail type", getField(row, "jail_type"));
   }
 
-  pushLabeled(out, "Last updated", getField(row, "last_updated"));
-  pushLabeled(out, "Last logout", getField(row, "last_logged_out"));
+  return out;
+}
+
+async function fetchRelatedIdentifierRows(
+  identifierTables: IdentifierTableCapabilities[],
+  playerRow: Record<string, unknown>
+): Promise<Record<string, unknown>[]> {
+  const rows: Record<string, unknown>[] = [];
+  for (const table of identifierTables) {
+    const joinValue = normalizeText(getField(playerRow, table.joinPlayerColumn));
+    if (!joinValue) continue;
+    const sql = `
+      SELECT *
+      FROM ${quoteIdentifier(table.tableName)}
+      WHERE ${quoteIdentifier(table.joinIdentifierColumn)} = ?
+      LIMIT 1
+    `;
+    const matches = await queryRows<RowDataPacket>(sql, [joinValue]);
+    if (matches[0]) rows.push(matches[0] as Record<string, unknown>);
+  }
+  return rows;
+}
+
+function resolveDiscordId(
+  playerRow: Record<string, unknown>,
+  identifierRows: Record<string, unknown>[]
+): string | null {
+  return extractDiscordId(playerRow) ?? identifierRows.reduce<string | null>(
+    (found, row) => found ?? extractDiscordId(row),
+    null
+  );
+}
+
+function resolvePlaytime(
+  capabilities: PlayerTableCapabilities,
+  row: Record<string, unknown>,
+  metadata: Record<string, unknown> | null
+): string | null {
+  if (capabilities.playtimeColumn) {
+    const fromColumn = formatPlaytimeDuration(getField(row, capabilities.playtimeColumn));
+    if (fromColumn) return fromColumn;
+  }
+  if (!metadata) return null;
+  return (
+    formatPlaytimeDuration(metadata.playtime) ||
+    formatPlaytimeDuration(metadata.playTime) ||
+    formatPlaytimeDuration(metadata.PlayTime)
+  );
+}
+
+function resolveFirstSeen(
+  capabilities: PlayerTableCapabilities,
+  row: Record<string, unknown>,
+  metadata: Record<string, unknown> | null
+): string | null {
+  if (capabilities.firstSeenColumn) {
+    const fromColumn = formatPresenceDate(getField(row, capabilities.firstSeenColumn));
+    if (fromColumn) return fromColumn;
+  }
+  if (!metadata) return null;
+  return (
+    formatPresenceDate(metadata.first_seen) ||
+    formatPresenceDate(metadata.firstseen) ||
+    formatPresenceDate(metadata.first_join)
+  );
+}
+
+function resolveLastSeen(
+  capabilities: PlayerTableCapabilities,
+  row: Record<string, unknown>,
+  metadata: Record<string, unknown> | null
+): string | null {
+  const candidates = [
+    capabilities.lastLoggedOutColumn
+      ? getField(row, capabilities.lastLoggedOutColumn)
+      : undefined,
+    capabilities.lastSeenColumn && capabilities.lastSeenColumn !== capabilities.lastLoggedOutColumn
+      ? getField(row, capabilities.lastSeenColumn)
+      : undefined,
+    capabilities.updatedAtColumn &&
+    capabilities.updatedAtColumn !== capabilities.lastSeenColumn &&
+    capabilities.updatedAtColumn !== capabilities.lastLoggedOutColumn
+      ? getField(row, capabilities.updatedAtColumn)
+      : undefined,
+    metadata?.lastlogin,
+    metadata?.last_login,
+    metadata?.lastLogin,
+  ];
+  for (const candidate of candidates) {
+    const formatted = formatPresenceDate(candidate);
+    if (formatted) return formatted;
+  }
+  return null;
+}
+
+function buildPresence(input: {
+  playtime: string | null;
+  firstSeen: string | null;
+  lastSeen: string | null;
+}): LabeledValue[] {
+  const out: LabeledValue[] = [];
+  if (input.playtime) out.push({ label: "Playtime", value: input.playtime });
+  if (input.firstSeen) out.push({ label: "First seen", value: input.firstSeen });
+  if (input.lastSeen) out.push({ label: "Last seen", value: input.lastSeen });
   return out;
 }
 
@@ -1451,27 +1730,35 @@ export async function getStaffPlayerDetail(identifier: string): Promise<StaffPla
   if (!row) return null;
 
   const vehicleCaps = detectVehicleCapabilities(schema);
+  const identifierTables = detectIdentifierTables(schema, playerCaps);
   const skillsTable = findTable(schema, ["player_skills"]);
   const groupsTable = findTable(schema, ["player_groups"]);
   const criminalTable = findTable(schema, ["mdt_criminals"]);
   const bansTable = findTable(schema, ["bans"]);
 
-  const license = normalizeText(getField(row, "license"));
-  const discordId = extractDiscordId(row);
+  const license =
+    normalizeText(getField(row, playerCaps.licenseColumn || "license")) ||
+    normalizeText(getField(row, playerCaps.license2Column || "license2"));
 
   const charinfo = asObject(getField(row, playerCaps.profileJsonColumn || "charinfo"));
   const job = asObject(getField(row, playerCaps.jobColumn || "job"));
   const gang = asObject(getField(row, "gang"));
   const money = asObject(getField(row, playerCaps.moneyJsonColumn || "money"));
   const metadata = asObject(getField(row, "metadata"));
+  const playtime = resolvePlaytime(playerCaps, row, metadata);
+  const firstSeen = resolveFirstSeen(playerCaps, row, metadata);
+  const lastSeen = resolveLastSeen(playerCaps, row, metadata);
+  const presence = buildPresence({ playtime, firstSeen, lastSeen });
 
-  const [vehicles, skills, groups, criminal, bans] = await Promise.all([
+  const [vehicles, skills, groups, criminal, bans, identifierRows] = await Promise.all([
     vehicleCaps?.ownerColumn ? fetchVehiclesByOwner(vehicleCaps, trimmed, 50) : Promise.resolve([]),
     skillsTable ? fetchPlayerSkills(skillsTable, trimmed) : Promise.resolve([]),
     groupsTable ? fetchPlayerGroups(groupsTable, trimmed) : Promise.resolve([]),
     criminalTable ? fetchCriminalRecord(criminalTable, trimmed) : Promise.resolve(null),
     bansTable ? fetchPlayerBans(bansTable, license) : Promise.resolve([]),
+    fetchRelatedIdentifierRows(identifierTables, row),
   ]);
+  const discordId = resolveDiscordId(row, identifierRows);
 
   let banned: boolean | null;
   if (playerCaps.bannedColumn) {
@@ -1491,6 +1778,10 @@ export async function getStaffPlayerDetail(identifier: string): Promise<StaffPla
     displayName: resolvePlayerDisplayName(row, playerCaps),
     license,
     discordId,
+    playtime,
+    firstSeen,
+    lastSeen,
+    presence,
     banned,
     whitelisted,
     isDead: toBoolean(getField(row, "isdead")),
@@ -1740,10 +2031,49 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   }
 }
 
+export type PlayerFlagToggleResult = {
+  identifier: string;
+  field: "banned" | "whitelisted";
+  oldValue: boolean;
+  newValue: boolean;
+};
+
+export type VehicleWriteResult = {
+  vehicleKey: string;
+  plate: string | null;
+  ownerIdentifier: string | null;
+  field: string;
+  oldValue: string | null;
+  newValue: string | null;
+};
+
+async function fetchVehicleRawRow(
+  capabilities: VehicleTableCapabilities,
+  vehicleKey: string
+): Promise<Record<string, unknown>> {
+  const sql = `
+    SELECT *
+    FROM ${quoteIdentifier(capabilities.tableName)}
+    WHERE ${quoteIdentifier(capabilities.keyColumn)} = ?
+    LIMIT 1
+  `;
+  const rows = await queryRows<RowDataPacket>(sql, [vehicleKey]);
+  const row = rows[0];
+  if (!row) {
+    throw new Error("Target record was not found.");
+  }
+  return row as Record<string, unknown>;
+}
+
+function formatStoredAuditValue(value: boolean | null): string | null {
+  if (value == null) return null;
+  return value ? "stored" : "out";
+}
+
 export async function togglePlayerFlag(
   identifier: string,
   flag: "banned" | "whitelisted"
-): Promise<void> {
+): Promise<PlayerFlagToggleResult> {
   const schema = await getSchemaSnapshot();
   const capabilities = detectPlayerCapabilities(schema);
   if (!capabilities) {
@@ -1761,7 +2091,8 @@ export async function togglePlayerFlag(
     identifier,
     targetColumn
   );
-  const nextValue = !(toBoolean(currentValue) ?? false);
+  const oldValue = toBoolean(currentValue) ?? false;
+  const nextValue = !oldValue;
   const updateValue = coerceBooleanForDatabase(currentValue, nextValue);
 
   const sql = `
@@ -1775,9 +2106,16 @@ export async function togglePlayerFlag(
   if (result.affectedRows < 1) {
     throw new Error("No player row was updated.");
   }
+
+  return {
+    identifier,
+    field: flag,
+    oldValue,
+    newValue: nextValue,
+  };
 }
 
-export async function toggleVehicleStorageState(vehicleKey: string): Promise<void> {
+export async function toggleVehicleStorageState(vehicleKey: string): Promise<VehicleWriteResult> {
   const schema = await getSchemaSnapshot();
   const capabilities = detectVehicleCapabilities(schema);
   if (!capabilities) {
@@ -1789,18 +2127,16 @@ export async function toggleVehicleStorageState(vehicleKey: string): Promise<voi
     throw new Error("The detected vehicle table does not expose a stored/state column.");
   }
 
-  const currentValue = await fetchCurrentFieldValue(
-    capabilities.tableName,
-    capabilities.keyColumn,
-    vehicleKey,
-    targetColumn
-  );
+  const row = await fetchVehicleRawRow(capabilities, vehicleKey);
+  const vehicle = mapVehicleRow(row, capabilities);
+  const currentValue = getField(row, targetColumn);
   const currentBool = capabilities.storedColumn
     ? toBoolean(currentValue)
     : typeof currentValue === "number"
       ? currentValue >= 1
       : toBoolean(currentValue);
-  const nextValue = !(currentBool ?? false);
+  const oldValue = currentBool ?? false;
+  const nextValue = !oldValue;
   const updateValue = coerceBooleanForDatabase(currentValue, nextValue);
 
   const sql = `
@@ -1813,9 +2149,21 @@ export async function toggleVehicleStorageState(vehicleKey: string): Promise<voi
   if (result.affectedRows < 1) {
     throw new Error("No vehicle row was updated.");
   }
+
+  return {
+    vehicleKey: vehicle.key,
+    plate: vehicle.plate,
+    ownerIdentifier: vehicle.ownerIdentifier,
+    field: "stored",
+    oldValue: formatStoredAuditValue(oldValue),
+    newValue: formatStoredAuditValue(nextValue),
+  };
 }
 
-export async function putVehicleInGarage(vehicleKey: string, garageName: string): Promise<void> {
+export async function putVehicleInGarage(
+  vehicleKey: string,
+  garageName: string
+): Promise<VehicleWriteResult> {
   const garage = garageName.trim();
   if (!garage) {
     throw new Error("Garage name is required.");
@@ -1839,12 +2187,9 @@ export async function putVehicleInGarage(vehicleKey: string, garageName: string)
     throw new Error("The detected vehicle table does not expose a stored/state column.");
   }
 
-  const currentStorageValue = await fetchCurrentFieldValue(
-    capabilities.tableName,
-    capabilities.keyColumn,
-    vehicleKey,
-    storageColumn
-  );
+  const row = await fetchVehicleRawRow(capabilities, vehicleKey);
+  const vehicle = mapVehicleRow(row, capabilities);
+  const currentStorageValue = getField(row, storageColumn);
   const storedValue = coerceBooleanForDatabase(currentStorageValue, true);
 
   const sql = `
@@ -1858,6 +2203,15 @@ export async function putVehicleInGarage(vehicleKey: string, garageName: string)
   if (result.affectedRows < 1) {
     throw new Error("No vehicle row was updated.");
   }
+
+  return {
+    vehicleKey: vehicle.key,
+    plate: vehicle.plate,
+    ownerIdentifier: vehicle.ownerIdentifier,
+    field: "garage",
+    oldValue: vehicle.garage,
+    newValue: garage,
+  };
 }
 
 export type FiveMSchemaTable = {
