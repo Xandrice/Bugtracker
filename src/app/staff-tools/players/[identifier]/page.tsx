@@ -3,6 +3,7 @@ import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
 import {
   ArrowLeft,
+  Banknote,
   Briefcase,
   Car,
   Clock,
@@ -28,6 +29,7 @@ import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { DataList, DataValue } from "@/components/staff/DataList";
 import {
+  canManageCompensation,
   canManageStaffPlayers,
   canViewStaffPlayers,
   getPermissionContext,
@@ -43,6 +45,12 @@ import { listPlayerStaffAuditEvents } from "@/lib/staff-audit";
 import { discordSignInUrl } from "@/lib/auth-urls";
 import { StaffAuditList } from "@/components/staff/StaffAuditList";
 import { togglePlayerBanAction, togglePlayerWhitelistAction } from "../../actions";
+import {
+  compensationItemsFromJson,
+  compensationStatusLabel,
+  compensationStatusTone,
+  formatMoneyAmount,
+} from "@/lib/compensation";
 
 function boolBadge(value: boolean | null, trueLabel: string, falseLabel: string, trueTone: "danger" | "success" | "warning") {
   if (value === true) return <Badge tone={trueTone}>{trueLabel}</Badge>;
@@ -157,6 +165,7 @@ export default async function StaffPlayerDetailPage({
   }
 
   const canManage = canManageStaffPlayers(permissions);
+  const canFileCompensation = canManageCompensation(permissions);
   const [player, inventory] = await Promise.all([
     getStaffPlayerDetail(identifier),
     getStaffPlayerInventory(identifier),
@@ -208,6 +217,21 @@ export default async function StaffPlayerDetailPage({
       })
     : [];
 
+  const compensationRequests = await db.compensationRequest.findMany({
+    where: {
+      OR: [
+        { playerIdentifier: player.identifier },
+        ...(player.discordId ? [{ discordId: player.discordId }] : []),
+      ],
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 8,
+    include: {
+      requester: { select: { name: true } },
+      resolver: { select: { name: true } },
+      payer: { select: { name: true } },
+    },
+  });
 
   return (
     <PageContainer className="max-w-[1200px]">
@@ -550,6 +574,75 @@ export default async function StaffPlayerDetailPage({
           </CardBody>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Banknote className="h-4 w-4 text-primary" />
+              Compensation
+              <span className="text-xs font-normal text-muted-foreground">
+                ({compensationRequests.length})
+              </span>
+            </span>
+            <span className="flex items-center gap-2">
+              {canFileCompensation && (
+                <Link
+                  href={`/staff-tools/compensation/new?identifier=${encodeURIComponent(player.identifier)}${
+                    player.displayName ? `&name=${encodeURIComponent(player.displayName)}` : ""
+                  }${player.discordId ? `&discordId=${encodeURIComponent(player.discordId)}` : ""}`}
+                  className="text-xs font-medium text-primary hover:text-primary/80"
+                >
+                  File request
+                </Link>
+              )}
+              <Link
+                href="/staff-tools/compensation"
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
+              >
+                Queue
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardBody className="space-y-2">
+          {compensationRequests.length > 0 ? (
+            compensationRequests.map((request) => {
+              const items = compensationItemsFromJson(request.items);
+              return (
+                <Link
+                  key={request.id}
+                  href={`/staff-tools/compensation/${request.id}`}
+                  className="block rounded-md border border-border bg-surface-2 p-3 transition-colors hover:bg-muted"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 text-sm font-medium text-foreground">{request.reason}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {request.cashAmount != null && <span>Cash {formatMoneyAmount(request.cashAmount)}</span>}
+                        {request.bankAmount != null && <span>Bank {formatMoneyAmount(request.bankAmount)}</span>}
+                        {items.length > 0 && (
+                          <span>
+                            {items.length} item{items.length === 1 ? "" : "s"}
+                          </span>
+                        )}
+                        <span>By {request.requester?.name || "Staff"}</span>
+                        <span>{new Date(request.updatedAt).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    <Badge tone={compensationStatusTone(request.status)}>
+                      {compensationStatusLabel(request.status)}
+                    </Badge>
+                  </div>
+                </Link>
+              );
+            })
+          ) : (
+            <p className="text-xs text-muted-foreground">No compensation requests for this player.</p>
+          )}
+        </CardBody>
+      </Card>
 
       {modLogEntries.length > 0 && (
         <Card>

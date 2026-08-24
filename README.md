@@ -136,6 +136,14 @@ curl -X POST https://tracker.example.com/api/issues \
 - The page passes `AccountID` and `ProjectID` headers when configured.
 - Access is controlled by `LOG_VIEW_ROLES`, so logs can be restricted to specific staff roles.
 
+### Staff compensation queue
+
+`/staff-tools/compensation` is a refund decision queue (lost items, wipe, bug loss). Staff file a request against a citizenid/identifier; a senior approves or denies; someone marks it paid after paying out in-game or via txAdmin.
+
+This does **not** write cash, bank, or items to the live FiveM MySQL. There is no give-item or set-money action.
+
+View access follows existing staff-tools player or economy view. Filing, assignment, approve/deny, and mark-paid require manage-player permission or an Admin / Moderator (or Owner) role.
+
 ### 4) Prisma migration notes
 
 - If your current DB is SQLite and production is Postgres, export/import your data, then apply schema to Postgres.
@@ -145,6 +153,7 @@ curl -X POST https://tracker.example.com/api/issues \
 - Backlog ranking (`Issue.backlogRank`) ships as migration `20260823_issue_backlog_rank`. Apply it with `pnpm prisma migrate deploy`, or `pnpm prisma db push` if you are not using migration history. Do not run Prisma migrate as part of the Vercel build.
 - Keeping Prisma out of build avoids accidental table drops in shared/existing databases.
 - Staff tools write audit (`StaffAuditEvent` — ban, whitelist, garage/storage toggles) is a Prisma table. Apply `prisma/migrations/20260823_staff_audit_events` with `pnpm prisma migrate deploy` or `pnpm prisma db push` **outside** `vercel-build` / `next build`. Do not add migrate to the Vercel build command.
+- Compensation queue (`CompensationRequest`) ships as `prisma/migrations/20260823_compensation_requests`. Apply it with `pnpm prisma migrate deploy` or `pnpm prisma db push` against your Postgres instance — do not run migrate as part of `vercel-build` / `next build`.
 
 ### 5) Cut over from Render
 

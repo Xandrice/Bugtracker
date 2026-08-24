@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
+  Banknote,
   BarChart3,
   Car,
   CameraIcon,
@@ -17,6 +18,7 @@ import { Button } from "@/components/ui/Button";
 import {
   canAccessAnyStaffTool,
   canRefreshStaffSchema,
+  canViewCompensation,
   canViewStaffEconomy,
   canViewStaffPlayers,
   canViewStaffVehicles,
@@ -113,6 +115,7 @@ export default async function StaffDashboardPage() {
   const showPlayersLink = canViewStaffPlayers(permissions);
   const showVehiclesLink = canViewStaffVehicles(permissions);
   const showEconomyLink = canViewStaffEconomy(permissions);
+  const showCompensationLink = canViewCompensation(permissions);
 
   const [metrics, history, lastSnapshot, recentWrites] = await Promise.all([
     getDashboardMetrics(),
@@ -187,6 +190,15 @@ export default async function StaffDashboardPage() {
               >
                 <Coins className="h-3.5 w-3.5" />
                 Economy
+              </Link>
+            )}
+            {showCompensationLink && (
+              <Link
+                href="/staff-tools/compensation"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:border-border-strong"
+              >
+                <Banknote className="h-3.5 w-3.5" />
+                Compensation
               </Link>
             )}
             <form action={captureSnapshotAction}>

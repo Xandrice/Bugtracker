@@ -59,6 +59,10 @@ model User {
   playerReports  PlayerReport[] @relation("ReportReporter")
   assignedReports PlayerReport[] @relation("ReportAssignee")
   staffAuditEvents StaffAuditEvent[] @relation("StaffAuditActor")
+  compensationRequested CompensationRequest[] @relation("CompensationRequester")
+  compensationAssigned  CompensationRequest[] @relation("CompensationAssignee")
+  compensationResolved  CompensationRequest[] @relation("CompensationResolver")
+  compensationPaid      CompensationRequest[] @relation("CompensationPayer")
 }
 
 model VerificationToken {
@@ -374,4 +378,36 @@ model StaffAuditEvent {
   @@index([createdAt])
   @@index([targetType, targetKey, createdAt])
   @@index([playerKey, createdAt])
+}
+
+// Staff compensation / refund queue. Tracks the decision only — never writes
+// cash, bank, or items into the live FiveM MySQL. Payout stays in-game / txAdmin.
+model CompensationRequest {
+  id               String   @id @default(cuid())
+  playerIdentifier String
+  playerName       String?
+  discordId        String?
+  reason           String
+  cashAmount       Float?
+  bankAmount       Float?
+  items            Json?
+  evidence         String?
+  // OPEN -> APPROVED | DENIED; APPROVED -> PAID
+  status           String   @default("OPEN")
+  requesterId      String
+  requester        User     @relation("CompensationRequester", fields: [requesterId], references: [id])
+  assigneeId       String?
+  assignee         User?    @relation("CompensationAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  resolverId       String?
+  resolver         User?    @relation("CompensationResolver", fields: [resolverId], references: [id], onDelete: SetNull)
+  resolvedAt       DateTime?
+  payerId          String?
+  payer            User?    @relation("CompensationPayer", fields: [payerId], references: [id], onDelete: SetNull)
+  paidAt           DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([status])
+  @@index([playerIdentifier])
+  @@index([discordId])
 }
