@@ -53,7 +53,6 @@ model User {
   notificationsCreated Notification[] @relation("NotificationActor")
   issueActivities IssueActivity[] @relation("ActivityActor")
   savedViews     SavedView[]
-  announcements  Announcement[] @relation("AnnouncementAuthor")
   incidents      Incident[]     @relation("IncidentReporter")
   assignedIncidents Incident[]  @relation("IncidentAssignee")
   releases       Release[]      @relation("ReleaseAuthor")
@@ -117,10 +116,16 @@ model Issue {
   outgoingLinks IssueLink[] @relation("IssueLinkSource")
   incomingLinks IssueLink[] @relation("IssueLinkTarget")
 
+  // Lexicographic backlog order (smaller = higher on /issues/backlog).
+  // Kept when leaving BACKLOG so the issue can return near its old place;
+  // assigned at the end when first entering BACKLOG.
+  backlogRank String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([parentIssueId])
+  @@index([status, backlogRank])
 }
 
 model IssueLink {
@@ -257,21 +262,6 @@ model SavedView {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
-}
-
-model Announcement {
-  id          String    @id @default(cuid())
-  title       String
-  body        String
-  pinned      Boolean   @default(false)
-  audienceRole String?
-  expiresAt   DateTime?
-  authorId    String
-  author      User      @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@index([pinned, expiresAt])
 }
 
 model Incident {

@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Briefcase,
   Car,
+  Clock,
   Coins,
   ExternalLink,
   FileText,
@@ -148,6 +149,20 @@ export default async function StaffPlayerDetailPage({
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {player.presence.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-primary" />
+                Presence
+              </CardTitle>
+            </CardHeader>
+            <CardBody>
+              <DataList items={player.presence} emptyLabel="No presence data stored." />
+            </CardBody>
+          </Card>
+        )}
+
         {player.discordId && (
           <Card>
             <CardHeader>

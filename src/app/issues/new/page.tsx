@@ -45,7 +45,13 @@ const SEVERITY_HINT: Record<string, string> = {
     BLOCKER: "Affects nearly everyone and prevents the server or feature from being used.",
 };
 
-function NewIssueForm({ initialType }: { initialType: IssueType }) {
+function NewIssueForm({
+    initialType,
+    createInBacklog,
+}: {
+    initialType: IssueType;
+    createInBacklog: boolean;
+}) {
     const [severity, setSeverity] = useState("MINOR");
     const [type, setType] = useState(initialType);
     const [priority, setPriority] = useState("MEDIUM");
@@ -55,23 +61,26 @@ function NewIssueForm({ initialType }: { initialType: IssueType }) {
     return (
         <PageContainer className="max-w-3xl">
             <Link
-                href="/issues"
+                href={createInBacklog ? "/issues/backlog" : "/issues"}
                 className="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
                 <ArrowLeft className="h-3.5 w-3.5" />
-                Back to issues
+                {createInBacklog ? "Back to backlog" : "Back to issues"}
             </Link>
 
             <form action={createIssue}>
                 {!isBug && <input type="hidden" name="severity" value="MINOR" />}
+                {createInBacklog && <input type="hidden" name="status" value="BACKLOG" />}
                 <Card>
                     <CardHeader>
                         <div className="space-y-1">
                             <CardTitle>New issue</CardTitle>
                             <p className="text-xs text-muted-foreground">
-                                {isBug
-                                    ? "Report a bug with repro steps and severity so it can be triaged quickly."
-                                    : "Submit a task or feature request. Switch type to Bug for the full report form."}
+                                {createInBacklog
+                                    ? "This issue will be added at the bottom of the backlog."
+                                    : isBug
+                                      ? "Report a bug with repro steps and severity so it can be triaged quickly."
+                                      : "Submit a task or feature request. Switch type to Bug for the full report form."}
                             </p>
                         </div>
                     </CardHeader>
@@ -249,7 +258,14 @@ function NewIssueForm({ initialType }: { initialType: IssueType }) {
 function NewIssuePageInner() {
     const searchParams = useSearchParams();
     const initialType = normalizeType(searchParams.get("type") ?? "BUG");
-    return <NewIssueForm key={initialType} initialType={initialType} />;
+    const createInBacklog = searchParams.get("status") === "BACKLOG";
+    return (
+        <NewIssueForm
+            key={`${initialType}-${createInBacklog}`}
+            initialType={initialType}
+            createInBacklog={createInBacklog}
+        />
+    );
 }
 
 export default function NewIssuePage() {

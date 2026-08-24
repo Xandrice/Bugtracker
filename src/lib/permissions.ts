@@ -191,10 +191,6 @@ export function canDeleteAllData(context: PermissionContext | null): boolean {
   return context?.role === "Owner";
 }
 
-export function canManageAnnouncements(context: PermissionContext | null): boolean {
-  return hasRole(context, MANAGE_ROLES);
-}
-
 export function canManageIncidents(context: PermissionContext | null): boolean {
   return hasRole(context, new Set([...MANAGE_ROLES, "Moderator" as ProjectRole]));
 }

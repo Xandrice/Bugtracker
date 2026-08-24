@@ -5,7 +5,6 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
-  canManageAnnouncements,
   canManageIncidents,
   canManageReports,
   getPermissionContext,
@@ -173,54 +172,6 @@ export async function deleteSavedView(id: string) {
 
   revalidatePath("/issues");
   return { ok: true };
-}
-
-// ---------- Announcements ----------
-
-export async function createAnnouncement(formData: FormData) {
-  const actor = await getActor();
-  if (!actor) redirectToSignIn();
-
-  const denied = requirePermission(canManageAnnouncements(actor.permissions));
-  if (denied) throw new Error(denied.error);
-
-  const title = (formData.get("title") as string | null)?.trim();
-  const body = (formData.get("body") as string | null)?.trim();
-  const pinned = formData.get("pinned") === "on";
-  const audienceRole = (formData.get("audienceRole") as string | null)?.trim() || null;
-  const expiresAtRaw = formData.get("expiresAt") as string | null;
-
-  if (!title || !body) throw new Error("Title and body required");
-
-  await (db as any).announcement.create({
-    data: {
-      title,
-      body,
-      pinned,
-      audienceRole,
-      expiresAt: expiresAtRaw ? new Date(expiresAtRaw) : null,
-      authorId: actor.userId,
-    },
-  });
-
-  revalidatePath("/announcements");
-  revalidatePath("/");
-  redirect("/announcements");
-}
-
-export async function deleteAnnouncement(formData: FormData) {
-  const actor = await getActor();
-  if (!actor) redirectToSignIn();
-
-  const denied = requirePermission(canManageAnnouncements(actor.permissions));
-  if (denied) throw new Error(denied.error);
-
-  const id = formData.get("id") as string | null;
-  if (!id) throw new Error("Missing id");
-
-  await (db as any).announcement.delete({ where: { id } });
-  revalidatePath("/announcements");
-  revalidatePath("/");
 }
 
 // ---------- Incidents ----------
