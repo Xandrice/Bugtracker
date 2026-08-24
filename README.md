@@ -188,6 +188,16 @@ This does **not** write cash, bank, or items to the live FiveM MySQL. There is n
 
 View access follows existing staff-tools player or economy view. Filing, assignment, approve/deny, and mark-paid require manage-player permission or an Admin / Moderator (or Owner) role.
 
+### Issue watchers
+
+Signed-in users can Watch / Unwatch an issue from the issue detail sidebar (People). Watchers share the existing `notifyUser` / Discord DM path:
+
+- **STATUS_CHANGE:** reporter and assignee are *implicit* watchers (notified without a row, same as today). Explicit `IssueWatcher` rows are added to that recipient set.
+- **COMMENT:** assignee is still notified; explicit watchers are added. Reporter is not auto-notified for comments unless they Watch.
+- Unwatch removes only the explicit row; it does not stop reporter/assignee status notifications while those roles apply.
+
+`/issues/me` has an Assigned / Watching filter for explicit subscriptions.
+
 ### 4) Prisma migration notes
 
 - If your current DB is SQLite and production is Postgres, export/import your data, then apply schema to Postgres.
@@ -199,6 +209,7 @@ View access follows existing staff-tools player or economy view. Filing, assignm
 - Staff tools write audit (`StaffAuditEvent` — ban, whitelist, garage/storage toggles) is a Prisma table. Apply `prisma/migrations/20260823_staff_audit_events` with `pnpm prisma migrate deploy` or `pnpm prisma db push` **outside** `vercel-build` / `next build`. Do not add migrate to the Vercel build command.
 - Compensation queue (`CompensationRequest`) ships as `prisma/migrations/20260823_compensation_requests`. Apply it with `pnpm prisma migrate deploy` or `pnpm prisma db push` against your Postgres instance — do not run migrate as part of `vercel-build` / `next build`.
 - Issue templates (`IssueTemplate`) ship as `prisma/migrations/20260824_issue_templates`, including four seed templates (bug report, script crash, feature request, player-facing task). The INSERT is one-shot (`ON CONFLICT DO NOTHING`) so later staff edits are kept. A matching upsert also runs on `/issues/new` and `/issues/templates` for databases that used `db push` without the SQL seed. Apply the migration with `pnpm prisma migrate deploy` or `pnpm prisma db push` **outside** `vercel-build` / `next build`. Owner/Admin staff manage templates at `/issues/templates`; everyone else can optionally pick one on `/issues/new`.
+- Issue watchers (`IssueWatcher`) ships as `prisma/migrations/20260824_issue_watchers`. Apply it with `pnpm prisma migrate deploy` or `pnpm prisma db push` **outside** `vercel-build` / `next build`. Reporter and assignee are implicit watchers for status changes (notified without a row). Watch / Unwatch on the issue page manages explicit subscribers, who also get comment notifications alongside the assignee.
 
 ### 5) Cut over from Render
 
