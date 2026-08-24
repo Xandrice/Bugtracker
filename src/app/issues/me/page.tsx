@@ -8,6 +8,12 @@ import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { formatIssueRef } from "@/lib/issue-ids";
 import { discordSignInUrl } from "@/lib/auth-urls";
 import { cn } from "@/components/ui/cn";
+import {
+    normalizePriority,
+    normalizeSeverity,
+    normalizeStatus,
+    normalizeType,
+} from "@/lib/issue-tokens";
 
 export default async function MyIssuesPage({
     searchParams,
@@ -36,10 +42,10 @@ export default async function MyIssuesPage({
         id: i.id,
         publicKey: i.publicKey ?? null,
         title: i.title,
-        type: i.type,
-        status: i.status,
-        priority: i.priority,
-        severity: i.severity,
+        type: normalizeType(i.type),
+        status: normalizeStatus(i.status),
+        priority: normalizePriority(i.priority),
+        severity: normalizeSeverity(i.severity),
         assignee: i.assignee
             ? { id: i.assignee.id, name: i.assignee.name, image: i.assignee.image }
             : null,
