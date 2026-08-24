@@ -116,10 +116,16 @@ model Issue {
   outgoingLinks IssueLink[] @relation("IssueLinkSource")
   incomingLinks IssueLink[] @relation("IssueLinkTarget")
 
+  // Lexicographic backlog order (smaller = higher on /issues/backlog).
+  // Kept when leaving BACKLOG so the issue can return near its old place;
+  // assigned at the end when first entering BACKLOG.
+  backlogRank String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([parentIssueId])
+  @@index([status, backlogRank])
 }
 
 model IssueLink {

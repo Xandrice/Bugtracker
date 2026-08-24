@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAppBaseUrl, sendDiscordChannelMessage } from "@/lib/discord";
 import { formatIssueRef, generateIssuePublicKey } from "@/lib/issue-ids";
 import { recordActivity } from "@/lib/activity";
+import { nextBacklogRank } from "@/lib/issue-backlog";
 
 const ALLOWED_STATUS = ["BACKLOG", "OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const;
 const ALLOWED_PRIORITY = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
@@ -95,6 +96,7 @@ function revalidateIssuePaths() {
     revalidatePath("/issues/me");
     revalidatePath("/boards/triage");
     revalidatePath("/boards/main");
+    revalidatePath("/issues/backlog");
 }
 
 export async function POST(req: Request) {
@@ -228,26 +230,31 @@ export async function POST(req: Request) {
         let createdIssue = null;
         for (let attempt = 0; attempt < 5 && !createdIssue; attempt += 1) {
             try {
-                createdIssue = await db.issue.create({
-                    data: {
-                        publicKey: generateIssuePublicKey(),
-                        title,
-                        description: body.description || null,
-                        type,
-                        priority,
-                        severity,
-                        status,
-                        environment: body.environment || null,
-                        tags: body.tags || null,
-                        resourceName: body.resourceName || null,
-                        serverVersion: body.serverVersion || null,
-                        reproductionSteps: body.reproductionSteps || null,
-                        expectedBehavior: body.expectedBehavior || null,
-                        label: body.label || null,
-                        discordChannelId: null,
-                        discordThreadId: discordPostId || null,
-                        reporter: { connect: { id: reporter.id } },
-                    }
+                createdIssue = await db.$transaction(async (tx) => {
+                    const backlogRank =
+                        status === "BACKLOG" ? await nextBacklogRank(tx) : undefined;
+                    return tx.issue.create({
+                        data: {
+                            publicKey: generateIssuePublicKey(),
+                            title,
+                            description: body.description || null,
+                            type,
+                            priority,
+                            severity,
+                            status,
+                            environment: body.environment || null,
+                            tags: body.tags || null,
+                            resourceName: body.resourceName || null,
+                            serverVersion: body.serverVersion || null,
+                            reproductionSteps: body.reproductionSteps || null,
+                            expectedBehavior: body.expectedBehavior || null,
+                            label: body.label || null,
+                            discordChannelId: null,
+                            discordThreadId: discordPostId || null,
+                            backlogRank,
+                            reporter: { connect: { id: reporter.id } },
+                        },
+                    });
                 });
             } catch (error: unknown) {
                 // P2002 on publicKey means collision — retry with a fresh key.

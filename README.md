@@ -142,6 +142,7 @@ curl -X POST https://tracker.example.com/api/issues \
 - Apply schema changes manually (outside the Vercel build) using either:
   - `pnpm prisma db push` (no migration history), or
   - `pnpm prisma migrate deploy` (after baseline/migrations are set up).
+- Backlog ranking (`Issue.backlogRank`) ships as migration `20260823_issue_backlog_rank`. Apply it with `pnpm prisma migrate deploy`, or `pnpm prisma db push` if you are not using migration history. Do not run Prisma migrate as part of the Vercel build.
 - Keeping Prisma out of build avoids accidental table drops in shared/existing databases.
 
 ### 5) Cut over from Render
