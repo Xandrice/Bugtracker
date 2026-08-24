@@ -39,6 +39,7 @@ import {
   type StaffInventoryContainer,
   type StaffInventoryItem,
 } from "@/lib/fivem-inventory";
+import { listPlayerStaffAuditEvents } from "@/lib/staff-audit";
 import { discordSignInUrl } from "@/lib/auth-urls";
 import { StaffAuditList } from "@/components/staff/StaffAuditList";
 import { togglePlayerBanAction, togglePlayerWhitelistAction } from "../../actions";
