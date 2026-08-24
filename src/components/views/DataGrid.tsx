@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
     ArrowDown,
@@ -12,7 +12,13 @@ import {
     Search,
     X,
 } from "lucide-react";
-import { updateIssueAssignee, updateIssueWorkflow } from "@/app/actions";
+import {
+    bulkUpdateIssues,
+    updateIssueAssignee,
+    updateIssueWorkflow,
+    type BulkIssueUpdates,
+} from "@/app/actions";
+import { Button } from "@/components/ui/Button";
 import { deleteSavedView, saveSavedView, type SavedViewFilters } from "@/app/staff-actions";
 import { formatIssueRef } from "@/lib/issue-ids";
 import {
@@ -114,6 +120,8 @@ interface DataGridProps {
 }
 
 const EMPTY_SAVED_VIEWS: Array<{ id: string; name: string; filters: SavedViewFilters }> = [];
+const BULK_UNCHANGED = "__keep__";
+const MAX_BULK_ISSUE_UPDATES = 100;
 
 export function DataGrid({
     issues,
@@ -136,6 +144,14 @@ export function DataGrid({
     const [pendingIssueId, setPendingIssueId] = useState<string | null>(null);
     const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
     const [isPending, startTransition] = useTransition();
+    const [isBulkPending, startBulkTransition] = useTransition();
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+    const [bulkStatus, setBulkStatus] = useState(BULK_UNCHANGED);
+    const [bulkType, setBulkType] = useState(BULK_UNCHANGED);
+    const [bulkPriority, setBulkPriority] = useState(BULK_UNCHANGED);
+    const [bulkAssignee, setBulkAssignee] = useState(BULK_UNCHANGED);
+    const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+    const selectAllRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         setLocalIssues(issues);
@@ -240,6 +256,14 @@ export function DataGrid({
         () => new Set(localIssues.map((issue) => issue.id)),
         [localIssues]
     );
+
+    useEffect(() => {
+        setSelectedIds((prev) => {
+            if (prev.size === 0) return prev;
+            const next = new Set([...prev].filter((id) => issueIds.has(id)));
+            return next.size === prev.size ? prev : next;
+        });
+    }, [issueIds]);
 
     const childrenByParentId = useMemo(() => {
         const map = new Map<string, IssueSnippet[]>();
@@ -369,6 +393,22 @@ export function DataGrid({
         expandedIds,
     ]);
 
+    const visibleIssueIds = useMemo(
+        () => visibleRows.map(({ issue }) => issue.id),
+        [visibleRows]
+    );
+    const selectedCount = selectedIds.size;
+    const visibleSelectedCount = visibleIssueIds.filter((id) => selectedIds.has(id)).length;
+    const allVisibleSelected =
+        visibleIssueIds.length > 0 && visibleSelectedCount === visibleIssueIds.length;
+    const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+
+    useEffect(() => {
+        if (selectAllRef.current) {
+            selectAllRef.current.indeterminate = someVisibleSelected;
+        }
+    }, [someVisibleSelected]);
+
     // When search matches a subtask but not its parent, auto-expand the parent.
     useEffect(() => {
         const q = search.trim().toLowerCase();
@@ -442,6 +482,142 @@ export function DataGrid({
                 setLocalIssues(previous);
             } finally {
                 setPendingIssueId(null);
+            }
+        });
+    };
+
+    const toggleSelected = (issueId: string, checked: boolean) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (checked) next.add(issueId);
+            else next.delete(issueId);
+            return next;
+        });
+        setBulkMessage(null);
+    };
+
+    const toggleSelectAllVisible = (checked: boolean) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (checked) {
+                for (const id of visibleIssueIds) next.add(id);
+            } else {
+                for (const id of visibleIssueIds) next.delete(id);
+            }
+            return next;
+        });
+        setBulkMessage(null);
+    };
+
+    const clearSelection = () => {
+        setSelectedIds(new Set());
+        setBulkStatus(BULK_UNCHANGED);
+        setBulkType(BULK_UNCHANGED);
+        setBulkPriority(BULK_UNCHANGED);
+        setBulkAssignee(BULK_UNCHANGED);
+        setBulkMessage(null);
+    };
+
+    const hasBulkChanges =
+        bulkStatus !== BULK_UNCHANGED ||
+        bulkType !== BULK_UNCHANGED ||
+        bulkPriority !== BULK_UNCHANGED ||
+        (canEditAssignee && bulkAssignee !== BULK_UNCHANGED);
+
+    const applyBulkUpdate = () => {
+        if (selectedCount === 0 || !hasBulkChanges || isBulkPending) return;
+        if (selectedCount > MAX_BULK_ISSUE_UPDATES) {
+            setBulkMessage(`Too many issues selected (max ${MAX_BULK_ISSUE_UPDATES}).`);
+            return;
+        }
+
+        const updates: BulkIssueUpdates = {};
+        if (bulkStatus !== BULK_UNCHANGED) updates.status = bulkStatus;
+        if (bulkType !== BULK_UNCHANGED) updates.type = bulkType;
+        if (bulkPriority !== BULK_UNCHANGED) updates.priority = bulkPriority;
+        if (canEditAssignee && bulkAssignee !== BULK_UNCHANGED) {
+            updates.assigneeId = bulkAssignee === "none" ? null : bulkAssignee;
+        }
+
+        const ids = [...selectedIds];
+        const previous = localIssues;
+        const nextAssignee =
+            !("assigneeId" in updates)
+                ? undefined
+                : updates.assigneeId
+                  ? assignableUsers?.find((user) => user.id === updates.assigneeId) ?? null
+                  : null;
+
+        setLocalIssues((prev) =>
+            prev.map((issue) => {
+                if (!selectedIds.has(issue.id)) return issue;
+                return {
+                    ...issue,
+                    ...(updates.status
+                        ? { status: updates.status as IssueStatus }
+                        : {}),
+                    ...(updates.type ? { type: updates.type as IssueType } : {}),
+                    ...(updates.priority
+                        ? { priority: updates.priority as IssuePriority }
+                        : {}),
+                    ...("assigneeId" in updates ? { assignee: nextAssignee ?? null } : {}),
+                };
+            })
+        );
+        setBulkMessage(null);
+
+        startBulkTransition(async () => {
+            try {
+                const result = await bulkUpdateIssues(ids, updates);
+                if (result.error) {
+                    setLocalIssues(previous);
+                    setBulkMessage(result.error);
+                    return;
+                }
+
+                const skipped = result.skipped ?? [];
+                const skippedIds = new Set(skipped.map((row) => row.id));
+                if (skippedIds.size > 0) {
+                    setLocalIssues((current) =>
+                        current.map((issue) => {
+                            const skip = skipped.find((row) => row.id === issue.id);
+                            if (!skip) return issue;
+                            if (/issue not found|unauthorized|permission/i.test(skip.error)) {
+                                return previous.find((row) => row.id === issue.id) ?? issue;
+                            }
+                            return issue;
+                        })
+                    );
+                    setSelectedIds(skippedIds);
+                } else {
+                    setSelectedIds(new Set());
+                    setBulkStatus(BULK_UNCHANGED);
+                    setBulkType(BULK_UNCHANGED);
+                    setBulkPriority(BULK_UNCHANGED);
+                    setBulkAssignee(BULK_UNCHANGED);
+                }
+
+                const updated = result.updated ?? 0;
+                if (updated > 0 && skipped.length === 0) {
+                    setBulkMessage(
+                        `Updated ${updated} issue${updated === 1 ? "" : "s"}.`
+                    );
+                } else if (updated > 0) {
+                    const sample = skipped
+                        .slice(0, 3)
+                        .map((row) => row.error)
+                        .join("; ");
+                    setBulkMessage(
+                        `Updated ${updated}. ${skipped.length} could not be updated${sample ? `: ${sample}` : "."}`
+                    );
+                } else {
+                    setBulkMessage(
+                        skipped[0]?.error || "No issues were updated."
+                    );
+                }
+            } catch {
+                setLocalIssues(previous);
+                setBulkMessage("Bulk update failed. Try again.");
             }
         });
     };
@@ -581,11 +757,127 @@ export function DataGrid({
                 </div>
             )}
 
+            {(selectedCount > 0 || bulkMessage) && (
+                <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface p-2">
+                    <span className="px-1.5 text-xs font-medium text-foreground">
+                        {selectedCount} selected
+                    </span>
+                    <Select
+                        size="xs"
+                        value={bulkStatus}
+                        onChange={setBulkStatus}
+                        options={[
+                            { value: BULK_UNCHANGED, label: "Status · No change" },
+                            ...STATUS_OPTIONS,
+                        ]}
+                        className="w-auto min-w-[140px]"
+                        fullWidth={false}
+                        aria-label="Bulk status"
+                        disabled={isBulkPending}
+                    />
+                    <Select
+                        size="xs"
+                        value={bulkType}
+                        onChange={setBulkType}
+                        options={[
+                            { value: BULK_UNCHANGED, label: "Type · No change" },
+                            ...TYPE_OPTIONS,
+                        ]}
+                        className="w-auto min-w-[130px]"
+                        fullWidth={false}
+                        aria-label="Bulk type"
+                        disabled={isBulkPending}
+                    />
+                    <Select
+                        size="xs"
+                        value={bulkPriority}
+                        onChange={setBulkPriority}
+                        options={[
+                            { value: BULK_UNCHANGED, label: "Priority · No change" },
+                            ...PRIORITY_OPTIONS,
+                        ]}
+                        className="w-auto min-w-[140px]"
+                        fullWidth={false}
+                        aria-label="Bulk priority"
+                        disabled={isBulkPending}
+                    />
+                    {canEditAssignee && (
+                        <Select
+                            size="xs"
+                            value={bulkAssignee}
+                            onChange={setBulkAssignee}
+                            options={[
+                                { value: BULK_UNCHANGED, label: "Assignee · No change" },
+                                ...assigneeOptions,
+                            ]}
+                            className="w-auto min-w-[160px]"
+                            fullWidth={false}
+                            maxVisibleItems={5}
+                            aria-label="Bulk assignee"
+                            disabled={isBulkPending}
+                        />
+                    )}
+                    <Button
+                        type="button"
+                        variant="primary"
+                        size="xs"
+                        onClick={applyBulkUpdate}
+                        disabled={
+                            selectedCount === 0 ||
+                            !hasBulkChanges ||
+                            isBulkPending
+                        }
+                        loading={isBulkPending}
+                    >
+                        {isBulkPending && (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                        )}
+                        Apply
+                    </Button>
+                    <button
+                        type="button"
+                        onClick={clearSelection}
+                        disabled={isBulkPending}
+                        className="inline-flex items-center gap-1 rounded-md px-2 h-7 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                    >
+                        Clear
+                    </button>
+                    {bulkMessage && (
+                        <span
+                            className={cn(
+                                "w-full text-[11px]",
+                                bulkMessage.startsWith("Updated") &&
+                                    !bulkMessage.includes("could not")
+                                    ? "text-success"
+                                    : "text-danger"
+                            )}
+                        >
+                            {bulkMessage}
+                        </span>
+                    )}
+                </div>
+            )}
+
             <div className="overflow-hidden rounded-md border border-border bg-surface">
                 <div className="overflow-x-auto">
                     <table className="w-full whitespace-nowrap text-left text-sm">
                         <thead>
                             <tr className="border-b border-border bg-surface-2 text-[10px] uppercase tracking-wider text-subtle-foreground">
+                                <th className="w-8 px-2 py-2">
+                                    <input
+                                        ref={selectAllRef}
+                                        type="checkbox"
+                                        checked={allVisibleSelected}
+                                        onChange={(e) =>
+                                            toggleSelectAllVisible(e.target.checked)
+                                        }
+                                        disabled={
+                                            visibleIssueIds.length === 0 || isBulkPending
+                                        }
+                                        aria-label="Select all visible issues"
+                                        className="h-3.5 w-3.5 rounded border-border accent-primary"
+                                    />
+                                </th>
                                 <th
                                     onClick={() => handleSort("id")}
                                     className="w-16 px-3 py-2 font-medium cursor-pointer hover:text-foreground"
@@ -641,7 +933,7 @@ export function DataGrid({
                             {visibleRows.length === 0 ? (
                                 <tr>
                                     <td
-                                        colSpan={9}
+                                        colSpan={10}
                                         className="px-4 py-12 text-center text-xs text-muted-foreground"
                                     >
                                         No issues found matching your criteria.
@@ -650,16 +942,35 @@ export function DataGrid({
                             ) : (
                                 visibleRows.map(({ issue, depth, childCount }) => {
                                     const issueRef = formatIssueRef(issue.publicKey, issue.id);
-                                    const updating = isPending && pendingIssueId === issue.id;
+                                    const updating =
+                                        isBulkPending ||
+                                        (isPending && pendingIssueId === issue.id);
                                     const isExpanded = expandedIds.has(issue.id);
+                                    const isSelected = selectedIds.has(issue.id);
                                     return (
                                         <tr
                                             key={issue.id}
                                             className={cn(
                                                 "group border-b border-border last:border-b-0 hover:bg-muted/40 transition-colors",
-                                                depth > 0 && "bg-muted/15"
+                                                depth > 0 && "bg-muted/15",
+                                                isSelected && "bg-primary/8"
                                             )}
                                         >
+                                            <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isSelected}
+                                                    onChange={(e) =>
+                                                        toggleSelected(
+                                                            issue.id,
+                                                            e.target.checked
+                                                        )
+                                                    }
+                                                    disabled={isBulkPending}
+                                                    aria-label={`Select ${issueRef}`}
+                                                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                                                />
+                                            </td>
                                             <td className="px-3 py-1.5">
                                                 <Link
                                                     href={`/issues/${issueRef}`}
