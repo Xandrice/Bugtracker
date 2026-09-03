@@ -198,6 +198,7 @@ View access follows existing staff-tools player or economy view. Filing, assignm
 - Keeping Prisma out of build avoids accidental table drops in shared/existing databases.
 - Staff tools write audit (`StaffAuditEvent` — ban, whitelist, garage/storage toggles) is a Prisma table. Apply `prisma/migrations/20260823_staff_audit_events` with `pnpm prisma migrate deploy` or `pnpm prisma db push` **outside** `vercel-build` / `next build`. Do not add migrate to the Vercel build command.
 - Compensation queue (`CompensationRequest`) ships as `prisma/migrations/20260823_compensation_requests`. Apply it with `pnpm prisma migrate deploy` or `pnpm prisma db push` against your Postgres instance — do not run migrate as part of `vercel-build` / `next build`.
+- Issue templates (`IssueTemplate`) ship as `prisma/migrations/20260824_issue_templates`, including four seed templates (bug report, script crash, feature request, player-facing task). The INSERT is one-shot (`ON CONFLICT DO NOTHING`) so later staff edits are kept. A matching upsert also runs on `/issues/new` and `/issues/templates` for databases that used `db push` without the SQL seed. Apply the migration with `pnpm prisma migrate deploy` or `pnpm prisma db push` **outside** `vercel-build` / `next build`. Owner/Admin staff manage templates at `/issues/templates`; everyone else can optionally pick one on `/issues/new`.
 
 ### 5) Cut over from Render
 

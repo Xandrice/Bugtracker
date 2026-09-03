@@ -132,6 +132,29 @@ model Issue {
   @@index([status, backlogRank])
 }
 
+// Named, reusable prefills for /issues/new. Using a template is optional.
+model IssueTemplate {
+  id                String    @id @default(cuid())
+  slug              String    @unique
+  name              String
+  description       String?
+  type              String    @default("BUG") // BUG, FEATURE, TASK
+  priority          String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  severity          String    @default("MINOR") // MINOR, MAJOR, CRITICAL, BLOCKER
+  titleHint         String? // title input placeholder
+  title             String? // optional prefilled title
+  body              String? // description prefill
+  reproductionSteps String?
+  expectedBehavior  String?
+  resourceName      String?
+  sortOrder         Int       @default(0)
+  archivedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([archivedAt, sortOrder])
+}
+
 model IssueLink {
   id        String   @id @default(cuid())
   // BLOCKS, BLOCKED_BY, RELATES_TO, DUPLICATES

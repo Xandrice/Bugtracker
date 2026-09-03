@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Database, KeyRound, Loader2, Palette, Settings2 } from "lucide-react";
+import Link from "next/link";
+import { Check, Database, KeyRound, LayoutTemplate, Loader2, Palette, Settings2 } from "lucide-react";
 import { useTheme } from "next-themes";
 import {
     createStaffRoleAction,
@@ -265,6 +266,28 @@ export function SettingsClient({
                                     {isSavingForums && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                                     {isSavingForums ? "Saving..." : "Save Discord forums"}
                                 </Button>
+                            </CardBody>
+                        </Card>
+                    )}
+
+                    {activeTab === "general" && canManagePermissions && (
+                        <Card>
+                            <CardHeader>
+                                <div className="space-y-1">
+                                    <CardTitle>Issue templates</CardTitle>
+                                    <p className="text-xs text-muted-foreground">
+                                        Named prefills staff can pick on the new-issue form. Using a template is optional.
+                                    </p>
+                                </div>
+                            </CardHeader>
+                            <CardBody>
+                                <Link
+                                    href="/issues/templates"
+                                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-transparent px-3 h-8 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                                >
+                                    <LayoutTemplate className="h-3.5 w-3.5" />
+                                    Manage templates
+                                </Link>
                             </CardBody>
                         </Card>
                     )}
