@@ -419,7 +419,8 @@ export async function updateIssueStatus(issueId: string, status: string) {
 
 export async function updateIssueWorkflow(
     issueId: string,
-    updates: Partial<{ type: string; priority: string; severity: string; status: string }>
+    updates: Partial<{ type: string; priority: string; severity: string; status: string }>,
+    options?: { skipRevalidate?: boolean }
 ) {
     const actor = await getActorContext();
     if (!actor) return { error: "Unauthorized" };
@@ -491,7 +492,7 @@ export async function updateIssueWorkflow(
         });
     }
 
-    revalidateIssuePaths(issueId);
+    if (!options?.skipRevalidate) revalidateIssuePaths(issueId);
 }
 
 export async function reorderBacklogIssue(
@@ -714,7 +715,11 @@ export async function saveIssueDetails(formData: FormData): Promise<void> {
     await redirectToIssue(issueId);
 }
 
-export async function updateIssueAssignee(issueId: string, assigneeId: string | null) {
+export async function updateIssueAssignee(
+    issueId: string,
+    assigneeId: string | null,
+    options?: { skipRevalidate?: boolean }
+) {
     const actor = await getActorContext();
     if (!actor) return { error: "Unauthorized" };
 
@@ -725,6 +730,7 @@ export async function updateIssueAssignee(issueId: string, assigneeId: string | 
         where: { id: issueId },
         select: { assigneeId: true, title: true, publicKey: true, assignee: { select: { name: true } } },
     });
+    if (!previous) return { error: "Issue not found" };
 
     await db.issue.update({
         where: { id: issueId },
@@ -769,7 +775,134 @@ export async function updateIssueAssignee(issueId: string, assigneeId: string | 
         });
     }
 
-    revalidateIssuePaths(issueId);
+    if (!options?.skipRevalidate) revalidateIssuePaths(issueId);
+}
+
+const MAX_BULK_ISSUE_UPDATES = 100;
+
+export type BulkIssueUpdates = {
+    type?: string;
+    priority?: string;
+    status?: string;
+    /** Present to change assignee; `null` unassigns. Omit to leave assignee unchanged. */
+    assigneeId?: string | null;
+};
+
+/**
+ * Apply the same workflow / assignee edits as the single-issue updaters to many
+ * rows. Only fields present on `updates` are written. Assignee changes still
+ * require `canAssignIssues`. Missing rows are skipped with an error instead of
+ * aborting the rest of the batch.
+ */
+export async function bulkUpdateIssues(
+    issueIds: string[],
+    updates: BulkIssueUpdates
+): Promise<{
+    error?: string;
+    updated?: number;
+    skipped?: { id: string; error: string }[];
+}> {
+    const actor = await getActorContext();
+    if (!actor) return { error: "Unauthorized" };
+
+    const ids = [...new Set((issueIds ?? []).filter((id) => typeof id === "string" && id.length > 0))];
+    if (ids.length === 0) return { error: "No issues selected" };
+    if (ids.length > MAX_BULK_ISSUE_UPDATES) {
+        return { error: `Too many issues selected (max ${MAX_BULK_ISSUE_UPDATES})` };
+    }
+
+    const changeAssignee = Object.prototype.hasOwnProperty.call(updates, "assigneeId");
+    if (changeAssignee) {
+        const denied = requirePermission(canAssignIssues(actor.permissions));
+        if (denied) return denied;
+    }
+
+    const workflow: Partial<{ type: string; priority: string; status: string }> = {};
+    if (updates.type !== undefined) {
+        if (!(ALLOWED_TYPE as readonly string[]).includes(updates.type)) {
+            return { error: "Invalid type" };
+        }
+        workflow.type = updates.type;
+    }
+    if (updates.priority !== undefined) {
+        if (!(ALLOWED_PRIORITY as readonly string[]).includes(updates.priority)) {
+            return { error: "Invalid priority" };
+        }
+        workflow.priority = updates.priority;
+    }
+    if (updates.status !== undefined) {
+        if (!(ALLOWED_STATUS as readonly string[]).includes(updates.status)) {
+            return { error: "Invalid status" };
+        }
+        workflow.status = updates.status;
+    }
+
+    const hasWorkflow = Object.keys(workflow).length > 0;
+    if (!hasWorkflow && !changeAssignee) {
+        return { error: "Choose at least one field to update" };
+    }
+
+    const existing = await db.issue.findMany({
+        where: { id: { in: ids } },
+        select: { id: true },
+    });
+    const existingIds = new Set(existing.map((issue) => issue.id));
+
+    const skipRevalidate = { skipRevalidate: true };
+    const skipped: { id: string; error: string }[] = [];
+    let updated = 0;
+
+    for (const issueId of ids) {
+        if (!existingIds.has(issueId)) {
+            skipped.push({ id: issueId, error: "Issue not found" });
+            continue;
+        }
+
+        const rowErrors: string[] = [];
+
+        if (hasWorkflow) {
+            try {
+                const result = await updateIssueWorkflow(issueId, workflow, skipRevalidate);
+                if (result?.error) rowErrors.push(result.error);
+            } catch (err) {
+                rowErrors.push(err instanceof Error ? err.message : "Failed to update workflow");
+            }
+        }
+
+        if (changeAssignee && !rowErrors.includes("Issue not found")) {
+            try {
+                const result = await updateIssueAssignee(
+                    issueId,
+                    updates.assigneeId ?? null,
+                    skipRevalidate
+                );
+                if (result?.error) rowErrors.push(result.error);
+            } catch (err) {
+                rowErrors.push(err instanceof Error ? err.message : "Failed to update assignee");
+            }
+        }
+
+        if (rowErrors.length > 0) {
+            skipped.push({ id: issueId, error: [...new Set(rowErrors)].join("; ") });
+        } else {
+            updated += 1;
+        }
+    }
+
+    if (updated > 0) {
+        revalidatePath("/");
+        revalidatePath("/issues");
+        revalidatePath("/issues/me");
+        revalidatePath("/issues/backlog");
+        revalidatePath("/boards/triage");
+        revalidatePath("/boards/main");
+        for (const issueId of ids) {
+            if (skipped.some((row) => row.id === issueId)) continue;
+            revalidatePath(`/issues/${issueId}`);
+        }
+    }
+
+    return { updated, skipped };
 }
 
 export async function setAssignee(formData: FormData): Promise<void> {
