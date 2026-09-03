@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { getAppBaseUrl, sendDiscordDM } from "@/lib/discord";
 import { formatIssueRef } from "@/lib/issue-ids";
+import { getIssueWatcherUserIds, uniqueUserIds } from "@/lib/issue-watchers";
 
 async function getUserDiscordId(userId: string): Promise<string | null> {
   const account = await db.account.findFirst({
@@ -74,15 +75,18 @@ export async function recordActivity(input: {
 
   if (!input.notifyStatusChange || input.field !== "status") return;
 
-  const issue = await db.issue.findUnique({
-    where: { id: input.issueId },
-    select: {
-      title: true,
-      publicKey: true,
-      assigneeId: true,
-      reporterId: true,
-    },
-  });
+  const [issue, watcherIds] = await Promise.all([
+    db.issue.findUnique({
+      where: { id: input.issueId },
+      select: {
+        title: true,
+        publicKey: true,
+        assigneeId: true,
+        reporterId: true,
+      },
+    }),
+    getIssueWatcherUserIds(input.issueId),
+  ]);
   if (!issue) return;
 
   const issueRef = formatIssueRef(issue.publicKey, input.issueId);
@@ -93,9 +97,8 @@ export async function recordActivity(input: {
   const issueUrl = `${getAppBaseUrl()}${link}`;
   const dmBody = `**${actorName}** changed status on **${issueRef}**: ${body}\n${issueUrl}`;
 
-  const recipients = new Set<string>();
-  if (issue.assigneeId) recipients.add(issue.assigneeId);
-  if (issue.reporterId) recipients.add(issue.reporterId);
+  // Implicit: reporter + assignee. Explicit: IssueWatcher rows.
+  const recipients = uniqueUserIds(issue.assigneeId, issue.reporterId, watcherIds);
 
   for (const userId of recipients) {
     await notifyUser({

@@ -57,6 +57,7 @@ import {
 import { WorkflowFields } from "./components/WorkflowFields";
 import { AssigneeSelect } from "./components/AssigneeSelect";
 import { IssueActivityTimeline } from "./components/IssueActivityTimeline";
+import { WatchersMeta } from "./components/WatchersMeta";
 
 export default async function IssueDetailsPage({
     params,
@@ -95,6 +96,12 @@ export default async function IssueDetailsPage({
             },
             notes: {
                 include: { author: true },
+                orderBy: { createdAt: "asc" },
+            },
+            watchers: {
+                include: {
+                    user: { select: { id: true, name: true, image: true } },
+                },
                 orderBy: { createdAt: "asc" },
             },
         },
@@ -386,6 +393,16 @@ export default async function IssueDetailsPage({
                                     <span className="text-sm text-subtle-foreground">Unassigned</span>
                                 )}
                             </Meta>
+
+                            <WatchersMeta
+                                issueId={issue.id}
+                                currentUserId={session?.user?.id ?? null}
+                                watchers={issue.watchers.map((row) => ({
+                                    id: row.user.id,
+                                    name: row.user.name,
+                                    image: row.user.image,
+                                }))}
+                            />
                         </div>
                     </Section>
 

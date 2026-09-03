@@ -29,6 +29,7 @@ import {
     type StaffPermissionKey,
 } from "@/lib/staff-permissions";
 import { recordActivity } from "@/lib/activity";
+import { getIssueWatcherUserIds, uniqueUserIds } from "@/lib/issue-watchers";
 import { discordSignInUrl } from "@/lib/auth-urls";
 import { syncProjectMemberProfileByDiscordId } from "@/lib/member-profiles";
 import { nextBacklogRank, placeBacklogIssue, rankWhenEnteringBacklog } from "@/lib/issue-backlog";
@@ -781,6 +782,37 @@ export async function setAssignee(formData: FormData): Promise<void> {
     await redirectToIssue(issueId);
 }
 
+export async function toggleIssueWatch(formData: FormData): Promise<void> {
+    const session = await auth();
+    if (!session?.user?.id) redirectToSignIn();
+
+    const issueId = formData.get("issueId") as string | null;
+    const watch = formData.get("watch") as string | null;
+    if (!issueId) throw new Error("Missing issue");
+
+    const issue = await db.issue.findUnique({
+        where: { id: issueId },
+        select: { id: true, publicKey: true },
+    });
+    if (!issue) throw new Error("Issue not found");
+
+    const userId = session.user.id;
+    if (watch === "true") {
+        await db.issueWatcher.upsert({
+            where: { issueId_userId: { issueId, userId } },
+            create: { issueId, userId },
+            update: {},
+        });
+    } else {
+        await db.issueWatcher.deleteMany({
+            where: { issueId, userId },
+        });
+    }
+
+    revalidateIssuePaths(issueId);
+    revalidatePath(`/issues/${formatIssueRef(issue.publicKey, issue.id)}`);
+}
+
 export async function createTeamNote(formData: FormData) {
     const session = await auth();
     if (!session?.user?.id) redirectToSignIn();
@@ -807,10 +839,13 @@ export async function createTeamNote(formData: FormData) {
         });
 
         const issueRef = await getIssuePublicRef(issueId);
-        const issue = await db.issue.findUnique({
-            where: { id: issueId },
-            select: { title: true, assigneeId: true },
-        });
+        const [issue, watcherIds] = await Promise.all([
+            db.issue.findUnique({
+                where: { id: issueId },
+                select: { title: true, assigneeId: true },
+            }),
+            getIssueWatcherUserIds(issueId),
+        ]);
 
         await notifyMentionedUsers({
             content,
@@ -821,20 +856,25 @@ export async function createTeamNote(formData: FormData) {
             pageTitle: issue?.title,
         });
 
-        if (issue?.assigneeId && issue.assigneeId !== session.user.id) {
+        // Comments already notify the assignee; explicit watchers share that path.
+        // Reporter is not added here (they only get COMMENT if they Watch).
+        const commentRecipients = uniqueUserIds(issue?.assigneeId, watcherIds);
+        if (commentRecipients.length > 0) {
             const snippet = content.length > 180 ? content.slice(0, 177) + "…" : content;
             const issueUrl = `${baseUrl}/issues/${issueRef}`;
-            const dmBody = `**${senderName}** commented on **${issue.title}**\n${issueUrl}\n\n> ${content.replace(/\n/g, "\n> ")}`;
-            await notifyUser({
-                userId: issue.assigneeId,
-                actorId: session.user.id,
-                type: "COMMENT",
-                title: `${senderName} commented on ${issue.title}`,
-                body: snippet,
-                link: `/issues/${issueRef}`,
-                issueId,
-                discordMessage: dmBody,
-            });
+            const dmBody = `**${senderName}** commented on **${issue?.title}**\n${issueUrl}\n\n> ${content.replace(/\n/g, "\n> ")}`;
+            for (const userId of commentRecipients) {
+                await notifyUser({
+                    userId,
+                    actorId: session.user.id,
+                    type: "COMMENT",
+                    title: `${senderName} commented on ${issue?.title}`,
+                    body: snippet,
+                    link: `/issues/${issueRef}`,
+                    issueId,
+                    discordMessage: dmBody,
+                });
+            }
         }
 
         revalidatePath(`/issues/${issueId}`);
