@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
 export function authorizeDiscordWebhook(req: Request): NextResponse | null {
-    const secret = process.env.DISCORD_WEBHOOK_SECRET;
+    const secret = process.env.DISCORD_WEBHOOK_SECRET?.trim();
     if (!secret) {
         return NextResponse.json(
             { error: "Server configuration error: DISCORD_WEBHOOK_SECRET not set" },
@@ -10,7 +10,7 @@ export function authorizeDiscordWebhook(req: Request): NextResponse | null {
         );
     }
 
-    const headerSecret = req.headers.get("x-discord-webhook-secret");
+    const headerSecret = req.headers.get("x-discord-webhook-secret")?.trim();
     if (!headerSecret || headerSecret !== secret) {
         return NextResponse.json(
             { error: "Unauthorized" },
