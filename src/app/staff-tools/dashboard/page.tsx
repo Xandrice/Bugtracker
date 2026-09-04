@@ -8,6 +8,7 @@ import {
   Coins,
   RefreshCcw,
   History,
+  MapPinned,
   Shield,
   Users,
 } from "lucide-react";
@@ -172,6 +173,15 @@ export default async function StaffDashboardPage() {
               >
                 <Users className="h-3.5 w-3.5" />
                 Players
+              </Link>
+            )}
+            {showPlayersLink && (
+              <Link
+                href="/staff-tools/map"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:border-border-strong"
+              >
+                <MapPinned className="h-3.5 w-3.5" />
+                Map
               </Link>
             )}
             {showVehiclesLink && (

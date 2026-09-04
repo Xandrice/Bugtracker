@@ -19,6 +19,7 @@ import {
   Coins,
   BarChart3,
   Banknote,
+  MapPinned,
 } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { QuickCreateTrigger } from "@/components/issues/QuickCreateIssue";
@@ -34,6 +35,7 @@ function navItems(canViewLogs: boolean, staffToolAccess: StaffToolAccess) {
   const staffToolItems = [
     ...(anyStaffTool ? [{ name: "Dashboard", href: "/staff-tools/dashboard", icon: BarChart3 }] : []),
     ...(staffToolAccess.players ? [{ name: "Players", href: "/staff-tools/players", icon: Users }] : []),
+    ...(staffToolAccess.players ? [{ name: "Map", href: "/staff-tools/map", icon: MapPinned }] : []),
     ...(staffToolAccess.vehicles ? [{ name: "Vehicles", href: "/staff-tools/vehicles", icon: Car }] : []),
     ...(staffToolAccess.economy ? [{ name: "Economy", href: "/staff-tools/economy", icon: Coins }] : []),
     ...(staffToolAccess.players || staffToolAccess.economy
