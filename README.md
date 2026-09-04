@@ -180,6 +180,67 @@ curl -X POST https://tracker.example.com/api/reports \
 - The page passes `AccountID` and `ProjectID` headers when configured.
 - Access is controlled by `LOG_VIEW_ROLES`, so logs can be restricted to specific staff roles.
 
+### Staff live player map
+
+`/staff-tools/map` is a staff-only San Andreas map shell. It is gated with the same `canViewStaffPlayers` permission as `/staff-tools/players`.
+
+This repo and the FiveM MySQL helpers do **not** contain live player XYZ. Presence today is playtime / first-last seen. The map therefore ships empty until a FiveM server or Renny publisher posts positions. The UI never invents markers.
+
+No Prisma model is added. Ingest is held in process memory and goes stale after 90 seconds. That store is instance-local on Vercel — do not treat it as a durable live feed. If a later durable store is needed, apply any migrate **outside** `vercel-build` / `next build` (Xandrice-only).
+
+#### Ingest: `POST /api/staff-tools/live-map`
+
+**Auth:** Same as `POST /api/issues`. Header `x-discord-webhook-secret` must match `DISCORD_WEBHOOK_SECRET`. Returns 401 if missing/wrong, 500 if env var unset.
+
+Each POST **replaces** the current online set. Send the full currently-online list on every tick (every 5–15s). An empty `players` array means “publisher is up, nobody online.”
+
+**JSON body:**
+- Required: `players` (array)
+- Optional: `source` (`fivem` | `renny`, default `fivem`), `serverId` (string)
+- Each player: required `identifier` (string), `x` (number), `y` (number); optional `name`, `z`, `heading`
+
+```json
+{
+  "source": "fivem",
+  "serverId": "renegade-1",
+  "players": [
+    {
+      "identifier": "ABC12345",
+      "name": "Alex",
+      "x": 215.5,
+      "y": -890.25,
+      "z": 30.1,
+      "heading": 91
+    }
+  ]
+}
+```
+
+**Response:** `200`
+```json
+{ "ok": true, "accepted": 1, "rejected": 0, "staleAfterMs": 90000 }
+```
+
+#### Staff read: `GET /api/staff-tools/live-map`
+
+**Auth:** Signed-in session with `canViewStaffPlayers`. Returns 401 if unsigned, 403 if the role cannot view staff players.
+
+**Response:**
+```json
+{
+  "available": false,
+  "source": null,
+  "serverId": null,
+  "publisherRequired": true,
+  "note": "Live positions require a FiveM server or Renny publisher posting to POST /api/staff-tools/live-map. This repo does not read player XYZ from MySQL and does not invent coordinates.",
+  "players": [],
+  "receivedAt": null,
+  "staleAfterMs": 90000
+}
+```
+
+When a fresh ingest exists, `available` is `true`, `publisherRequired` is `false`, `note` is `null`, and `players` is only the last published set.
+
 ### Staff compensation queue
 
 `/staff-tools/compensation` is a refund decision queue (lost items, wipe, bug loss). Staff file a request against a citizenid/identifier; a senior approves or denies; someone marks it paid after paying out in-game or via txAdmin.
