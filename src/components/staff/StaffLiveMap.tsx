@@ -117,6 +117,7 @@ export function StaffLiveMap({ initialSnapshot }: { initialSnapshot: LiveMapSnap
   }, []);
 
   useEffect(() => {
+    void refresh();
     const timer = window.setInterval(() => {
       void refresh();
     }, POLL_MS);
