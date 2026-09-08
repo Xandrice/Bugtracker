@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { parseIssueListState, type IssueListParams, type IssueListScope, type IssueListState } from "./issue-list-state";
+import { pgTable } from "./pg-schema";
 
 export type IssueListRow = {
   id: string; publicKey: string | null; title: string; status: string; type: string; priority: string; severity: string;
@@ -16,7 +17,7 @@ export function issueMatchSql(state: IssueListState, scope: IssueListScope, user
   const col = (name: string) => Prisma.raw(`${alias}."${name}"`);
   const filters: Prisma.Sql[] = [Prisma.sql`TRUE`];
   if (scope === "assigned") filters.push(Prisma.sql`${col("assigneeId")} = ${userId}`);
-  if (scope === "watching") filters.push(Prisma.sql`EXISTS (SELECT 1 FROM "IssueWatcher" w WHERE w."issueId" = ${col("id")} AND w."userId" = ${userId})`);
+  if (scope === "watching") filters.push(Prisma.sql`EXISTS (SELECT 1 FROM ${pgTable("IssueWatcher")} w WHERE w."issueId" = ${col("id")} AND w."userId" = ${userId})`);
   if (scope === "triage") filters.push(Prisma.sql`${col("assigneeId")} IS NULL AND ${col("status")} = 'OPEN'`);
   if (state.status === "ACTIVE") filters.push(Prisma.sql`${col("status")} <> 'DONE'`);
   else if (state.status !== "ALL") filters.push(Prisma.sql`${col("status")} = ${state.status}`);
@@ -40,21 +41,21 @@ function orderSql(state: IssueListState) {
 const columns = Prisma.sql`i.id, i."publicKey", i.title, i.status, i.type, i.priority, i.severity, i."assigneeId", u.name AS "assigneeName", i."dueDate", i."updatedAt", i."resourceName", i."storyPoints", i."parentIssueId"`;
 
 export async function getIssueChildren(parentId: string, state: IssueListState, scope: IssueListScope, userId: string | null, offset = 0, client: Prisma.TransactionClient = db): Promise<IssueListRow[]> {
-  return client.$queryRaw<IssueListRow[]>(Prisma.sql`SELECT ${columns}, TRUE AS matches, 0::int AS "childCount" FROM "Issue" i LEFT JOIN "User" u ON u.id = i."assigneeId" WHERE i."parentIssueId" = ${parentId} AND ${issueMatchSql(state, scope, userId, "i")} ORDER BY ${orderSql(state)} LIMIT 50 OFFSET ${offset}`);
+  return client.$queryRaw<IssueListRow[]>(Prisma.sql`SELECT ${columns}, TRUE AS matches, 0::int AS "childCount" FROM ${pgTable("Issue")} i LEFT JOIN ${pgTable("User")} u ON u.id = i."assigneeId" WHERE i."parentIssueId" = ${parentId} AND ${issueMatchSql(state, scope, userId, "i")} ORDER BY ${orderSql(state)} LIMIT 50 OFFSET ${offset}`);
 }
 
 export async function getIssueListPage(params: IssueListParams, scope: IssueListScope, userId: string | null): Promise<IssueListPage> {
   const state = parseIssueListState(params, scope);
   const parentMatch = issueMatchSql(state, scope, userId, "i");
   const childMatch = issueMatchSql(state, scope, userId, "c");
-  const groupWhere = Prisma.sql`i."parentIssueId" IS NULL AND (${parentMatch} OR EXISTS (SELECT 1 FROM "Issue" c WHERE c."parentIssueId" = i.id AND ${childMatch}))`;
+  const groupWhere = Prisma.sql`i."parentIssueId" IS NULL AND (${parentMatch} OR EXISTS (SELECT 1 FROM ${pgTable("Issue")} c WHERE c."parentIssueId" = i.id AND ${childMatch}))`;
   return db.$transaction(async (tx) => {
-    const [counts] = await tx.$queryRaw<{ groups: number; matches: number }[]>(Prisma.sql`SELECT (SELECT COUNT(*)::int FROM "Issue" i WHERE ${groupWhere}) AS groups, (SELECT COUNT(*)::int FROM "Issue" i WHERE ${parentMatch}) AS matches`);
+    const [counts] = await tx.$queryRaw<{ groups: number; matches: number }[]>(Prisma.sql`SELECT (SELECT COUNT(*)::int FROM ${pgTable("Issue")} i WHERE ${groupWhere}) AS groups, (SELECT COUNT(*)::int FROM ${pgTable("Issue")} i WHERE ${parentMatch}) AS matches`);
     const pageCount = Math.max(1, Math.ceil(counts.groups / 50));
     state.page = Math.min(state.page, pageCount);
     const parents = await tx.$queryRaw<IssueListRow[]>(Prisma.sql`SELECT ${columns}, ${parentMatch} AS matches,
-      (SELECT COUNT(*)::int FROM "Issue" c WHERE c."parentIssueId" = i.id AND ${childMatch}) AS "childCount"
-      FROM "Issue" i LEFT JOIN "User" u ON u.id = i."assigneeId" WHERE ${groupWhere}
+      (SELECT COUNT(*)::int FROM ${pgTable("Issue")} c WHERE c."parentIssueId" = i.id AND ${childMatch}) AS "childCount"
+      FROM ${pgTable("Issue")} i LEFT JOIN ${pgTable("User")} u ON u.id = i."assigneeId" WHERE ${groupWhere}
       ORDER BY ${orderSql(state)} LIMIT 50 OFFSET ${(state.page - 1) * 50}`);
     const groups: IssueGroup[] = [];
     for (const parent of parents) groups.push({ parent, expanded: !parent.matches, children: !parent.matches ? await getIssueChildren(parent.id, state, scope, userId, 0, tx) : [] });

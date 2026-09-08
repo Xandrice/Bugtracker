@@ -8,9 +8,12 @@ const { loader, root } = require('./load-ts.cjs');
 const { PGlite } = require('../../node_modules/.cache/issue-test-tools/node_modules/@electric-sql/pglite');
 
 test('PostgreSQL integration: grouped queries, scope, pagination, migration and transaction rollback', async (t) => {
+  const { postgresSchema } = loader()('src/lib/pg-schema.ts');
+  const schema = postgresSchema();
   const pg = new PGlite();
   t.after(() => pg.close());
-  await pg.exec(`CREATE TABLE "User" (id text PRIMARY KEY, name text, image text);
+  await pg.exec(`CREATE SCHEMA IF NOT EXISTS "${schema}"; SET search_path TO "${schema}";
+    CREATE TABLE "User" (id text PRIMARY KEY, name text, image text);
     CREATE TABLE "Issue" (id text PRIMARY KEY, "publicKey" text, title text, description text, status text DEFAULT 'OPEN', type text DEFAULT 'BUG', priority text DEFAULT 'MEDIUM', severity text DEFAULT 'MINOR', "assigneeId" text REFERENCES "User"(id), "dueDate" timestamp, "updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP, "resourceName" text, "storyPoints" integer, "parentIssueId" text REFERENCES "Issue"(id), "backlogRank" text, tags text);
     CREATE TABLE "IssueWatcher" ("issueId" text, "userId" text);
     CREATE TABLE "IssueActivity" (id serial PRIMARY KEY, "issueId" text, "actorId" text, action text, field text, "oldValue" text, "newValue" text);

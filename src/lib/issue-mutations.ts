@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { canAssignIssues, type PermissionContext } from "@/lib/permissions";
+import { pgTable } from "@/lib/pg-schema";
 import { issueFieldChanges, validateIssueFields } from "./issue-validation";
 import { rankWhenEnteringBacklog } from "./issue-backlog";
 import { recordActivity } from "./activity";
@@ -18,7 +19,7 @@ export async function mutateIssue(issueId: string, input: Record<string, unknown
   try {
     const committed = await db.$transaction(async (tx) => {
       // Serialize writes to the same issue so audit old values reflect the actual preceding state.
-      await tx.$queryRaw`SELECT id FROM "Issue" WHERE id = ${issueId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM ${pgTable("Issue")} WHERE id = ${issueId} FOR UPDATE`;
       const previous = await tx.issue.findUnique({ where: { id: issueId }, include: { assignee: { select: { name: true } } } });
       if (!previous) return null;
       let assigneeName = "Unassigned";

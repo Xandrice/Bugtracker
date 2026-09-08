@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { evenlySpacedRanks, rankBetween } from "@/lib/backlog-rank";
+import { pgTable } from "@/lib/pg-schema";
 
 const BACKLOG_STATUS = "BACKLOG";
 
@@ -10,7 +11,7 @@ const rankOrderBy = [
 ];
 
 async function lockBacklogRows(tx: Prisma.TransactionClient) {
-    await tx.$queryRaw`SELECT id FROM "Issue" WHERE status = ${BACKLOG_STATUS} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM ${pgTable("Issue")} WHERE status = ${BACKLOG_STATUS} FOR UPDATE`;
 }
 
 /** Next rank after the last current BACKLOG item (bottom of the list). */
