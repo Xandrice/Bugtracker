@@ -10,6 +10,7 @@ async function discordApi(path: string, init: RequestInit) {
 
     return fetch(`https://discord.com/api/v10${path}`, {
         ...init,
+        signal: init.signal ?? AbortSignal.timeout(10000),
         headers: {
             "Authorization": `Bot ${token}`,
             "Content-Type": "application/json",

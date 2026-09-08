@@ -1,4 +1,8 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import { PlayerLogControls } from "@/components/staff/PlayerLogControls";
+import { PlayerLogs } from "@/components/staff/PlayerLogs";
+import { playerProfileTab, readLogParam, type PlayerLogParams } from "@/lib/player-logs";
 import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
 import {
@@ -29,6 +33,7 @@ import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { DataList, DataValue } from "@/components/staff/DataList";
 import {
+  canViewLogs,
   canManageCompensation,
   canManageStaffPlayers,
   canViewStaffPlayers,
@@ -133,8 +138,10 @@ function InventorySection({
 
 export default async function StaffPlayerDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ identifier: string }>;
+  searchParams: Promise<PlayerLogParams>;
 }) {
   const { identifier: rawIdentifier } = await params;
   const identifier = decodeURIComponent(rawIdentifier);
@@ -164,18 +171,32 @@ export default async function StaffPlayerDetailPage({
     );
   }
 
+  const filters = await searchParams;
+  const allowedLogs = canViewLogs(permissions);
+  const tab = playerProfileTab(filters, allowedLogs);
+  const filterQuery = new URLSearchParams();
+  for (const key of ["range", "duration", "start", "end", "limit"]) {
+    const value = readLogParam(filters[key]);
+    if (value) filterQuery.set(key, value);
+  }
+  const profilePath = `/staff-tools/players/${encodeURIComponent(identifier)}`;
+  const tabHref = (value: string) => {
+    const query = new URLSearchParams(filterQuery);
+    query.set("tab", value);
+    return `${profilePath}?${query}`;
+  };
   const canManage = canManageStaffPlayers(permissions);
   const canFileCompensation = canManageCompensation(permissions);
   const [player, inventory] = await Promise.all([
     getStaffPlayerDetail(identifier),
-    getStaffPlayerInventory(identifier),
+    tab === "assets" ? getStaffPlayerInventory(identifier) : Promise.resolve(null),
   ]);
   if (!player) notFound();
-  const auditEvents = await listPlayerStaffAuditEvents({
+  const auditEvents = tab === "history" ? await listPlayerStaffAuditEvents({
     playerIdentifier: player.identifier,
     vehicleKeys: player.vehicles.map((vehicle) => vehicle.key),
     limit: 20,
-  });
+  }) : [];
 
   const showInventory =
     !!inventory &&
@@ -183,7 +204,7 @@ export default async function StaffPlayerDetailPage({
 
   // Fetch Discord account info if we have a Discord ID
   let discordAccount: { name: string | null; email: string | null; image: string | null } | null = null;
-  if (player.discordId) {
+  if (tab === "overview" && player.discordId) {
     const account = await db.account.findFirst({
       where: { provider: "discord", providerAccountId: player.discordId },
       include: { user: true },
@@ -212,7 +233,7 @@ export default async function StaffPlayerDetailPage({
         )
       )
     : [];
-  const modLogEntries = subjectDiscordIds.length
+  const modLogEntries = tab === "history" && subjectDiscordIds.length
     ? await db.playerReport.findMany({
         where: { subjectDiscordId: { in: subjectDiscordIds } },
         orderBy: { updatedAt: "desc" },
@@ -231,7 +252,7 @@ export default async function StaffPlayerDetailPage({
       })
     : [];
 
-  const compensationRequests = await db.compensationRequest.findMany({
+  const compensationRequests = tab === "history" ? await db.compensationRequest.findMany({
     where: {
       OR: [
         { playerIdentifier: player.identifier },
@@ -245,7 +266,7 @@ export default async function StaffPlayerDetailPage({
       resolver: { select: { name: true } },
       payer: { select: { name: true } },
     },
-  });
+  }) : [];
 
   return (
     <PageContainer className="max-w-[1200px]">
@@ -272,6 +293,17 @@ export default async function StaffPlayerDetailPage({
         }
       />
 
+      <nav aria-label="Player profile sections" className="flex gap-1 overflow-x-auto border-b border-border pb-2">
+        {["overview", "assets", "history", ...(allowedLogs ? ["logs"] : [])].map((value) => (
+          <Link key={value} href={tabHref(value)} scroll={false} prefetch={false}
+            aria-current={tab === value ? "page" : undefined}
+            className={`rounded-md px-4 py-2 text-sm font-medium capitalize focus-ring ${tab === value ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}>
+            {value}
+          </Link>
+        ))}
+      </nav>
+
+      {tab === "overview" && <>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {player.presence.length > 0 && (
           <Card>
@@ -438,6 +470,43 @@ export default async function StaffPlayerDetailPage({
         </Card>
       )}
 
+      {canManage && (player.supportsBanToggle || player.supportsWhitelistToggle) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Management actions</CardTitle>
+          </CardHeader>
+          <CardBody className="flex flex-wrap gap-2">
+            {player.supportsBanToggle && (
+              <form action={togglePlayerBanAction}>
+                <input type="hidden" name="playerIdentifier" value={player.identifier} />
+                <Button type="submit" size="sm" variant="outline">
+                  Toggle ban
+                </Button>
+              </form>
+            )}
+            {player.supportsWhitelistToggle && (
+              <form action={togglePlayerWhitelistAction}>
+                <input type="hidden" name="playerIdentifier" value={player.identifier} />
+                <Button type="submit" size="sm" variant="outline">
+                  Toggle whitelist
+                </Button>
+              </form>
+            )}
+          </CardBody>
+        </Card>
+      )}
+
+      <details className="rounded-md border border-border bg-surface">
+        <summary className="cursor-pointer px-4 py-3 text-xs font-medium text-foreground">
+          Raw database row
+        </summary>
+        <div className="border-t border-border p-4">
+          <DataValue value={player.raw} />
+        </div>
+      </details>
+      </>}
+
+      {tab === "assets" && <>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -524,6 +593,9 @@ export default async function StaffPlayerDetailPage({
         </Card>
       )}
 
+      </>}
+
+      {tab === "history" && <>
       {player.criminal && (
         <Card>
           <CardHeader>
@@ -680,14 +752,13 @@ export default async function StaffPlayerDetailPage({
           </CardHeader>
           <CardBody className="space-y-2">
             {modLogEntries.map((entry) => (
-              <Link
+              <div
                 key={entry.id}
-                href={`/reports/${entry.id}`}
                 className="block rounded-md border border-border bg-surface-2 p-3 transition-colors hover:bg-muted"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-foreground">{entry.title}</p>
+                    <Link href={`/reports/${entry.id}`} className="text-sm font-medium text-foreground hover:underline">{entry.title}</Link>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <span>Category: {entry.category}</span>
                       <span>•</span>
@@ -702,7 +773,6 @@ export default async function StaffPlayerDetailPage({
                             key={link.issueId}
                             href={`/issues/${link.issue.publicKey || link.issue.id}`}
                             className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20"
-                            onClick={(e) => e.stopPropagation()}
                           >
                             {link.issue.publicKey || `#${link.issue.id.slice(0, 8)}`}
                           </Link>
@@ -714,7 +784,7 @@ export default async function StaffPlayerDetailPage({
                     {entry.status}
                   </Badge>
                 </div>
-              </Link>
+              </div>
             ))}
           </CardBody>
         </Card>
@@ -735,40 +805,19 @@ export default async function StaffPlayerDetailPage({
         </CardBody>
       </Card>
 
-      {canManage && (player.supportsBanToggle || player.supportsWhitelistToggle) && (
+      </>}
+
+      {tab === "logs" && allowedLogs && (
         <Card>
-          <CardHeader>
-            <CardTitle>Management actions</CardTitle>
-          </CardHeader>
-          <CardBody className="flex flex-wrap gap-2">
-            {player.supportsBanToggle && (
-              <form action={togglePlayerBanAction}>
-                <input type="hidden" name="playerIdentifier" value={player.identifier} />
-                <Button type="submit" size="sm" variant="outline">
-                  Toggle ban
-                </Button>
-              </form>
-            )}
-            {player.supportsWhitelistToggle && (
-              <form action={togglePlayerWhitelistAction}>
-                <input type="hidden" name="playerIdentifier" value={player.identifier} />
-                <Button type="submit" size="sm" variant="outline">
-                  Toggle whitelist
-                </Button>
-              </form>
-            )}
+          <CardHeader><CardTitle>Player logs</CardTitle></CardHeader>
+          <CardBody className="space-y-4">
+            <PlayerLogControls key={filterQuery.toString()} params={filters} />
+            <Suspense key={`${player.identifier}-${filterQuery}`} fallback={<p role="status" className="text-sm text-muted-foreground">Loading player logs?</p>}>
+              <PlayerLogs identifier={player.identifier} params={filters} permissions={permissions} />
+            </Suspense>
           </CardBody>
         </Card>
       )}
-
-      <details className="rounded-md border border-border bg-surface">
-        <summary className="cursor-pointer px-4 py-3 text-xs font-medium text-foreground">
-          Raw database row
-        </summary>
-        <div className="border-t border-border p-4">
-          <DataValue value={player.raw} />
-        </div>
-      </details>
     </PageContainer>
   );
 }

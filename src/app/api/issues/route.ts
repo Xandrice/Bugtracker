@@ -7,8 +7,9 @@ import {
     getOrCreateUserFromDiscordId,
     parseDiscordPostInput,
 } from "@/lib/discord-intake";
-import { formatIssueRef, generateIssuePublicKey } from "@/lib/issue-ids";
-import { recordActivity } from "@/lib/activity";
+import { formatIssueRef } from "@/lib/issue-ids";
+import { generateIssuePublicKey } from "@/lib/issue-key";
+import { validateIssueFields } from "@/lib/issue-validation";
 import { nextBacklogRank } from "@/lib/issue-backlog";
 
 const ALLOWED_STATUS = ["BACKLOG", "OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const;
@@ -59,6 +60,13 @@ export async function POST(req: Request) {
             { status: 400 }
         );
     }
+
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Expected an object." }, { status: 400 });
+    for (const [field, value] of Object.entries(body)) {
+        if (value !== null && typeof value !== "string") return NextResponse.json({ error: "Invalid field type.", fieldErrors: { [field]: "Enter text." } }, { status: 400 });
+    }
+    const validation = validateIssueFields(body as Record<string, unknown>, true);
+    if (Object.keys(validation.fieldErrors).length) return NextResponse.json({ error: "Invalid issue fields.", fieldErrors: validation.fieldErrors }, { status: 400 });
 
     // Validate required fields
     const title = body.title?.trim();
@@ -166,7 +174,7 @@ export async function POST(req: Request) {
                 createdIssue = await db.$transaction(async (tx) => {
                     const backlogRank =
                         status === "BACKLOG" ? await nextBacklogRank(tx) : undefined;
-                    return tx.issue.create({
+                    const created = await tx.issue.create({
                         data: {
                             publicKey: generateIssuePublicKey(),
                             title,
@@ -188,6 +196,8 @@ export async function POST(req: Request) {
                             reporter: { connect: { id: reporter.id } },
                         },
                     });
+                    await tx.issueActivity.create({ data: { issueId: created.id, actorId: reporter.id, action: "CREATED" } });
+                    return created;
                 });
             } catch (error: unknown) {
                 // P2002 on publicKey means collision — retry with a fresh key.
@@ -238,7 +248,7 @@ export async function POST(req: Request) {
     }
 
     // If a forum post ID is linked, publish an initial traceability message there.
-    if (discordPostId) {
+    try { if (discordPostId) {
         const baseUrl = getAppBaseUrl();
         const issueLink = `${baseUrl}/issues/${formatIssueRef(issue.publicKey, issue.id)}`;
         const introMessage = [
@@ -258,13 +268,9 @@ export async function POST(req: Request) {
         }
     }
 
-    revalidateIssuePaths();
+    } catch (error) { console.error("Issue created; Discord notice failed", error); }
 
-    await recordActivity({
-        issueId: issue.id,
-        actorId: reporter.id,
-        action: "CREATED",
-    });
+    revalidateIssuePaths();
 
     const baseUrl = getAppBaseUrl();
     const issueRef = formatIssueRef(issue.publicKey, issue.id);

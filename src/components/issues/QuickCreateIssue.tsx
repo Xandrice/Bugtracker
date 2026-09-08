@@ -11,8 +11,9 @@ import {
 } from "react";
 import Link from "next/link";
 import { Loader2, Plus, X } from "lucide-react";
-import { useFormStatus } from "react-dom";
+
 import { createIssue } from "@/app/actions";
+import { IssueActionForm, IssueFieldError, useIssueFormState } from "@/components/issues/IssueActionForm";
 import { Button } from "@/components/ui/Button";
 import { FieldRow, Input, Textarea } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -32,7 +33,7 @@ export function useQuickCreate() {
 }
 
 function SubmitButton() {
-    const { pending } = useFormStatus();
+    const { pending } = useIssueFormState();
     return (
         <Button type="submit" variant="primary" size="sm" disabled={pending}>
             {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
@@ -84,7 +85,7 @@ function QuickCreateDialog({ onClose }: { onClose: () => void }) {
                     </button>
                 </div>
 
-                <form action={createIssue} className="space-y-4 p-4">
+                <IssueActionForm action={createIssue} className="space-y-4 p-4">
                     <input type="hidden" name="severity" value="MINOR" />
 
                     <FieldRow label="Title" htmlFor="quick-title">
@@ -95,7 +96,8 @@ function QuickCreateDialog({ onClose }: { onClose: () => void }) {
                             placeholder="What needs to be done?"
                             required
                         />
-                    </FieldRow>
+                    <IssueFieldError field="title" />
+          </FieldRow>
 
                     <div className="grid grid-cols-2 gap-3">
                         <FieldRow label="Type" htmlFor="quick-type">
@@ -106,7 +108,8 @@ function QuickCreateDialog({ onClose }: { onClose: () => void }) {
                                 options={TYPE_OPTIONS}
                                 size="sm"
                             />
-                        </FieldRow>
+                        <IssueFieldError field="type" />
+          </FieldRow>
                         <FieldRow label="Priority" htmlFor="quick-priority">
                             <Select
                                 name="priority"
@@ -115,7 +118,8 @@ function QuickCreateDialog({ onClose }: { onClose: () => void }) {
                                 options={PRIORITY_OPTIONS}
                                 size="sm"
                             />
-                        </FieldRow>
+                        <IssueFieldError field="priority" />
+          </FieldRow>
                     </div>
 
                     <FieldRow label="Description (optional)" htmlFor="quick-description">
@@ -125,7 +129,8 @@ function QuickCreateDialog({ onClose }: { onClose: () => void }) {
                             rows={2}
                             placeholder="One-line context…"
                         />
-                    </FieldRow>
+                    <IssueFieldError field="description" />
+          </FieldRow>
 
                     <div className="flex items-center justify-between gap-3 pt-1">
                         <Link
@@ -142,7 +147,7 @@ function QuickCreateDialog({ onClose }: { onClose: () => void }) {
                             <SubmitButton />
                         </div>
                     </div>
-                </form>
+                </IssueActionForm>
             </div>
         </div>
     );

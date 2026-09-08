@@ -1,0 +1,17 @@
+import { randomBytes } from "node:crypto";
+
+// Lowercase alphanumerics with ambiguous chars (0/1/i/l/o) removed.
+// 31 chars ^ 8 length ≈ 8.5e11 combinations — plenty of headroom for a team tracker.
+const ID_ALPHABET = "23456789abcdefghjkmnpqrstuvwxyz";
+const ID_LENGTH = 8;
+
+export function generateIssuePublicKey(length: number = ID_LENGTH): string {
+    const alphabet = ID_ALPHABET;
+    const bytes = randomBytes(length);
+    let out = "";
+    for (let i = 0; i < length; i++) {
+        out += alphabet[bytes[i] % alphabet.length];
+    }
+    return out;
+}
+

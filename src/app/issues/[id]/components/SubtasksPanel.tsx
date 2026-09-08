@@ -15,6 +15,7 @@ import {
     type IssueStatus,
     type IssueType,
 } from "@/lib/issue-tokens";
+import { IssueActionForm, IssueFieldError } from "@/components/issues/IssueActionForm";
 import { createSubtask, unlinkSubtask } from "@/app/actions";
 
 export type SubtaskRow = {
@@ -142,11 +143,12 @@ export function SubtasksPanel({
             </div>
 
             {adding && (
-                <form
+                <IssueActionForm
                     action={async (formData) => {
                         setSubmitting(true);
                         try {
-                            await createSubtask(formData);
+                            const result = await createSubtask(formData);
+                            if (result?.error) return result;
                             resetForm();
                         } finally {
                             setSubmitting(false);
@@ -165,10 +167,13 @@ export function SubtasksPanel({
                         name="title"
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        placeholder="Subtask title"
+                        aria-label="Subtask title" placeholder="Subtask title"
                         autoFocus
                         required
                     />
+                    <IssueFieldError field="title" />
+                    <IssueFieldError field="type" />
+                    <IssueFieldError field="priority" />
                     <button
                         type="button"
                         onClick={() => setShowOptions((v) => !v)}
@@ -219,7 +224,7 @@ export function SubtasksPanel({
                             Add subtask
                         </Button>
                     </div>
-                </form>
+                </IssueActionForm>
             )}
         </div>
     );

@@ -33,7 +33,7 @@ import {
     canManageNote,
     getPermissionContext,
 } from "@/lib/permissions";
-import { syncIssueNotesFromDiscord } from "@/lib/discordSync";
+import { loadIssueComments } from "@/lib/issue-comments";
 import { formatIssueRef } from "@/lib/issue-ids";
 import { SITE_NAME } from "@/lib/site";
 import { Button } from "@/components/ui/Button";
@@ -94,10 +94,6 @@ export default async function IssueDetailsPage({
                     },
                 },
             },
-            notes: {
-                include: { author: true },
-                orderBy: { createdAt: "asc" },
-            },
             watchers: {
                 include: {
                     user: { select: { id: true, name: true, image: true } },
@@ -114,12 +110,7 @@ export default async function IssueDetailsPage({
         redirect(`/issues/${publicIssueRef}`);
     }
 
-    try {
-        await syncIssueNotesFromDiscord(issue.id);
-    } catch (error) {
-        console.error("Failed to sync Discord notes for issue", issue.id, error);
-    }
-
+    const { notes: issueNotes, syncWarning: commentSyncWarning } = await loadIssueComments(issue.id);
     const assignableUsers = await getStaffUsers();
     const permissionContext = await getPermissionContext(session?.user?.id);
     const canEdit = !!session?.user?.id;
@@ -282,12 +273,13 @@ export default async function IssueDetailsPage({
                             <MessageSquare className="h-4 w-4 text-muted-foreground" />
                             Activity
                             <span className="text-[11px] font-normal text-muted-foreground">
-                                {issue.notes.length} comment{issue.notes.length === 1 ? "" : "s"}
+                                {issueNotes.length} comment{issueNotes.length === 1 ? "" : "s"}
                             </span>
                         </h3>
 
                         <div className="space-y-3">
-                            {issue.notes.map((note: any) => (
+                            {commentSyncWarning && <p role="status" className="text-xs text-warning">Discord comments could not be refreshed. Showing stored comments; refresh to retry.</p>}
+                            {issueNotes.map((note: any) => (
                                 <IssueCommentCard
                                     key={note.id}
                                     issueId={issue.id}
@@ -305,7 +297,7 @@ export default async function IssueDetailsPage({
                                     }}
                                 />
                             ))}
-                            {issue.notes.length === 0 && (
+                            {issueNotes.length === 0 && (
                                 <EmptyState
                                     icon={<MessageSquare className="h-5 w-5" />}
                                     title="No activity yet"

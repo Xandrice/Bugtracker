@@ -1,47 +1,12 @@
-import { DataGrid, IssueSnippet } from "@/components/views/DataGrid";
-import { auth } from "@/../auth";
-import { db } from "@/lib/db";
+import { IssueListView } from "@/components/issues/IssueListView";
+import type { IssueListParams } from "@/lib/issue-list-state";
 import Link from "next/link";
 import { Plus, AlertTriangle } from "lucide-react";
 import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardBody } from "@/components/ui/Card";
-import { formatIssueRef } from "@/lib/issue-ids";
-import { getStaffUsers } from "@/lib/staff";
-import { canAssignIssues, getPermissionContext } from "@/lib/permissions";
 
-export default async function BugTriagePage() {
-    const session = await auth();
-    const permissionContext = await getPermissionContext(session?.user?.id);
-    const assignableUsers =
-        session?.user?.id && canAssignIssues(permissionContext)
-            ? await getStaffUsers()
-            : [];
-    const rawIssues = await db.issue.findMany({
-        where: { assigneeId: null, status: "OPEN" },
-        include: {
-            parentIssue: { select: { id: true, publicKey: true } },
-            _count: { select: { subtasks: true } },
-        },
-        orderBy: { updatedAt: "desc" },
-    });
-
-    const issues: IssueSnippet[] = rawIssues.map((i: any) => ({
-        id: i.id,
-        publicKey: i.publicKey ?? null,
-        title: i.title,
-        type: i.type,
-        status: i.status,
-        priority: i.priority,
-        severity: i.severity,
-        assignee: null,
-        updatedAt: i.updatedAt,
-        dueDate: i.dueDate ?? undefined,
-        parentIssueId: i.parentIssueId ?? null,
-        parentIssueRef: i.parentIssue
-            ? formatIssueRef(i.parentIssue.publicKey, i.parentIssue.id)
-            : null,
-        subtaskCount: i._count?.subtasks ?? 0,
-    }));
+export default async function BugTriagePage({ searchParams }: { searchParams: Promise<IssueListParams> }) {
+    const params = await searchParams;
 
     return (
         <PageContainer>
@@ -70,7 +35,7 @@ export default async function BugTriagePage() {
                     </div>
                 </CardBody>
             </Card>
-            <DataGrid issues={issues} assignableUsers={assignableUsers} />
+            <IssueListView params={params} scope="triage" />
         </PageContainer>
     );
 }

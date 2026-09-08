@@ -1,62 +1,24 @@
-import { DataGrid, IssueSnippet } from "@/components/views/DataGrid";
+import { IssueListView } from "@/components/issues/IssueListView";
+import type { IssueListParams } from "@/lib/issue-list-state";
 import { auth } from "@/../auth";
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
-import { formatIssueRef } from "@/lib/issue-ids";
 import { discordSignInUrl } from "@/lib/auth-urls";
 import { cn } from "@/components/ui/cn";
-import {
-    normalizePriority,
-    normalizeSeverity,
-    normalizeStatus,
-    normalizeType,
-} from "@/lib/issue-tokens";
+
 
 export default async function MyIssuesPage({
     searchParams,
 }: {
-    searchParams: Promise<{ view?: string }>;
+    searchParams: Promise<IssueListParams>;
 }) {
     const session = await auth();
     if (!session?.user?.id) redirect(discordSignInUrl("/issues/me"));
 
     const params = await searchParams;
     const watchingView = params.view === "watching";
-
-    const rawIssues = await db.issue.findMany({
-        where: watchingView
-            ? { watchers: { some: { userId: session.user.id } } }
-            : { assigneeId: session.user.id },
-        include: {
-            assignee: true,
-            parentIssue: { select: { id: true, publicKey: true } },
-            _count: { select: { subtasks: true } },
-        },
-        orderBy: { updatedAt: "desc" },
-    });
-
-    const issues: IssueSnippet[] = rawIssues.map((i) => ({
-        id: i.id,
-        publicKey: i.publicKey ?? null,
-        title: i.title,
-        type: normalizeType(i.type),
-        status: normalizeStatus(i.status),
-        priority: normalizePriority(i.priority),
-        severity: normalizeSeverity(i.severity),
-        assignee: i.assignee
-            ? { id: i.assignee.id, name: i.assignee.name, image: i.assignee.image }
-            : null,
-        updatedAt: i.updatedAt,
-        dueDate: i.dueDate ?? undefined,
-        parentIssueId: i.parentIssueId ?? null,
-        parentIssueRef: i.parentIssue
-            ? formatIssueRef(i.parentIssue.publicKey, i.parentIssue.id)
-            : null,
-        subtaskCount: i._count?.subtasks ?? 0,
-    }));
 
     return (
         <PageContainer>
@@ -101,7 +63,7 @@ export default async function MyIssuesPage({
                     Watching
                 </Link>
             </div>
-            <DataGrid issues={issues} />
+            <IssueListView params={params} scope={watchingView ? "watching" : "assigned"} />
         </PageContainer>
     );
 }

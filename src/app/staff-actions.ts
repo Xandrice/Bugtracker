@@ -132,6 +132,8 @@ export type SavedViewFilters = {
   type?: string;
   assignee?: string;
   search?: string;
+  sort?: string;
+  direction?: string;
 };
 
 export async function getMySavedViews() {
@@ -150,7 +152,7 @@ export async function saveSavedView(name: string, filters: SavedViewFilters) {
   const trimmed = name.trim();
   if (!trimmed) return { error: "Name required" };
 
-  await (db as any).savedView.create({
+  const view = await db.savedView.create({
     data: {
       userId: session.user.id,
       name: trimmed,
@@ -159,7 +161,7 @@ export async function saveSavedView(name: string, filters: SavedViewFilters) {
   });
 
   revalidatePath("/issues");
-  return { ok: true };
+  return { ok: true, view };
 }
 
 export async function deleteSavedView(id: string) {

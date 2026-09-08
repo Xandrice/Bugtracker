@@ -3,11 +3,14 @@
 import { db } from "@/lib/db";
 import { auth } from "@/../auth";
 import { Prisma } from "@prisma/client";
+import { mutateIssue } from "@/lib/issue-mutations";
+import { validateIssueFields, type IssueFormResult } from "@/lib/issue-validation";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAppBaseUrl, sendDiscordChannelMessage, sendDiscordDM } from "@/lib/discord";
 import { getStaffUsers } from "@/lib/staff";
-import { formatIssueRef, generateIssuePublicKey } from "@/lib/issue-ids";
+import { formatIssueRef } from "@/lib/issue-ids";
+import { generateIssuePublicKey } from "@/lib/issue-key";
 import { normalizeNoteThreadCategory } from "@/lib/note-categories";
 import {
     canAssignIssues,
@@ -251,10 +254,18 @@ async function notifyMentionedUsers(input: {
     }
 }
 
-export async function createIssue(formData: FormData) {
+export async function createIssue(formData: FormData): Promise<IssueFormResult | void> {
     const session = await auth();
     if (!session?.user?.id) redirectToSignIn();
     const reporterId = session.user.id;
+    const input = Object.fromEntries(formData.entries());
+    const validation = validateIssueFields({ type: "BUG", priority: "MEDIUM", severity: "MINOR", ...input }, true);
+    if (Object.keys(validation.fieldErrors).length) return { error: "Check the highlighted fields.", fieldErrors: validation.fieldErrors };
+    for (const [field, value] of Object.entries(input)) {
+        if (typeof value !== "string") return { error: "Enter text values.", fieldErrors: { [field]: "Enter text." } };
+    }
+    formData.set("title", validation.data.title!);
+    for (const [field, value] of Object.entries({ type: "BUG", priority: "MEDIUM", severity: "MINOR" })) if (!formData.has(field)) formData.set(field, value);
 
     const title = formData.get("title") as string;
     const description = formData.get("description") as string | null;
@@ -302,7 +313,7 @@ export async function createIssue(formData: FormData) {
                 createdIssue = await db.$transaction(async (tx) => {
                     const backlogRank =
                         status === "BACKLOG" ? await nextBacklogRank(tx) : undefined;
-                    return tx.issue.create({
+                    const created = await tx.issue.create({
                         data: {
                             publicKey: generateIssuePublicKey(),
                             title,
@@ -326,6 +337,8 @@ export async function createIssue(formData: FormData) {
                             reporter: { connect: { id: reporterId } },
                         },
                     });
+                    await tx.issueActivity.create({ data: { issueId: created.id, actorId: reporterId, action: "CREATED" } });
+                    return created;
                 });
             } catch (error: any) {
                 // P2002 on publicKey means collision — retry with a fresh key.
@@ -350,11 +363,12 @@ export async function createIssue(formData: FormData) {
                 redirect(`/issues/${formatIssueRef(existing.publicKey, existing.id)}`);
             }
         }
-        throw error;
+        console.error("Issue creation failed", error);
+        return { error: "Could not create this issue. Your report is preserved; try again." };
     }
 
     // If a forum post ID is linked, publish an initial traceability message there.
-    if (discordPostId) {
+    try { if (discordPostId) {
         const baseUrl = getAppBaseUrl();
         const issueLink = `${baseUrl}/issues/${formatIssueRef(issue.publicKey, issue.id)}`;
         const introMessage = [
@@ -374,47 +388,19 @@ export async function createIssue(formData: FormData) {
         }
     }
 
+    } catch (error) { console.error("Issue created; Discord notice failed", error); }
+
     revalidatePath("/issues");
     revalidatePath("/issues/backlog");
     revalidatePath("/boards/triage");
     revalidatePath("/boards/main");
     revalidatePath("/");
 
-    await recordActivity({
-        issueId: issue.id,
-        actorId: reporterId,
-        action: "CREATED",
-    });
-
     await redirectToIssue(issue.id);
 }
 
 export async function updateIssueStatus(issueId: string, status: string) {
-    const session = await auth();
-    if (!session?.user?.id) return { error: "Unauthorized" };
-
-    if (!(ALLOWED_STATUS as readonly string[]).includes(status)) {
-        return { error: "Invalid status" };
-    }
-
-    const previous = await db.issue.findUnique({
-        where: { id: issueId },
-        select: { status: true, backlogRank: true },
-    });
-    if (!previous) return { error: "Issue not found" };
-
-    await db.$transaction(async (tx) => {
-        const data: Prisma.IssueUpdateInput = { status };
-        if (status === "BACKLOG" && previous.status !== "BACKLOG") {
-            data.backlogRank = await rankWhenEnteringBacklog(tx, previous.backlogRank);
-        }
-        await tx.issue.update({
-            where: { id: issueId },
-            data,
-        });
-    });
-
-    revalidateIssuePaths(issueId);
+    return updateIssueWorkflow(issueId, { status });
 }
 
 export async function updateIssueWorkflow(
@@ -424,75 +410,11 @@ export async function updateIssueWorkflow(
 ) {
     const actor = await getActorContext();
     if (!actor) return { error: "Unauthorized" };
-
-    const previous = await db.issue.findUnique({
-        where: { id: issueId },
-        select: { type: true, priority: true, severity: true, status: true, backlogRank: true },
-    });
-    if (!previous) return { error: "Issue not found" };
-
-    const data: Prisma.IssueUpdateInput = {};
-
-    if (updates.type !== undefined) {
-        if (!(ALLOWED_TYPE as readonly string[]).includes(updates.type)) {
-            return { error: "Invalid type" };
-        }
-        data.type = updates.type;
-    }
-
-    if (updates.priority !== undefined) {
-        if (!(ALLOWED_PRIORITY as readonly string[]).includes(updates.priority)) {
-            return { error: "Invalid priority" };
-        }
-        data.priority = updates.priority;
-    }
-
-    if (updates.severity !== undefined) {
-        if (!(ALLOWED_SEVERITY as readonly string[]).includes(updates.severity)) {
-            return { error: "Invalid severity" };
-        }
-        data.severity = updates.severity;
-    }
-
-    if (updates.status !== undefined) {
-        if (!(ALLOWED_STATUS as readonly string[]).includes(updates.status)) {
-            return { error: "Invalid status" };
-        }
-        data.status = updates.status;
-    }
-
-    if (Object.keys(data).length === 0) {
-        return { error: "No updates provided" };
-    }
-
-    await db.$transaction(async (tx) => {
-        if (data.status === "BACKLOG" && previous.status !== "BACKLOG") {
-            data.backlogRank = await rankWhenEnteringBacklog(tx, previous.backlogRank);
-        }
-        await tx.issue.update({
-            where: { id: issueId },
-            data,
-        });
-    });
-
-    for (const [field, newValue] of Object.entries(data)) {
-        if (field === "backlogRank") continue;
-        const oldValue = String((previous as Record<string, unknown>)[field] ?? "");
-        if (oldValue === String(newValue ?? "")) continue;
-
-        await recordActivity({
-            issueId,
-            actorId: actor.userId,
-            action: field === "status" ? "STATUS_CHANGE" : "FIELD_CHANGE",
-            field,
-            oldValue,
-            newValue: String(newValue ?? ""),
-            actorName: actor.session.user?.name,
-            notifyStatusChange: field === "status",
-        });
-    }
-
+    if (!updates || typeof updates !== "object" || Array.isArray(updates)) return { error: "Invalid updates." };
+    const allowed = Object.fromEntries(Object.entries(updates).filter(([key]) => ["type", "priority", "severity", "status"].includes(key)));
+    const result = await mutateIssue(issueId, allowed, { ...actor, name: actor.session.user?.name });
     if (!options?.skipRevalidate) revalidateIssuePaths(issueId);
+    return result;
 }
 
 export async function reorderBacklogIssue(
@@ -550,232 +472,36 @@ export async function toggleIssueResolved(formData: FormData) {
     await redirectToIssue(issueId);
 }
 
-export async function updateIssue(issueId: string, formData: FormData): Promise<{ error?: string } | void> {
+export async function updateIssue(issueId: string, formData: FormData) {
     const actor = await getActorContext();
     if (!actor) return { error: "Unauthorized" };
-
-    const previous = await db.issue.findUnique({
-        where: { id: issueId },
-        select: {
-            title: true,
-            assigneeId: true,
-            assignee: { select: { name: true } },
-        },
-    });
-    if (!previous) return { error: "Issue not found" };
-
-    const data: Record<string, unknown> = {};
-    if (formData.has("title")) {
-        const titleRaw = formData.get("title") as string | null;
-        const trimmed = (titleRaw || "").trim();
-        if (!trimmed) return { error: "Title cannot be empty" };
-        data.title = trimmed;
-    }
-    if (formData.has("description")) {
-        const descriptionVal = formData.get("description") as string | null;
-        data.description = descriptionVal;
-    }
-    if (formData.has("priority")) {
-        const priorityVal = formData.get("priority") as string | null;
-        if (!priorityVal || !(ALLOWED_PRIORITY as readonly string[]).includes(priorityVal)) {
-            return { error: "Invalid priority" };
-        }
-        data.priority = priorityVal;
-    }
-    if (formData.has("severity")) {
-        const severityVal = formData.get("severity") as string | null;
-        if (!severityVal || !(ALLOWED_SEVERITY as readonly string[]).includes(severityVal)) {
-            return { error: "Invalid severity" };
-        }
-        data.severity = severityVal;
-    }
-    if (formData.has("assigneeId")) {
-        const denied = requirePermission(canAssignIssues(actor.permissions));
-        if (denied) return denied;
-
-        const assigneeId = formData.get("assigneeId") as string | null;
-        data.assigneeId = !assigneeId || assigneeId === "none" ? null : assigneeId;
-    }
-    if (formData.has("dueDate")) {
-        const dueDateRaw = formData.get("dueDate") as string | null;
-        data.dueDate = dueDateRaw ? new Date(dueDateRaw) : null;
-    }
-    if (formData.has("storyPoints")) {
-        const storyPointsRaw = formData.get("storyPoints") as string | null;
-        if (!storyPointsRaw || !String(storyPointsRaw).trim()) {
-            data.storyPoints = null;
-        } else {
-            const n = parseInt(String(storyPointsRaw), 10);
-            data.storyPoints = Number.isFinite(n) ? n : null;
-        }
-    }
-    if (formData.has("resourceName")) {
-        const resourceNameVal = formData.get("resourceName") as string | null;
-        data.resourceName = resourceNameVal || null;
-    }
-    if (formData.has("serverVersion")) {
-        const serverVersionVal = formData.get("serverVersion") as string | null;
-        data.serverVersion = serverVersionVal || null;
-    }
-    if (formData.has("reproductionSteps")) {
-        const reproductionStepsVal = formData.get("reproductionSteps") as string | null;
-        data.reproductionSteps = reproductionStepsVal || null;
-    }
-    if (formData.has("expectedBehavior")) {
-        const expectedBehaviorVal = formData.get("expectedBehavior") as string | null;
-        data.expectedBehavior = expectedBehaviorVal || null;
-    }
-    if (formData.has("tags")) {
-        const tagsVal = formData.get("tags") as string | null;
-        data.tags = tagsVal || null;
-    }
-    if (formData.has("label")) {
-        const labelVal = formData.get("label") as string | null;
-        data.label = labelVal || null;
-    }
-    if (formData.has("environment")) {
-        const environment = formData.get("environment") as string | null;
-        data.environment = environment?.trim() || null;
-    }
+    const input = Object.fromEntries(formData.entries());
+    if (input.assigneeId === "none") input.assigneeId = "";
     if (formData.has("discordPostId") || formData.has("discordThreadId")) {
-        const discordPostRaw = (formData.get("discordPostId") as string | null)
-            ?? (formData.get("discordThreadId") as string | null);
-        const parsed = parseDiscordPostInput(discordPostRaw);
-        if (parsed.postId) {
-            const existing = await db.issue.findFirst({
-                where: {
-                    discordThreadId: parsed.postId,
-                    id: { not: issueId },
-                },
-                select: { id: true },
-            });
-
-            if (existing) {
-                return { error: `This Discord post is already linked to issue ${existing.id}.` };
-            }
-        }
-        data.discordThreadId = parsed.postId;
-        data.discordChannelId = null;
+        const raw = formData.get("discordPostId") ?? formData.get("discordThreadId");
+        if (raw !== null && typeof raw !== "string") return { error: "Enter a Discord post link or ID.", fieldErrors: { discordPostId: "Enter text." } };
+        input.discordThreadId = parseDiscordPostInput(raw as string | null).postId || "";
+        input.discordChannelId = "";
     }
-
-    if (Object.keys(data).length === 0) {
-        return { error: "No updates provided" };
-    }
-
-    await db.issue.update({
-        where: { id: issueId },
-        data: data as any
-    });
-
-    if (formData.has("title") && data.title && data.title !== previous.title) {
-        await recordActivity({
-            issueId,
-            actorId: actor.userId,
-            action: "FIELD_CHANGE",
-            field: "title",
-            oldValue: previous.title,
-            newValue: String(data.title),
-        });
-    }
-
-    if (formData.has("assigneeId")) {
-        const nextAssigneeId = data.assigneeId as string | null;
-        if (nextAssigneeId !== previous.assigneeId) {
-            let newAssigneeName = "Unassigned";
-            if (nextAssigneeId) {
-                const user = await db.user.findUnique({
-                    where: { id: nextAssigneeId },
-                    select: { name: true },
-                });
-                newAssigneeName = user?.name || nextAssigneeId;
-            }
-
-            await recordActivity({
-                issueId,
-                actorId: actor.userId,
-                action: "ASSIGNEE_CHANGE",
-                field: "assignee",
-                oldValue: previous.assignee?.name || "Unassigned",
-                newValue: newAssigneeName,
-            });
-        }
-    }
-
+    const result = await mutateIssue(issueId, input, { ...actor, name: actor.session.user?.name });
     revalidateIssuePaths(issueId);
+    return result;
 }
 
-export async function saveIssueDetails(formData: FormData): Promise<void> {
-    const session = await auth();
-    if (!session?.user?.id) redirectToSignIn();
-    const issueId = formData.get("issueId") as string | null;
-    if (!issueId) throw new Error("Missing issue");
+export async function saveIssueDetails(formData: FormData): Promise<IssueFormResult | void> {
+    const issueId = formData.get("issueId");
+    if (typeof issueId !== "string" || !issueId) return { error: "Missing issue." };
     const result = await updateIssue(issueId, formData);
-    if (result?.error === "Unauthorized") redirectToSignIn();
-    if (result?.error) throw new Error(result.error);
+    if (result?.error) return result;
     await redirectToIssue(issueId);
 }
 
-export async function updateIssueAssignee(
-    issueId: string,
-    assigneeId: string | null,
-    options?: { skipRevalidate?: boolean }
-) {
+export async function updateIssueAssignee(issueId: string, assigneeId: string | null, options?: { skipRevalidate?: boolean }) {
     const actor = await getActorContext();
     if (!actor) return { error: "Unauthorized" };
-
-    const denied = requirePermission(canAssignIssues(actor.permissions));
-    if (denied) return denied;
-
-    const previous = await db.issue.findUnique({
-        where: { id: issueId },
-        select: { assigneeId: true, title: true, publicKey: true, assignee: { select: { name: true } } },
-    });
-    if (!previous) return { error: "Issue not found" };
-
-    await db.issue.update({
-        where: { id: issueId },
-        data: { assigneeId: assigneeId || null }
-    });
-
-    if (assigneeId !== previous?.assigneeId) {
-        let newAssigneeName = "Unassigned";
-        if (assigneeId) {
-            const user = await db.user.findUnique({
-                where: { id: assigneeId },
-                select: { name: true },
-            });
-            newAssigneeName = user?.name || assigneeId;
-        }
-
-        await recordActivity({
-            issueId,
-            actorId: actor.userId,
-            action: "ASSIGNEE_CHANGE",
-            field: "assignee",
-            oldValue: previous?.assignee?.name || "Unassigned",
-            newValue: newAssigneeName,
-        });
-    }
-
-    if (assigneeId && assigneeId !== previous?.assigneeId) {
-        const issueRef = formatIssueRef(previous?.publicKey, issueId);
-        const actorName = actor.session.user?.name || "Someone";
-        const issueUrl = `${getAppBaseUrl()}/issues/${issueRef}`;
-        const dmBody = `**${actorName}** assigned you **${issueRef}**${previous?.title ? `: ${previous.title}` : ""}\n${issueUrl}`;
-
-        await notifyUser({
-            userId: assigneeId,
-            actorId: actor.userId,
-            type: "ASSIGNED",
-            title: `${actorName} assigned you ${issueRef}`,
-            body: previous?.title || null,
-            link: `/issues/${issueRef}`,
-            issueId,
-            discordMessage: dmBody,
-        });
-    }
-
+    const result = await mutateIssue(issueId, { assigneeId }, { ...actor, name: actor.session.user?.name });
     if (!options?.skipRevalidate) revalidateIssuePaths(issueId);
+    return result;
 }
 
 const MAX_BULK_ISSUE_UPDATES = 100;
@@ -794,115 +520,23 @@ export type BulkIssueUpdates = {
  * require `canAssignIssues`. Missing rows are skipped with an error instead of
  * aborting the rest of the batch.
  */
-export async function bulkUpdateIssues(
-    issueIds: string[],
-    updates: BulkIssueUpdates
-): Promise<{
-    error?: string;
-    updated?: number;
-    skipped?: { id: string; error: string }[];
-}> {
+export async function bulkUpdateIssues(issueIds: string[], updates: BulkIssueUpdates) {
     const actor = await getActorContext();
-    if (!actor) return { error: "Unauthorized" };
-
-    const ids = [...new Set((issueIds ?? []).filter((id) => typeof id === "string" && id.length > 0))];
-    if (ids.length === 0) return { error: "No issues selected" };
-    if (ids.length > MAX_BULK_ISSUE_UPDATES) {
-        return { error: `Too many issues selected (max ${MAX_BULK_ISSUE_UPDATES})` };
-    }
-
-    const changeAssignee = Object.prototype.hasOwnProperty.call(updates, "assigneeId");
-    if (changeAssignee) {
-        const denied = requirePermission(canAssignIssues(actor.permissions));
-        if (denied) return denied;
-    }
-
-    const workflow: Partial<{ type: string; priority: string; status: string }> = {};
-    if (updates.type !== undefined) {
-        if (!(ALLOWED_TYPE as readonly string[]).includes(updates.type)) {
-            return { error: "Invalid type" };
-        }
-        workflow.type = updates.type;
-    }
-    if (updates.priority !== undefined) {
-        if (!(ALLOWED_PRIORITY as readonly string[]).includes(updates.priority)) {
-            return { error: "Invalid priority" };
-        }
-        workflow.priority = updates.priority;
-    }
-    if (updates.status !== undefined) {
-        if (!(ALLOWED_STATUS as readonly string[]).includes(updates.status)) {
-            return { error: "Invalid status" };
-        }
-        workflow.status = updates.status;
-    }
-
-    const hasWorkflow = Object.keys(workflow).length > 0;
-    if (!hasWorkflow && !changeAssignee) {
-        return { error: "Choose at least one field to update" };
-    }
-
-    const existing = await db.issue.findMany({
-        where: { id: { in: ids } },
-        select: { id: true },
-    });
-    const existingIds = new Set(existing.map((issue) => issue.id));
-
-    const skipRevalidate = { skipRevalidate: true };
+    if (!actor) return { error: "Unauthorized", updated: 0, skipped: [] as { id: string; error: string }[] };
+    if (!Array.isArray(issueIds)) return { error: "Invalid issue selection.", updated: 0, skipped: [] };
+    const ids = [...new Set(issueIds.filter((id) => typeof id === "string" && id))];
+    if (!ids.length || ids.length > MAX_BULK_ISSUE_UPDATES) return { error: "Select between 1 and 100 issues.", updated: 0, skipped: [] };
+    if (!updates || typeof updates !== "object" || Array.isArray(updates)) return { error: "Invalid updates.", updated: 0, skipped: [] };
+    const input = Object.fromEntries(Object.entries(updates).filter(([key]) => ["type", "priority", "status", "assigneeId"].includes(key)));
     const skipped: { id: string; error: string }[] = [];
-    let updated = 0;
-
-    for (const issueId of ids) {
-        if (!existingIds.has(issueId)) {
-            skipped.push({ id: issueId, error: "Issue not found" });
-            continue;
-        }
-
-        const rowErrors: string[] = [];
-
-        if (hasWorkflow) {
-            try {
-                const result = await updateIssueWorkflow(issueId, workflow, skipRevalidate);
-                if (result?.error) rowErrors.push(result.error);
-            } catch (err) {
-                rowErrors.push(err instanceof Error ? err.message : "Failed to update workflow");
-            }
-        }
-
-        if (changeAssignee && !rowErrors.includes("Issue not found")) {
-            try {
-                const result = await updateIssueAssignee(
-                    issueId,
-                    updates.assigneeId ?? null,
-                    skipRevalidate
-                );
-                if (result?.error) rowErrors.push(result.error);
-            } catch (err) {
-                rowErrors.push(err instanceof Error ? err.message : "Failed to update assignee");
-            }
-        }
-
-        if (rowErrors.length > 0) {
-            skipped.push({ id: issueId, error: [...new Set(rowErrors)].join("; ") });
-        } else {
-            updated += 1;
-        }
+    const issues = [];
+    for (const id of ids) {
+        const result = await mutateIssue(id, input, { ...actor, name: actor.session.user?.name });
+        if (result.error) skipped.push({ id, error: result.error });
+        else if (result.issue) issues.push(result.issue);
+        revalidateIssuePaths(id);
     }
-
-    if (updated > 0) {
-        revalidatePath("/");
-        revalidatePath("/issues");
-        revalidatePath("/issues/me");
-        revalidatePath("/issues/backlog");
-        revalidatePath("/boards/triage");
-        revalidatePath("/boards/main");
-        for (const issueId of ids) {
-            if (skipped.some((row) => row.id === issueId)) continue;
-            revalidatePath(`/issues/${issueId}`);
-        }
-    }
-
-    return { updated, skipped };
+    return { updated: issues.length, skipped, issues };
 }
 
 export async function setAssignee(formData: FormData): Promise<void> {
@@ -1444,38 +1078,10 @@ export async function getMentionableUsers() {
 }
 
 export async function updateIssueDiscordPost(formData: FormData) {
-    const session = await auth();
-    if (!session?.user?.id) redirectToSignIn();
-
-    const issueId = formData.get("issueId") as string | null;
-    const discordPostRaw = formData.get("discordPostId") as string | null;
-    if (!issueId) throw new Error("Missing issue");
-
-    const parsed = parseDiscordPostInput(discordPostRaw);
-
-    if (parsed.postId) {
-        const existing = await db.issue.findFirst({
-            where: {
-                discordThreadId: parsed.postId,
-                id: { not: issueId },
-            },
-            select: { id: true, publicKey: true },
-        });
-
-        if (existing) {
-            throw new Error(`This Discord post is already linked to issue ${formatIssueRef(existing.publicKey, existing.id)}.`);
-        }
-    }
-
-    await db.issue.update({
-        where: { id: issueId },
-        data: {
-            discordThreadId: parsed.postId,
-            discordChannelId: null,
-        }
-    });
-
-    revalidateIssuePaths(issueId);
+    const issueId = formData.get("issueId");
+    if (typeof issueId !== "string" || !issueId) throw new Error("Missing issue");
+    const result = await updateIssue(issueId, formData);
+    if (result.error) throw new Error(result.error);
     await redirectToIssue(issueId);
 }
 
@@ -1681,63 +1287,39 @@ export async function markAllNotificationsRead() {
 
 // ---------- Subtasks ----------
 
-export async function createSubtask(formData: FormData) {
+export async function createSubtask(formData: FormData): Promise<IssueFormResult | void> {
     const session = await auth();
-    if (!session?.user?.id) redirectToSignIn();
+    if (!session?.user?.id) return { error: "Unauthorized" };
     const reporterId = session.user.id;
-
-    const parentIssueId = formData.get("parentIssueId") as string | null;
-    const title = (formData.get("title") as string | null)?.trim();
-    const type = (formData.get("type") as string | null) || "TASK";
-    const priority = (formData.get("priority") as string | null) || "MEDIUM";
-
-    if (!parentIssueId) throw new Error("Missing parent");
-    if (!title) throw new Error("Missing title");
-
-    if (!(ALLOWED_TYPE as readonly string[]).includes(type)) throw new Error("Invalid type");
-    if (!(ALLOWED_PRIORITY as readonly string[]).includes(priority)) throw new Error("Invalid priority");
-
-    const parent = await db.issue.findUnique({
-        where: { id: parentIssueId },
-        select: { id: true, parentIssueId: true },
-    });
-    if (!parent) throw new Error("Parent issue not found");
-    if (parent.parentIssueId) {
-        throw new Error("Subtasks cannot themselves have subtasks");
-    }
-
-    let created = null;
-    for (let attempt = 0; attempt < 5 && !created; attempt += 1) {
-        try {
-            created = await db.issue.create({
-                data: {
-                    publicKey: generateIssuePublicKey(),
-                    title,
-                    type,
-                    priority,
-                    severity: "MINOR",
-                    status: "OPEN",
-                    reporter: { connect: { id: reporterId } },
-                    parentIssue: { connect: { id: parentIssueId } },
-                },
-            });
-        } catch (error: any) {
-            if (error?.code !== "P2002") throw error;
-            const conflictTarget = Array.isArray(error?.meta?.target) ? error.meta.target : [];
-            if (!conflictTarget.includes("publicKey")) throw error;
+    const parentIssueId = formData.get("parentIssueId");
+    if (typeof parentIssueId !== "string" || !parentIssueId) return { error: "Missing parent." };
+    const { data, fieldErrors } = validateIssueFields({ type: "TASK", priority: "MEDIUM", ...Object.fromEntries(formData.entries()) }, true);
+    if (Object.keys(fieldErrors).length) return { error: "Check the highlighted fields.", fieldErrors };
+    try {
+        for (let attempt = 0; attempt < 5; attempt++) {
+            try {
+                await db.$transaction(async (tx) => {
+                    const parent = await tx.issue.findUnique({ where: { id: parentIssueId }, select: { parentIssueId: true } });
+                    if (!parent || parent.parentIssueId) throw new Error("INVALID_PARENT");
+                    const created = await tx.issue.create({ data: { title: data.title!, type: data.type!, priority: data.priority!, severity: "MINOR", status: "OPEN", publicKey: generateIssuePublicKey(), reporterId: reporterId, parentIssueId } });
+                    await tx.issueActivity.createMany({ data: [
+                        { issueId: created.id, actorId: reporterId, action: "CREATED" },
+                        { issueId: parentIssueId, actorId: reporterId, action: "SUBTASK_ADDED", newValue: formatIssueRef(created.publicKey, created.id) },
+                    ] });
+                });
+                revalidateIssuePaths(parentIssueId);
+                return;
+            } catch (error) {
+                if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002" && Array.isArray(error.meta?.target) && error.meta.target.includes("publicKey")) continue;
+                throw error;
+            }
         }
+        return { error: "Could not allocate an issue key. Try again." };
+    } catch (error) {
+        if (error instanceof Error && error.message === "INVALID_PARENT") return { error: "Choose an existing parent issue. Subtasks cannot have their own subtasks." };
+        console.error("Subtask creation failed", error);
+        return { error: "Could not create subtask. Your entries are preserved." };
     }
-    if (!created) throw new Error("Failed to create subtask");
-
-    await recordActivity({
-        issueId: parentIssueId,
-        actorId: reporterId,
-        action: "SUBTASK_ADDED",
-        newValue: title,
-    });
-
-    revalidateIssuePaths(parentIssueId);
-    await redirectToIssue(parentIssueId);
 }
 
 export async function unlinkSubtask(formData: FormData) {

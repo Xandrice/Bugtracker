@@ -1,54 +1,14 @@
-import { DataGrid, IssueSnippet } from "@/components/views/DataGrid";
+import { IssueListView } from "@/components/issues/IssueListView";
+import type { IssueListParams } from "@/lib/issue-list-state";
 import { auth } from "@/../auth";
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { db } from "@/lib/db";
-import { getStaffUsers } from "@/lib/staff";
 import { ALL_ISSUES_SUBTITLE } from "@/lib/site";
 import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
-import { formatIssueRef } from "@/lib/issue-ids";
-import { canAssignIssues, getPermissionContext } from "@/lib/permissions";
-import { getMySavedViews } from "@/app/staff-actions";
 
-export default async function AllIssuesPage() {
+export default async function AllIssuesPage({ searchParams }: { searchParams: Promise<IssueListParams> }) {
     const session = await auth();
-    const permissionContext = await getPermissionContext(session?.user?.id);
-    const assignableUsers =
-        session?.user?.id && canAssignIssues(permissionContext)
-            ? await getStaffUsers()
-            : [];
-    const savedViews = session?.user?.id ? await getMySavedViews() : [];
-
-    const rawIssues = await db.issue.findMany({
-        include: {
-            assignee: true,
-            parentIssue: { select: { id: true, publicKey: true } },
-            _count: { select: { subtasks: true } },
-        },
-        orderBy: { updatedAt: "desc" },
-    });
-
-    const issues: IssueSnippet[] = rawIssues.map((i: any) => ({
-        id: i.id,
-        publicKey: i.publicKey ?? null,
-        title: i.title,
-        type: i.type,
-        status: i.status,
-        priority: i.priority,
-        severity: i.severity,
-        assignee: i.assignee
-            ? { id: i.assignee.id, name: i.assignee.name, image: i.assignee.image }
-            : null,
-        updatedAt: i.updatedAt,
-        dueDate: i.dueDate ?? undefined,
-        resourceName: i.resourceName ?? undefined,
-        storyPoints: i.storyPoints ?? undefined,
-        parentIssueId: i.parentIssueId ?? null,
-        parentIssueRef: i.parentIssue
-            ? formatIssueRef(i.parentIssue.publicKey, i.parentIssue.id)
-            : null,
-        subtaskCount: i._count?.subtasks ?? 0,
-    }));
+    const params = await searchParams;
 
     return (
         <PageContainer>
@@ -67,16 +27,7 @@ export default async function AllIssuesPage() {
                     )
                 }
             />
-            <DataGrid
-                issues={issues}
-                assignableUsers={assignableUsers}
-                defaultStatusFilter="ACTIVE"
-                savedViews={savedViews.map((v: any) => ({
-                    id: v.id,
-                    name: v.name,
-                    filters: JSON.parse(v.filters || "{}"),
-                }))}
-            />
+            <IssueListView params={params} scope="all" />
         </PageContainer>
     );
 }

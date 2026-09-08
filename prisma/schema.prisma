@@ -132,6 +132,9 @@ model Issue {
 
   @@index([parentIssueId])
   @@index([status, backlogRank])
+  @@index([parentIssueId, updatedAt, id])
+  @@index([assigneeId, status, updatedAt, id])
+  @@index([status, updatedAt, id])
 }
 
 // Named, reusable prefills for /issues/new. Using a template is optional.

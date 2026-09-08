@@ -40,9 +40,16 @@ export async function IssueActivityTimeline({ issueId }: { issueId: string }) {
                 {activity.actor?.name || "Someone"}
               </span>{" "}
               <span className="text-muted-foreground">
-                {formatActivityLabel(activity)}
+                {activity.action === "FIELD_CHANGE" ? `Changed ${activity.field || "issue details"}` : formatActivityLabel(activity)}
               </span>
             </p>
+            {activity.action === "FIELD_CHANGE" && <details className="text-xs text-muted-foreground">
+              <summary className="cursor-pointer">View change</summary>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <div><strong>Before</strong><p className="whitespace-pre-wrap break-words">{activity.oldValue ?? "Not set"}</p></div>
+                <div><strong>After</strong><p className="whitespace-pre-wrap break-words">{activity.newValue ?? "Not set"}</p></div>
+              </div>
+            </details>}
             <p className="flex items-center gap-1 text-[11px] text-subtle-foreground">
               <Clock className="h-3 w-3" />
               {new Intl.DateTimeFormat("en-US", {

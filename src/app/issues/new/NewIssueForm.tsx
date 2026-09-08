@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { mergeIssueTemplate } from "@/lib/issue-draft";
 import { ArrowLeft, Calendar, Loader2, Save } from "lucide-react";
-import { useFormStatus } from "react-dom";
+
 import { createIssue } from "@/app/actions";
+import { IssueActionForm, IssueFieldError, useIssueFormState } from "@/components/issues/IssueActionForm";
 import { PageContainer } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardFooter, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FieldRow, Input, Textarea } from "@/components/ui/Input";
@@ -27,7 +28,7 @@ import {
 } from "@/lib/issue-templates";
 
 function SubmitButton() {
-  const { pending } = useFormStatus();
+  const { pending } = useIssueFormState();
   return (
     <Button type="submit" variant="primary" size="md" disabled={pending}>
       {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
@@ -52,21 +53,18 @@ const SEVERITY_HINT: Record<string, string> = {
   BLOCKER: "Affects nearly everyone and prevents the server or feature from being used.",
 };
 
-function IssueFields({
-  prefill,
-  createInBacklog,
-}: {
-  prefill: IssueFormPrefill;
-  createInBacklog: boolean;
+type IssueDraft = Record<string, string>;
+function templateDraft(prefill: IssueFormPrefill): IssueDraft {
+  return { title: prefill.title, description: prefill.description, type: prefill.type, priority: prefill.priority, severity: prefill.severity,
+    reproductionSteps: prefill.reproductionSteps, expectedBehavior: prefill.expectedBehavior, resourceName: prefill.resourceName };
+}
+function IssueFields({ prefill, createInBacklog, draft, edit }: {
+  prefill: IssueFormPrefill; createInBacklog: boolean; draft: IssueDraft; edit: (field: string, value: string) => void;
 }) {
-  const [severity, setSeverity] = useState(prefill.severity);
-  const [type, setType] = useState(prefill.type);
-  const [priority, setPriority] = useState(prefill.priority);
-  const [label, setLabel] = useState("");
+  const { severity, type, priority, label } = draft;
   const isBug = type === "BUG";
-
   return (
-    <form action={createIssue}>
+    <IssueActionForm action={createIssue}>
       {!isBug && <input type="hidden" name="severity" value="MINOR" />}
       {createInBacklog && <input type="hidden" name="status" value="BACKLOG" />}
       <CardBody className="space-y-5">
@@ -74,10 +72,10 @@ function IssueFields({
             <Input
               id="title"
               name="title"
-              defaultValue={prefill.title}
               placeholder={prefill.titlePlaceholder}
               required
-            />
+            value={draft["title"] || ""} onChange={(event) => edit("title", event.target.value)} />
+          <IssueFieldError field="title" />
           </FieldRow>
 
           <div className={`grid grid-cols-1 gap-3 ${isBug ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
@@ -85,30 +83,33 @@ function IssueFields({
               <Select
                 name="type"
                 value={type}
-                onChange={(v) => setType(normalizeType(v))}
+                onChange={(v) => edit("type", normalizeType(v))}
                 options={TYPE_OPTIONS}
                 size="md"
               />
-            </FieldRow>
+            <IssueFieldError field="type" />
+          </FieldRow>
             <FieldRow label="Priority" htmlFor="priority">
               <Select
                 name="priority"
                 value={priority}
-                onChange={(v) => setPriority(normalizePriority(v))}
+                onChange={(v) => edit("priority", normalizePriority(v))}
                 options={PRIORITY_OPTIONS}
                 size="md"
               />
-            </FieldRow>
+            <IssueFieldError field="priority" />
+          </FieldRow>
             {isBug && (
               <FieldRow label="Severity" htmlFor="severity" hint={SEVERITY_HINT[severity]}>
                 <Select
                   name="severity"
                   value={severity}
-                  onChange={(v) => setSeverity(normalizeSeverity(v))}
+                  onChange={(v) => edit("severity", normalizeSeverity(v))}
                   options={SEVERITY_OPTIONS}
                   size="md"
                 />
-              </FieldRow>
+              <IssueFieldError field="severity" />
+          </FieldRow>
             )}
           </div>
 
@@ -118,19 +119,20 @@ function IssueFields({
                 <Input
                   id="resourceName"
                   name="resourceName"
-                  defaultValue={prefill.resourceName}
                   placeholder="e.g. police-mdt"
-                />
-              </FieldRow>
+                value={draft["resourceName"] || ""} onChange={(event) => edit("resourceName", event.target.value)} />
+              <IssueFieldError field="resourceName" />
+          </FieldRow>
               <FieldRow label="Label / category" htmlFor="label">
                 <Select
                   name="label"
                   value={label}
-                  onChange={setLabel}
+                  onChange={(value) => edit("label", value)}
                   options={LABEL_OPTIONS}
                   size="md"
                 />
-              </FieldRow>
+              <IssueFieldError field="label" />
+          </FieldRow>
             </div>
           )}
 
@@ -140,26 +142,29 @@ function IssueFields({
                 id="tags"
                 name="tags"
                 placeholder={isBug ? "resource:police-mdt, ui, lua" : "frontend, docs, qol"}
-              />
-            </FieldRow>
+              value={draft["tags"] || ""} onChange={(event) => edit("tags", event.target.value)} />
+            <IssueFieldError field="tags" />
+          </FieldRow>
             {!isBug && (
               <FieldRow label="Label / category" htmlFor="label">
                 <Select
                   name="label"
                   value={label}
-                  onChange={setLabel}
+                  onChange={(value) => edit("label", value)}
                   options={LABEL_OPTIONS}
                   size="md"
                 />
-              </FieldRow>
+              <IssueFieldError field="label" />
+          </FieldRow>
             )}
             {isBug && (
               <FieldRow label="Due date" htmlFor="dueDate">
                 <div className="relative">
                   <Calendar className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-subtle-foreground" />
-                  <Input id="dueDate" name="dueDate" type="date" className="pl-8" />
+                  <Input id="dueDate" name="dueDate" type="date" className="pl-8" value={draft["dueDate"] || ""} onChange={(event) => edit("dueDate", event.target.value)} />
                 </div>
-              </FieldRow>
+              <IssueFieldError field="dueDate" />
+          </FieldRow>
             )}
           </div>
 
@@ -167,9 +172,10 @@ function IssueFields({
             <FieldRow label="Due date" htmlFor="dueDate">
               <div className="relative">
                 <Calendar className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-subtle-foreground" />
-                <Input id="dueDate" name="dueDate" type="date" className="pl-8" />
+                <Input id="dueDate" name="dueDate" type="date" className="pl-8" value={draft["dueDate"] || ""} onChange={(event) => edit("dueDate", event.target.value)} />
               </div>
-            </FieldRow>
+            <IssueFieldError field="dueDate" />
+          </FieldRow>
           )}
 
           <FieldRow
@@ -182,7 +188,8 @@ function IssueFields({
               name="discordPostId"
               className="font-mono"
               placeholder="https://discord.com/channels/.../1489040926197289083"
-            />
+            value={draft["discordPostId"] || ""} onChange={(event) => edit("discordPostId", event.target.value)} />
+          <IssueFieldError field="discordPostId" />
           </FieldRow>
 
           <FieldRow label="Description" htmlFor="description">
@@ -190,13 +197,13 @@ function IssueFields({
               id="description"
               name="description"
               rows={5}
-              defaultValue={prefill.description}
               placeholder={
                 isBug
                   ? "What happened? Include error messages if you have them."
                   : "What do you want built or changed? Be specific."
               }
-            />
+            value={draft["description"] || ""} onChange={(event) => edit("description", event.target.value)} />
+          <IssueFieldError field="description" />
           </FieldRow>
 
           {isBug && (
@@ -206,19 +213,19 @@ function IssueFields({
                   id="reproductionSteps"
                   name="reproductionSteps"
                   rows={4}
-                  defaultValue={prefill.reproductionSteps}
                   placeholder="1. Go to… 2. Click… 3. See error"
-                />
-              </FieldRow>
+                value={draft["reproductionSteps"] || ""} onChange={(event) => edit("reproductionSteps", event.target.value)} />
+              <IssueFieldError field="reproductionSteps" />
+          </FieldRow>
               <FieldRow label="Expected behavior" htmlFor="expectedBehavior">
                 <Textarea
                   id="expectedBehavior"
                   name="expectedBehavior"
                   rows={3}
-                  defaultValue={prefill.expectedBehavior}
                   placeholder="What should have happened instead?"
-                />
-              </FieldRow>
+                value={draft["expectedBehavior"] || ""} onChange={(event) => edit("expectedBehavior", event.target.value)} />
+              <IssueFieldError field="expectedBehavior" />
+          </FieldRow>
             </>
           )}
       </CardBody>
@@ -231,7 +238,7 @@ function IssueFields({
         </Link>
         <SubmitButton />
       </CardFooter>
-    </form>
+    </IssueActionForm>
   );
 }
 
@@ -248,24 +255,23 @@ export function NewIssueForm({
   fallbackType: IssueType;
   canManageTemplates: boolean;
 }) {
-  const router = useRouter();
   const [templateId, setTemplateId] = useState(selectedTemplate?.id ?? "");
-
+  const [draft, setDraft] = useState<IssueDraft>(() => ({ label: "", tags: "", dueDate: "", discordPostId: "", ...templateDraft(issueFormPrefillFromTemplate(selectedTemplate, fallbackType)) }));
+  const dirty = useRef(new Set<string>());
   const selected = templates.find((template) => template.id === templateId) ?? null;
   const prefill = issueFormPrefillFromTemplate(selected, fallbackType);
-
+  const edit = (field: string, value: string) => {
+    dirty.current.add(field);
+    setDraft((previous) => ({ ...previous, [field]: value }));
+  };
   const pickTemplate = (id: string) => {
+    const template = templates.find((item) => item.id === id) ?? null;
     setTemplateId(id);
-    const params = new URLSearchParams();
-    if (createInBacklog) params.set("status", "BACKLOG");
-    if (id) {
-      const template = templates.find((item) => item.id === id);
-      params.set("template", template?.slug || id);
-    } else if (fallbackType !== "BUG") {
-      params.set("type", fallbackType);
-    }
-    const query = params.toString();
-    router.replace(query ? `/issues/new?${query}` : "/issues/new", { scroll: false });
+    setDraft((previous) => mergeIssueTemplate(previous, templateDraft(issueFormPrefillFromTemplate(template, fallbackType)), dirty.current));
+    const query = new URLSearchParams(window.location.search);
+    if (id) query.set("template", template?.slug || id); else query.delete("template");
+    // Native history integration updates the URL without remounting the draft.
+    window.history.replaceState(null, "", query.size ? `/issues/new?${query}` : "/issues/new");
   };
 
   return (
@@ -314,6 +320,12 @@ export function NewIssueForm({
                 ]}
                 size="md"
               />
+              <button type="button" className="text-xs text-primary hover:underline" onClick={() => {
+                if (window.confirm("Replace your edited template fields with this template? Other report fields will be kept.")) {
+                  setDraft((previous) => mergeIssueTemplate(previous, templateDraft(prefill), dirty.current, true));
+                  for (const field of Object.keys(templateDraft(prefill))) dirty.current.delete(field);
+                }
+              }}>Replace edited fields with template</button>
               {canManageTemplates && (
                 <p className="text-[11px] text-subtle-foreground">
                   <Link href="/issues/templates" className="hover:text-foreground">
@@ -321,11 +333,13 @@ export function NewIssueForm({
                   </Link>
                 </p>
               )}
-            </FieldRow>
+            <IssueFieldError field="issue-template" />
+          </FieldRow>
           </div>
         )}
         <IssueFields
-          key={`${templateId || "none"}-${fallbackType}-${createInBacklog}`}
+          draft={draft}
+          edit={edit}
           prefill={prefill}
           createInBacklog={createInBacklog}
         />

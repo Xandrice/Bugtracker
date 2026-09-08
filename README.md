@@ -75,7 +75,20 @@ Optional:
 - `VICTORIALOGS_BEARER_TOKEN` (optional bearer auth for VictoriaLogs)
 - `VICTORIALOGS_USERNAME` / `VICTORIALOGS_PASSWORD` (optional basic auth for VictoriaLogs)
 - `VICTORIALOGS_ACCOUNT_ID` / `VICTORIALOGS_PROJECT_ID` (optional default tenant headers)
-- `LOG_VIEW_ROLES` (comma-separated roles allowed to view `/logs`; default `Owner,Admin`)
+- `LOG_VIEW_ROLES` (comma-separated roles allowed to view `/logs` and player profile logs; default `Owner,Admin`)
+
+### Player profile logs
+
+Player profiles open on Overview, with Assets, History, and Logs sections. The Logs section additionally requires player staff-tool access and queries VictoriaLogs only when opened. It matches a complete `citizenid:<profile identifier>` token in the comma-separated `tags` field; entries without that tag are excluded. It does not identify players by their temporary `source` ID.
+
+Use a preset range, a custom duration such as `90m` or `1h30m`, or custom start/end dates with seconds. Dates use the browser's timezone and are sent to the backend in UTC. Apply saves filters in the URL; Refresh reruns the applied range. Results show the newest 200 entries by default, with limits up to 1,000 and expandable event details.
+
+Run the focused matching and time-range tests with:
+
+```powershell
+npx tsc src/lib/player-logs.ts src/lib/player-logs.test.ts --module commonjs --target es2020 --esModuleInterop --skipLibCheck --outDir .next/player-logs-tests
+node .next/player-logs-tests/player-logs.test.js
+```
 
 ### Discord forum sync notes
 
@@ -210,6 +223,24 @@ Signed-in users can Watch / Unwatch an issue from the issue detail sidebar (Peop
 - Compensation queue (`CompensationRequest`) ships as `prisma/migrations/20260823_compensation_requests`. Apply it with `pnpm prisma migrate deploy` or `pnpm prisma db push` against your Postgres instance — do not run migrate as part of `vercel-build` / `next build`.
 - Issue templates (`IssueTemplate`) ship as `prisma/migrations/20260824_issue_templates`, including four seed templates (bug report, script crash, feature request, player-facing task). The INSERT is one-shot (`ON CONFLICT DO NOTHING`) so later staff edits are kept. A matching upsert also runs on `/issues/new` and `/issues/templates` for databases that used `db push` without the SQL seed. Apply the migration with `pnpm prisma migrate deploy` or `pnpm prisma db push` **outside** `vercel-build` / `next build`. Owner/Admin staff manage templates at `/issues/templates`; everyone else can optionally pick one on `/issues/new`.
 - Issue watchers (`IssueWatcher`) ships as `prisma/migrations/20260824_issue_watchers`. Apply it with `pnpm prisma migrate deploy` or `pnpm prisma db push` **outside** `vercel-build` / `next build`. Reporter and assignee are implicit watchers for status changes (notified without a row). Watch / Unwatch on the issue page manages explicit subscribers, who also get comment notifications alongside the assignee.
+
+### Issue tracker regression checks
+
+The All Issues, Triage, and My Issues tables use URL-backed filters and pagination (50 parent groups per page). Matching subtasks remain visible under context-only parents. Issue edits and their activity entries commit together; bulk edits report failures per issue and retain failed selections. Template changes preserve edited draft fields unless replacement is confirmed.
+
+Migration `20260907000000_issue_list_indexes` adds indexes for the paginated lists. Apply it through your normal Prisma deployment process, outside the application build; local regression checks do not apply migrations to your configured database.
+
+Run the isolated PostgreSQL and browser regression checks with:
+
+```bash
+npm run test:issues:setup
+node node_modules/.cache/issue-test-tools/node_modules/playwright/cli.js install chromium
+npm run test:issues
+npm run build
+npm run test:issues:browser
+```
+
+The database tests use temporary PGlite databases. Browser checks render the actual issue components with mocked navigation and server actions, using CSS from the production build. They cover draft preservation, validation, context parents, partial bulk failures, refreshed subtasks, filters, saved views, and mobile layout. They do not send Discord messages or use the configured application database. Browser screenshots are saved under `.next/issue-checks/`.
 
 ### 5) Cut over from Render
 

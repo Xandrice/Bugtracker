@@ -57,8 +57,9 @@ export async function recordActivity(input: {
   newValue?: string | null;
   actorName?: string | null;
   notifyStatusChange?: boolean;
+  activityAlreadyRecorded?: boolean;
 }) {
-  try {
+  if (!input.activityAlreadyRecorded) try {
     await (db as any).issueActivity.create({
       data: {
         issueId: input.issueId,

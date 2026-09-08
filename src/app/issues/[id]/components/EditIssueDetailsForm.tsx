@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+
 import { saveIssueDetails } from "@/app/actions";
+import { IssueActionForm, IssueFieldError } from "@/components/issues/IssueActionForm";
 import { Button } from "@/components/ui/Button";
 import { FieldRow, Input, Textarea } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -43,7 +44,7 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
     const [priority, setPriority] = useState<string>(normalizePriority(issue.priority));
     const [severity, setSeverity] = useState<string>(normalizeSeverity(issue.severity));
     const [label, setLabel] = useState<string>(issue.label ?? "");
-    const [submitting, setSubmitting] = useState(false);
+
     const dueStr = issue.dueDate ? new Date(issue.dueDate).toISOString().slice(0, 10) : "";
 
     return (
@@ -55,15 +56,7 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
                     and scheduling.
                 </p>
             </summary>
-            <form
-                action={async (formData) => {
-                    setSubmitting(true);
-                    try {
-                        await saveIssueDetails(formData);
-                    } finally {
-                        setSubmitting(false);
-                    }
-                }}
+            <IssueActionForm action={saveIssueDetails}
                 className="space-y-4 border-t border-border p-4"
             >
                 <input type="hidden" name="issueId" value={issue.id} />
@@ -73,7 +66,8 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
 
                 <FieldRow label="Title" htmlFor="edit-title">
                     <Input id="edit-title" name="title" defaultValue={issue.title} required />
-                </FieldRow>
+                <IssueFieldError field="title" />
+          </FieldRow>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <FieldRow label="Priority">
@@ -102,7 +96,8 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
                             type="date"
                             defaultValue={dueStr}
                         />
-                    </FieldRow>
+                    <IssueFieldError field="dueDate" />
+          </FieldRow>
                     <FieldRow label="Story points" htmlFor="edit-points">
                         <Input
                             id="edit-points"
@@ -113,7 +108,8 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
                             placeholder="—"
                             defaultValue={issue.storyPoints ?? ""}
                         />
-                    </FieldRow>
+                    <IssueFieldError field="storyPoints" />
+          </FieldRow>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -124,7 +120,8 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
                             defaultValue={issue.tags ?? ""}
                             placeholder="comma separated"
                         />
-                    </FieldRow>
+                    <IssueFieldError field="tags" />
+          </FieldRow>
                     <FieldRow label="Label / category">
                         <Select
                             value={label}
@@ -143,7 +140,8 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
                             defaultValue={issue.resourceName ?? ""}
                             className="font-mono"
                         />
-                    </FieldRow>
+                    <IssueFieldError field="resourceName" />
+          </FieldRow>
                     <FieldRow label="Server / build" htmlFor="edit-build">
                         <Input
                             id="edit-build"
@@ -151,7 +149,8 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
                             defaultValue={issue.serverVersion ?? ""}
                             className="font-mono"
                         />
-                    </FieldRow>
+                    <IssueFieldError field="serverVersion" />
+          </FieldRow>
                 </div>
 
                 <FieldRow label="Environment" htmlFor="edit-env">
@@ -161,7 +160,8 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
                         defaultValue={issue.environment ?? ""}
                         placeholder="e.g. live, staging, reproducible on FX 6683"
                     />
-                </FieldRow>
+                <IssueFieldError field="environment" />
+          </FieldRow>
 
                 <FieldRow label="Description" htmlFor="edit-desc">
                     <Textarea
@@ -170,7 +170,8 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
                         rows={5}
                         defaultValue={issue.description ?? ""}
                     />
-                </FieldRow>
+                <IssueFieldError field="description" />
+          </FieldRow>
 
                 <FieldRow label="Steps to reproduce" htmlFor="edit-repro">
                     <Textarea
@@ -179,7 +180,8 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
                         rows={4}
                         defaultValue={issue.reproductionSteps ?? ""}
                     />
-                </FieldRow>
+                <IssueFieldError field="reproductionSteps" />
+          </FieldRow>
 
                 <FieldRow label="Expected behavior" htmlFor="edit-expected">
                     <Textarea
@@ -188,13 +190,13 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
                         rows={3}
                         defaultValue={issue.expectedBehavior ?? ""}
                     />
-                </FieldRow>
+                <IssueFieldError field="expectedBehavior" />
+          </FieldRow>
 
-                <Button type="submit" variant="primary" size="sm" disabled={submitting}>
-                    {submitting && <Loader2 className="h-3 w-3 animate-spin" />}
+                <Button type="submit" variant="primary" size="sm" >
                     Save details
                 </Button>
-            </form>
+            </IssueActionForm>
         </details>
     );
 }
