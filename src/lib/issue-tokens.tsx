@@ -24,13 +24,15 @@ export const STATUS_META: Record<IssueStatus, {
     label: string;
     short: string;
     icon: ReactNode;
-    tone: "neutral" | "info" | "warning" | "primary" | "success";
+    tone: "purple" | "info" | "warning" | "primary" | "success";
+    /** Text colour class matching the tone, for labels outside a Badge. */
+    text: string;
 }> = {
-    BACKLOG: { label: "Backlog", short: "Backlog", icon: <KanbanSquare className="h-3.5 w-3.5" />, tone: "neutral" },
-    OPEN: { label: "Open", short: "Open", icon: <CircleDashed className="h-3.5 w-3.5" />, tone: "info" },
-    IN_PROGRESS: { label: "In Progress", short: "In progress", icon: <CircleDot className="h-3.5 w-3.5" />, tone: "warning" },
-    REVIEW: { label: "Review", short: "Review", icon: <AlertCircle className="h-3.5 w-3.5" />, tone: "primary" },
-    DONE: { label: "Done", short: "Done", icon: <CheckCircle2 className="h-3.5 w-3.5" />, tone: "success" },
+    BACKLOG: { label: "Backlog", short: "Backlog", icon: <KanbanSquare className="h-3.5 w-3.5 text-[rgb(149_125_255)]" />, tone: "purple", text: "text-[rgb(149_125_255)]" },
+    OPEN: { label: "Open", short: "Open", icon: <CircleDashed className="h-3.5 w-3.5 text-info" />, tone: "info", text: "text-info" },
+    IN_PROGRESS: { label: "In Progress", short: "In progress", icon: <CircleDot className="h-3.5 w-3.5 text-warning" />, tone: "warning", text: "text-warning" },
+    REVIEW: { label: "Review", short: "Review", icon: <AlertCircle className="h-3.5 w-3.5 text-primary" />, tone: "primary", text: "text-primary" },
+    DONE: { label: "Done", short: "Done", icon: <CheckCircle2 className="h-3.5 w-3.5 text-success" />, tone: "success", text: "text-success" },
 };
 
 export const PRIORITY_META: Record<IssuePriority, {
@@ -80,7 +82,7 @@ export const LINK_TYPE_META: Record<IssueLinkType, {
 
 export const STATUS_OPTIONS = (Object.keys(STATUS_META) as IssueStatus[]).map((s) => ({
     value: s,
-    label: STATUS_META[s].label,
+    label: <span className={`font-medium ${STATUS_META[s].text}`}>{STATUS_META[s].label}</span>,
     icon: STATUS_META[s].icon,
 }));
 

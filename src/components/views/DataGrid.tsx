@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 export type { IssueStatus, IssuePriority, IssueType, IssueSeverity } from "@/lib/issue-tokens";
 
 export const statusStyles: Record<IssueStatus, string> = {
-    BACKLOG: "bg-muted text-muted-foreground border-border",
+    BACKLOG: "bg-[color:rgb(149_125_255_/_0.12)] text-[color:rgb(149_125_255)] border-[color:rgb(149_125_255_/_0.3)]",
     OPEN: "bg-info/12 text-info border-info/30",
     IN_PROGRESS: "bg-warning/12 text-warning border-warning/30",
     REVIEW: "bg-primary/12 text-primary border-primary/30",

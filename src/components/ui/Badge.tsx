@@ -1,7 +1,7 @@
 import { HTMLAttributes } from "react";
 import { cn } from "./cn";
 
-type Tone =
+export type BadgeTone =
     | "neutral"
     | "primary"
     | "success"
@@ -11,11 +11,11 @@ type Tone =
     | "purple";
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
-    tone?: Tone;
+    tone?: BadgeTone;
     size?: "xs" | "sm";
 }
 
-const TONES: Record<Tone, string> = {
+export const BADGE_TONES: Record<BadgeTone, string> = {
     neutral:
         "bg-muted text-muted-foreground border-border",
     primary:
@@ -48,7 +48,7 @@ export function Badge({
         <span
             className={cn(
                 "inline-flex items-center rounded border font-medium tracking-tight",
-                TONES[tone],
+                BADGE_TONES[tone],
                 SIZES[size],
                 className
             )}
