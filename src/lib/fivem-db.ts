@@ -12,12 +12,15 @@ import {
 type ColumnInfo = {
   tableName: string;
   columnName: string;
+  characterSet: string | null;
+  collation: string | null;
 };
 
 type TableSchema = {
   tableName: string;
   columns: string[];
   columnSet: Set<string>;
+  columnInfo: Map<string, ColumnInfo>;
 };
 
 type SchemaSnapshot = {
@@ -58,6 +61,7 @@ type IdentifierTableCapabilities = {
   joinPlayerColumn: string;
   joinIdentifierColumn: string;
   searchColumns: string[];
+  joinTextFormat: { characterSet: string; collation: string } | null;
 };
 
 type VehicleTableCapabilities = {
@@ -544,32 +548,38 @@ function coerceBooleanForDatabase(existing: unknown, next: boolean): string | nu
 
 async function getSchemaSnapshot(forceRefresh = false): Promise<SchemaSnapshot> {
   if (!forceRefresh && globalThis.fivemSchemaPromise) {
-    return globalThis.fivemSchemaPromise;
+    const cached = await globalThis.fivemSchemaPromise;
+    // Development reloads can retain a snapshot from before collation metadata
+    // was included. Reload that snapshot rather than using incomplete joins.
+    if (cached.tables.every((table) => table.columnInfo instanceof Map)) return cached;
   }
 
   const snapshotPromise = (async () => {
     const columns = await queryRows<ColumnInfo & RowDataPacket>(
       `
-        SELECT table_name AS tableName, column_name AS columnName
+        SELECT table_name AS tableName, column_name AS columnName,
+          character_set_name AS characterSet, collation_name AS collation
         FROM information_schema.columns
         WHERE table_schema = DATABASE()
         ORDER BY table_name, ordinal_position
       `
     );
 
-    const byName = new Map<string, string[]>();
+    const byName = new Map<string, ColumnInfo[]>();
     for (const column of columns) {
       const tableName = column.tableName.toLowerCase();
       const columnName = column.columnName.toLowerCase();
       const existing = byName.get(tableName);
-      if (existing) existing.push(columnName);
-      else byName.set(tableName, [columnName]);
+      const info = { ...column, tableName, columnName };
+      if (existing) existing.push(info);
+      else byName.set(tableName, [info]);
     }
 
     const tables: TableSchema[] = Array.from(byName.entries()).map(([tableName, tableColumns]) => ({
       tableName,
-      columns: tableColumns,
-      columnSet: new Set(tableColumns),
+      columns: tableColumns.map((column) => column.columnName),
+      columnSet: new Set(tableColumns.map((column) => column.columnName)),
+      columnInfo: new Map(tableColumns.map((column) => [column.columnName, column])),
     }));
 
     return {
@@ -783,11 +793,21 @@ function detectIdentifierTables(
     if (table.columnSet.has("license2") || table.columnSet.has("identifiers")) score += 1;
     if (score <= 0) continue;
 
+    const playerColumn = schema.byName.get(playerCaps.tableName)?.columnInfo.get(join.playerColumn);
+    const identifierColumn = table.columnInfo.get(join.identifierColumn);
+    // Use the related column's collation only when both join keys are text
+    // with different collations. Leave numeric joins and matching text alone.
+    const joinTextFormat = playerColumn?.collation && identifierColumn?.characterSet &&
+      identifierColumn.collation && playerColumn.collation !== identifierColumn.collation
+      ? { characterSet: identifierColumn.characterSet, collation: identifierColumn.collation }
+      : null;
+
     detected.push({
       tableName: table.tableName,
       joinPlayerColumn: join.playerColumn,
       joinIdentifierColumn: join.identifierColumn,
       searchColumns,
+      joinTextFormat,
       score,
     });
   }
@@ -799,6 +819,7 @@ function detectIdentifierTables(
       joinPlayerColumn: table.joinPlayerColumn,
       joinIdentifierColumn: table.joinIdentifierColumn,
       searchColumns: table.searchColumns,
+      joinTextFormat: table.joinTextFormat,
     }));
 }
 
@@ -865,11 +886,17 @@ function buildPlayerSearchWhere(
       identifierTerms
     );
     if (related.parts.length === 0) continue;
+    const playerKey = `${quoteIdentifier(capabilities.tableName)}.${quoteIdentifier(identifierTable.joinPlayerColumn)}`;
+    const format = identifierTable.joinTextFormat;
+    // Convert the outer key, keeping the related table's indexed key bare.
+    const compatiblePlayerKey = format
+      ? `CONVERT(${playerKey} USING ${quoteIdentifier(format.characterSet)}) COLLATE ${quoteIdentifier(format.collation)}`
+      : playerKey;
     parts.push(`EXISTS (
       SELECT 1
       FROM ${quoteIdentifier(identifierTable.tableName)}
       WHERE ${quoteIdentifier(identifierTable.tableName)}.${quoteIdentifier(identifierTable.joinIdentifierColumn)}
-        = ${quoteIdentifier(capabilities.tableName)}.${quoteIdentifier(identifierTable.joinPlayerColumn)}
+        = ${compatiblePlayerKey}
         AND (${related.parts.join(" OR ")})
     )`);
     params.push(...related.params);

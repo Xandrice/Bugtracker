@@ -130,13 +130,13 @@ export default async function StaffPlayersPage({
       {snapshot.connectionError && (
         <Card className="border-danger/30">
           <CardHeader>
-            <CardTitle>Unable to connect to FiveM database</CardTitle>
+            <CardTitle>Unable to load players from FiveM database</CardTitle>
           </CardHeader>
           <CardBody className="space-y-2 text-sm text-danger">
             <p>{snapshot.connectionError}</p>
             <p className="text-muted-foreground">
-              Confirm your database host/firewall credentials and that this machine can reach the
-              MySQL server.
+              Check the database error above. Connection errors may require checking host,
+              firewall, or credentials; query errors may require checking schema compatibility.
             </p>
           </CardBody>
         </Card>
