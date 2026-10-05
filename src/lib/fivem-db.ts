@@ -82,6 +82,7 @@ type VehicleTableCapabilities = {
 export type StaffPlayer = {
   identifier: string;
   displayName: string;
+  characterName: string | null;
   charInfo: string | null;
   fullRow: Record<string, unknown>;
   job: string | null;
@@ -912,6 +913,26 @@ async function countRows(tableName: string, whereClause = "", params: unknown[] 
   return rows[0]?.count ?? 0;
 }
 
+function resolvePlayerCharacterName(
+  row: Record<string, unknown>,
+  capabilities: PlayerTableCapabilities
+): string | null {
+  const firstName = capabilities.firstNameColumn
+    ? normalizeText(row[capabilities.firstNameColumn])
+    : null;
+  const lastName = capabilities.lastNameColumn
+    ? normalizeText(row[capabilities.lastNameColumn])
+    : null;
+  if (firstName || lastName) return [firstName, lastName].filter(Boolean).join(" ");
+
+  const profile = capabilities.profileJsonColumn
+    ? parseJsonObject(row[capabilities.profileJsonColumn])
+    : null;
+  const profileFirst = normalizeText(profile?.firstname) || normalizeText(profile?.first_name);
+  const profileLast = normalizeText(profile?.lastname) || normalizeText(profile?.last_name);
+  return [profileFirst, profileLast].filter(Boolean).join(" ") || null;
+}
+
 function resolvePlayerDisplayName(
   row: Record<string, unknown>,
   capabilities: PlayerTableCapabilities
@@ -1027,6 +1048,7 @@ function mapPlayerRow(row: Record<string, unknown>, capabilities: PlayerTableCap
   return {
     identifier,
     displayName,
+    characterName: resolvePlayerCharacterName(row, capabilities),
     charInfo,
     fullRow,
     job,

@@ -3,6 +3,55 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loader } = require('./issues/load-ts.cjs');
 
+test('player lists expose character names separately from account names', async (t) => {
+  const originalUrl = process.env.FIVEM_DB_URL;
+  const originalPool = globalThis.fivemDbPool;
+  const originalSchema = globalThis.fivemSchemaPromise;
+  process.env.FIVEM_DB_URL = 'mysql://test.invalid/test';
+  t.after(() => {
+    if (originalUrl === undefined) delete process.env.FIVEM_DB_URL;
+    else process.env.FIVEM_DB_URL = originalUrl;
+    globalThis.fivemDbPool = originalPool;
+    globalThis.fivemSchemaPromise = originalSchema;
+  });
+  const db = loader({ 'server-only': {} })('src/lib/fivem-db.ts');
+
+  for (const scenario of [
+    { label: 'JSON charinfo', fields: { charinfo: '{"firstname":"Jane","lastname":"Doe"}' }, expected: 'Jane Doe' },
+    { label: 'object charinfo', fields: { charinfo: { firstname: ' Jane ', lastname: ' Doe ' } }, expected: 'Jane Doe' },
+    { label: 'direct name columns', fields: { firstname: ' Jane ', lastname: ' Doe ' }, expected: 'Jane Doe' },
+    { label: 'snake case columns', fields: { first_name: 'Jane', last_name: 'Doe' }, expected: 'Jane Doe' },
+    { label: 'snake case profile', fields: { identity: { first_name: 'Jane', last_name: 'Doe' } }, expected: 'Jane Doe' },
+    { label: 'first name only', fields: { charinfo: { firstname: 'Jane' } }, expected: 'Jane' },
+    { label: 'last name only', fields: { charinfo: { lastname: 'Doe' } }, expected: 'Doe' },
+    { label: 'direct names take priority', fields: { firstname: 'Jane', lastname: 'Doe', charinfo: { firstname: 'Other', lastname: 'Name' } }, expected: 'Jane Doe' },
+    { label: 'empty columns fall back to charinfo', fields: { firstname: ' ', lastname: null, charinfo: { firstname: 'Jane', lastname: 'Doe' } }, expected: 'Jane Doe' },
+    { label: 'missing names', fields: {}, expected: null },
+    { label: 'blank names', fields: { charinfo: { firstname: ' ', lastname: '' } }, expected: null },
+    { label: 'malformed charinfo', fields: { charinfo: '{invalid' }, expected: null },
+  ]) {
+    await t.test(scenario.label, async () => {
+      const row = { citizenid: 'ABC123', name: 'AccountHandle', ...scenario.fields };
+      const schema = Object.keys(row).map((columnName) => ({
+        tableName: 'players', columnName, characterSet: 'utf8mb4', collation: 'utf8mb4_general_ci',
+      }));
+      globalThis.fivemSchemaPromise = undefined;
+      globalThis.fivemDbPool = {
+        query: async (sql) => {
+          if (sql.includes('information_schema.columns')) return [schema];
+          if (sql.includes('COUNT(*)')) return [[{ count: 1 }]];
+          return [[row]];
+        },
+      };
+
+      const snapshot = await db.getStaffToolsSnapshot({});
+      assert.equal(snapshot.connectionError, null);
+      assert.equal(snapshot.players[0].characterName, scenario.expected);
+      assert.equal(snapshot.players[0].displayName, 'AccountHandle');
+    });
+  }
+});
+
 test('player searches reconcile related text collations while preserving numeric joins', async (t) => {
   const originalUrl = process.env.FIVEM_DB_URL;
   const originalPool = globalThis.fivemDbPool;

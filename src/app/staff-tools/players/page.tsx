@@ -199,6 +199,7 @@ export default async function StaffPlayersPage({
                   <thead className="border-b border-border bg-surface-2 text-[10px] uppercase tracking-wider text-subtle-foreground">
                     <tr>
                       <th className="px-4 py-2">Player</th>
+                      <th className="px-4 py-2">Character name</th>
                       <th className="px-4 py-2">Citizen ID</th>
                       <th className="px-4 py-2">Job</th>
                       <th className="px-4 py-2">Status</th>
@@ -218,6 +219,11 @@ export default async function StaffPlayersPage({
                           >
                             {player.displayName}
                           </Link>
+                        </td>
+                        <td className="px-4 py-3 text-foreground">
+                          {player.characterName || (
+                            <span className="text-xs text-muted-foreground">Unknown character</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                           {player.identifier}
