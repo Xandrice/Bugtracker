@@ -35,7 +35,10 @@ function discordDisplayName(profile: unknown): string | null {
 const nextAuth = NextAuth({
     adapter: PrismaAdapter(db),
     providers: [
-        Discord,
+        Discord({
+            // Discord includes its issuer in the OAuth authorization response.
+            issuer: "https://discord.com",
+        }),
         ...(isDev
             ? [
                 Credentials({
