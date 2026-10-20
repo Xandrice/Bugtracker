@@ -10,6 +10,7 @@ import {
 } from "@/lib/issue-tokens";
 import { ensureMissingBacklogRanks } from "@/lib/issue-backlog";
 import { BacklogRankedList, type BacklogIssue } from "./BacklogRankedList";
+import { assigneeUsers, issueAssigneeInclude } from "@/lib/issue-assignees";
 
 export default async function BacklogIssuesPage() {
     const session = await auth();
@@ -18,7 +19,7 @@ export default async function BacklogIssuesPage() {
     const rawIssues = await db.issue.findMany({
         where: { status: "BACKLOG" },
         include: {
-            assignee: true,
+            assignees: issueAssigneeInclude,
             parentIssue: { select: { id: true, publicKey: true } },
             _count: { select: { subtasks: true } },
         },
@@ -34,9 +35,7 @@ export default async function BacklogIssuesPage() {
         title: i.title,
         type: normalizeType(i.type),
         priority: normalizePriority(i.priority),
-        assignee: i.assignee
-            ? { id: i.assignee.id, name: i.assignee.name, image: i.assignee.image }
-            : null,
+        assignees: assigneeUsers(i.assignees),
         dueDate: i.dueDate ?? undefined,
         storyPoints: i.storyPoints ?? undefined,
         parentIssueRef: i.parentIssue

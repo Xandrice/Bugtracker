@@ -4,15 +4,24 @@ import { NewIssueForm } from '../../src/app/issues/new/NewIssueForm';
 import { PagedIssueGrid } from '../../src/components/issues/PagedIssueGrid';
 import { IssueActionForm, IssueFieldError } from '../../src/components/issues/IssueActionForm';
 import { parseIssueListState, issueListSearchParams } from '../../src/lib/issue-list-state';
+import { AssigneeSelect } from '../../src/app/issues/[id]/components/AssigneeSelect';
 
 const template = { id: 'template', slug: 'template', name: 'Bug template', description: 'Common report', type: 'BUG', priority: 'HIGH', severity: 'MAJOR', titleHint: 'Describe the problem', title: 'Template title', body: 'Template body', reproductionSteps: 'Template steps', expectedBehavior: 'Template expected', resourceName: 'police', sortOrder: 0, archivedAt: null };
-const row = (id, status = 'OPEN') => ({ id, publicKey: id, title: id, status, type: 'BUG', priority: 'MEDIUM', severity: 'MINOR', assigneeId: null, assigneeName: null, dueDate: null, updatedAt: new Date('2026-09-07'), resourceName: 'police', storyPoints: null, parentIssueId: null, matches: true, childCount: 0 });
+const row = (id, status = 'OPEN') => ({ id, publicKey: id, title: id, status, type: 'BUG', priority: 'MEDIUM', severity: 'MINOR', assignees: [], dueDate: null, updatedAt: new Date('2026-09-07'), resourceName: 'police', storyPoints: null, parentIssueId: null, matches: true, childCount: 0 });
 const childRows = [{ ...row('child-one'), parentIssueId: 'parent' }, { ...row('child-two'), parentIssueId: 'parent' }];
 window.issueTest = {
   createIssue: async (data) => { window.lastSubmission = Object.fromEntries(data); return { error: 'Check the highlighted fields.', fieldErrors: { title: 'Enter a title.' } }; },
   loadIssueChildren: async (id) => ({ rows: id === "parent" ? structuredClone(childRows) : [{ ...row("context-child"), parentIssueId: "context-parent" }] }),
   updateIssueWorkflow: async (id, changes) => { if (window.failUpdate) return { error: 'Simulated update failed' }; Object.assign(childRows.find((r) => r.id === id) || {}, changes); return { issue: { id, ...changes } }; },
   updateIssueAssignee: async () => ({ error: 'Simulated assignment failure' }),
+  updateIssueAssignees: async (id, assigneeIds) => {
+    window.lastAssignees = assigneeIds;
+    if (window.failAssignment) return { error: 'Simulated assignment failure' };
+    if (id === 'assignment-task') window.detailAssigneeIds = assigneeIds;
+    const row = childRows.find(row => row.id === id);
+    if (row) row.assignees = assigneeIds.map(id => ({ id, name: id === 'staff' ? 'Staff' : 'Helper' }));
+    return { issue: { id } };
+  },
   bulkUpdateIssues: async () => { childRows[0].status = 'REVIEW'; return { updated: 1, skipped: [{ id: 'child-two', error: 'Simulated row failure' }] }; },
   saveSavedView: async (name, filters) => ({ view: { id: 'saved', name, filters } }),
   deleteSavedView: async () => ({ ok: true }),
@@ -43,6 +52,7 @@ function App() {
       <input name="title" aria-label="Second title" defaultValue="keep me" /><IssueFieldError field="title" /><button>Submit second</button>
     </IssueActionForm>
   </>;
-  return <main className="p-6" data-issue-filters={issueListSearchParams(page.state, 'all').toString()}><PagedIssueGrid key={issueListSearchParams(page.state, 'all').toString()} page={page} users={[{ id: 'staff', name: 'Staff' }]} canEdit canAssign signedIn savedViews={[]} /></main>;
+  if (location.pathname === '/assignments') return <main className="max-w-sm p-6"><AssigneeSelect key={(window.detailAssigneeIds || ['staff', 'helper']).join(',')} issueId="assignment-task" defaultValues={window.detailAssigneeIds || ['staff', 'helper']} users={[{ id: 'staff', name: 'Staff' }, { id: 'helper', name: 'Helper' }]} /></main>;
+  return <main className="p-6" data-issue-filters={issueListSearchParams(page.state, 'all').toString()}><PagedIssueGrid key={issueListSearchParams(page.state, 'all').toString()} page={page} users={[{ id: 'staff', name: 'Staff' }, { id: 'helper', name: 'Helper' }]} canEdit canAssign signedIn savedViews={[]} /></main>;
 }
 createRoot(document.getElementById('root')).render(<App />);

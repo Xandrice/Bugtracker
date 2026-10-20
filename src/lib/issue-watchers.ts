@@ -1,9 +1,9 @@
 /**
- * Reporter and assignee are *implicit* watchers: they already receive
+ * Reporter and all assignees are *implicit* watchers: they already receive
  * STATUS_CHANGE in-app + Discord DM notifications without a row here.
  * Watch / Unwatch only writes `IssueWatcher`. Explicit watchers are added to
  * the same `notifyUser` path for STATUS_CHANGE and COMMENT (comments already
- * notify the assignee). Unwatch does not stop reporter/assignee status pings
+ * notify all assignees). Unwatch does not stop reporter/assignee status pings
  * while those roles still apply.
  */
 export function uniqueUserIds(

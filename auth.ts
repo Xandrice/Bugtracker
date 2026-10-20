@@ -135,6 +135,9 @@ const nextAuth = NextAuth({
 
 export const { handlers, signIn, signOut } = nextAuth
 
+// Preserve Auth.js's request-handler overload for the Next.js proxy.
+export const proxyAuth = nextAuth.auth
+
 const nextAuthAuth = nextAuth.auth
 
 async function getOrCreateDevUser() {

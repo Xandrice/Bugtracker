@@ -39,6 +39,7 @@ import { getIssueWatcherUserIds, uniqueUserIds } from "@/lib/issue-watchers";
 import { discordSignInUrl } from "@/lib/auth-urls";
 import { syncProjectMemberProfileByDiscordId } from "@/lib/member-profiles";
 import { nextBacklogRank, placeBacklogIssue, rankWhenEnteringBacklog } from "@/lib/issue-backlog";
+import { issueAssigneeInclude } from "@/lib/issue-assignees";
 
 const ALLOWED_STATUS = ["BACKLOG", "OPEN", "IN_PROGRESS", "REVIEW", "DONE"] as const;
 const ALLOWED_PRIORITY = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
@@ -503,9 +504,13 @@ export async function saveIssueDetails(formData: FormData): Promise<IssueFormRes
 }
 
 export async function updateIssueAssignee(issueId: string, assigneeId: string | null, options?: { skipRevalidate?: boolean }) {
+    return updateIssueAssignees(issueId, assigneeId ? [assigneeId] : [], options);
+}
+
+export async function updateIssueAssignees(issueId: string, assigneeIds: string[], options?: { skipRevalidate?: boolean }) {
     const actor = await getActorContext();
     if (!actor) return { error: "Unauthorized" };
-    const result = await mutateIssue(issueId, { assigneeId }, { ...actor, name: actor.session.user?.name });
+    const result = await mutateIssue(issueId, { assigneeIds }, { ...actor, name: actor.session.user?.name });
     if (!options?.skipRevalidate) revalidateIssuePaths(issueId);
     return result;
 }
@@ -518,6 +523,8 @@ export type BulkIssueUpdates = {
     status?: string;
     /** Present to change assignee; `null` unassigns. Omit to leave assignee unchanged. */
     assigneeId?: string | null;
+    /** Replace all assignees; an empty array unassigns everyone. */
+    assigneeIds?: string[];
 };
 
 /**
@@ -533,7 +540,7 @@ export async function bulkUpdateIssues(issueIds: string[], updates: BulkIssueUpd
     const ids = [...new Set(issueIds.filter((id) => typeof id === "string" && id))];
     if (!ids.length || ids.length > MAX_BULK_ISSUE_UPDATES) return { error: "Select between 1 and 100 issues.", updated: 0, skipped: [] };
     if (!updates || typeof updates !== "object" || Array.isArray(updates)) return { error: "Invalid updates.", updated: 0, skipped: [] };
-    const input = Object.fromEntries(Object.entries(updates).filter(([key]) => ["type", "priority", "status", "assigneeId"].includes(key)));
+    const input = Object.fromEntries(Object.entries(updates).filter(([key]) => ["type", "priority", "status", "assigneeId", "assigneeIds"].includes(key)));
     const skipped: { id: string; error: string }[] = [];
     const issues = [];
     for (const id of ids) {
@@ -622,7 +629,7 @@ export async function createTeamNote(formData: FormData) {
         const [issue, watcherIds] = await Promise.all([
             db.issue.findUnique({
                 where: { id: issueId },
-                select: { title: true, assigneeId: true },
+                select: { title: true, assignees: { select: { userId: true } } },
             }),
             getIssueWatcherUserIds(issueId),
         ]);
@@ -637,9 +644,9 @@ export async function createTeamNote(formData: FormData) {
             internal,
         });
 
-        // Comments already notify the assignee; explicit watchers share that path.
+        // Comments notify all assignees; explicit watchers share that path.
         // Reporter is not added here (they only get COMMENT if they Watch).
-        const commentRecipients = uniqueUserIds(issue?.assigneeId, watcherIds);
+        const commentRecipients = uniqueUserIds(issue?.assignees.map(row => row.userId), watcherIds);
         if (commentRecipients.length > 0) {
             const snippet = content.length > 180 ? content.slice(0, 177) + "…" : content;
             const issueUrl = `${baseUrl}/issues/${issueRef}`;
@@ -1135,6 +1142,7 @@ export async function exportProjectData() {
         include: {
             reporter: true,
             assignee: true,
+            assignees: issueAssigneeInclude,
             notes: { include: { author: true } }
         }
     });

@@ -7,6 +7,7 @@ import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { formatIssueRef } from "@/lib/issue-ids";
 import type { IssuePriority, IssueStatus, IssueType } from "@/lib/issue-tokens";
 import { cn } from "@/components/ui/cn";
+import { assigneeUsers, issueAssigneeInclude, type IssueAssigneeUser } from "@/lib/issue-assignees";
 
 function mapSubtask(s: {
     id: string;
@@ -15,6 +16,7 @@ function mapSubtask(s: {
     status: string;
     priority: string;
     type: string;
+    assignees: { user: IssueAssigneeUser }[];
 }): KanbanSubtask {
     return {
         id: s.id,
@@ -23,6 +25,7 @@ function mapSubtask(s: {
         status: s.status as IssueStatus,
         priority: s.priority as IssuePriority,
         type: s.type as IssueType,
+        assignees: assigneeUsers(s.assignees),
     };
 }
 
@@ -34,7 +37,7 @@ export default async function MainBoardPage({
     const session = await auth();
     const userId = session?.user?.id;
     const assignedToMe = (await searchParams).assignee === "me" && !!userId;
-    const assignmentFilter = assignedToMe && userId ? { assigneeId: userId } : {};
+    const assignmentFilter = assignedToMe && userId ? { assignees: { some: { userId } } } : {};
     const rawIssues = await db.issue.findMany({
         where: assignmentFilter,
         orderBy: { updatedAt: "desc" },
@@ -45,6 +48,7 @@ export default async function MainBoardPage({
             status: true,
             priority: true,
             type: true,
+            assignees: issueAssigneeInclude,
             parentIssueId: true,
             parentIssue: {
                 select: { id: true, publicKey: true },
@@ -59,6 +63,7 @@ export default async function MainBoardPage({
                     status: true,
                     priority: true,
                     type: true,
+                    assignees: issueAssigneeInclude,
                 },
             },
         },
@@ -75,6 +80,7 @@ export default async function MainBoardPage({
             status: i.status as IssueStatus,
             priority: i.priority as IssuePriority,
             type: i.type as IssueType,
+            assignees: assigneeUsers(i.assignees),
             parentIssueId: i.parentIssueId,
             orphanParentRef: parentMissing
                 ? formatIssueRef(i.parentIssue?.publicKey ?? null, i.parentIssueId!)

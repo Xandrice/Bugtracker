@@ -82,7 +82,7 @@ export async function recordActivity(input: {
       select: {
         title: true,
         publicKey: true,
-        assigneeId: true,
+        assignees: { select: { userId: true } },
         reporterId: true,
       },
     }),
@@ -98,8 +98,8 @@ export async function recordActivity(input: {
   const issueUrl = `${getAppBaseUrl()}${link}`;
   const dmBody = `**${actorName}** changed status on **${issueRef}**: ${body}\n${issueUrl}`;
 
-  // Implicit: reporter + assignee. Explicit: IssueWatcher rows.
-  const recipients = uniqueUserIds(issue.assigneeId, issue.reporterId, watcherIds);
+  // Implicit: reporter + all assignees. Explicit: IssueWatcher rows.
+  const recipients = uniqueUserIds(issue.assignees.map(row => row.userId), issue.reporterId, watcherIds);
 
   for (const userId of recipients) {
     await notifyUser({

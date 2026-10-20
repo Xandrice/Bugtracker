@@ -4,7 +4,8 @@ import { Fragment, useEffect, useRef, useState, useTransition, type ReactNode, t
 import Link from "next/link";
 import { CalendarClock, ChevronDown, ChevronRight, GitBranch, ListFilter, Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { bulkUpdateIssues, updateIssueAssignee, updateIssueWorkflow } from "@/app/actions";
+import { bulkUpdateIssues, updateIssueAssignees, updateIssueWorkflow, type BulkIssueUpdates } from "@/app/actions";
+import { AssigneePicker } from "./AssigneePicker";
 import { refreshIssueGroups, retainMatchingSelection } from "@/lib/issue-list-refresh";
 import { loadIssueChildren } from "@/app/issue-list-actions";
 import { deleteSavedView, saveSavedView, type SavedViewFilters } from "@/app/staff-actions";
@@ -79,6 +80,8 @@ export function PagedIssueGrid({ page, users, canEdit, canAssign, signedIn, save
   const [saved, setSaved] = useState(savedViews);
   const [viewName, setViewName] = useState("");
   const [bulk, setBulk] = useState<Record<string, string>>({});
+  const [bulkAssignment, setBulkAssignment] = useState("keep");
+  const [bulkAssigneeIds, setBulkAssigneeIds] = useState<string[]>([]);
   const [query, setQuery] = useState(page.state.q);
   const previousPage = useRef(page);
   useEffect(() => {
@@ -122,11 +125,11 @@ export function PagedIssueGrid({ page, users, canEdit, canAssign, signedIn, save
   const allSelected = visible.length > 0 && visible.every((row) => selected.includes(row.id));
   const select = (id: string, checked: boolean) => setSelected((previous) => checked ? [...new Set([...previous, id])] : previous.filter((value) => value !== id));
 
-  function edit(row: IssueListRow, field: string, value: string) {
+  function edit(row: IssueListRow, field: string, value: string | string[]) {
     setRowErrors((previous) => ({ ...previous, [row.id]: "" }));
     startTransition(async () => {
       try {
-        const result = field === "assigneeId" ? await updateIssueAssignee(row.id, value || null) : await updateIssueWorkflow(row.id, { [field]: value });
+        const result = Array.isArray(value) ? await updateIssueAssignees(row.id, value) : await updateIssueWorkflow(row.id, { [field]: value });
         if (result.error) setRowErrors((previous) => ({ ...previous, [row.id]: result.error! }));
       } catch { setRowErrors((previous) => ({ ...previous, [row.id]: "Could not confirm the save. Reloading the current server values; retry if needed." })); }
       finally { router.refresh(); }
@@ -142,8 +145,8 @@ export function PagedIssueGrid({ page, users, canEdit, canAssign, signedIn, save
     });
   }
   function applyBulk() {
-    const updates = Object.fromEntries(Object.entries(bulk).filter(([, value]) => value !== ""));
-    if (updates.assigneeId === "none") updates.assigneeId = "";
+    const updates: BulkIssueUpdates = Object.fromEntries(Object.entries(bulk).filter(([, value]) => value !== ""));
+    if (bulkAssignment !== "keep") updates.assigneeIds = bulkAssignment === "clear" ? [] : bulkAssigneeIds;
     setMessage("");
     startTransition(async () => {
       try {
@@ -154,7 +157,7 @@ export function PagedIssueGrid({ page, users, canEdit, canAssign, signedIn, save
         if (!result.error) {
           setSelected(skipped.map((row) => row.id));
           setRowErrors(Object.fromEntries(skipped.map((row) => [row.id, row.error])));
-          if (!skipped.length) setBulk({});
+          if (!skipped.length) { setBulk({}); setBulkAssignment("keep"); setBulkAssigneeIds([]); }
         }
       } catch { setFailure(true); setMessage("Could not confirm the bulk result. Reloading server values before you retry."); }
       finally { router.refresh(); }
@@ -197,8 +200,7 @@ export function PagedIssueGrid({ page, users, canEdit, canAssign, signedIn, save
         <td className="p-2">{canEdit && !context ? <ToneSelect tone={status.tone} icon={status.icon} aria-label={`Status for ${row.title}`} value={row.status} disabled={pending} onChange={(e) => edit(row, "status", e.target.value)}><StatusOptions /></ToneSelect> : <Badge tone={status.tone}>{status.icon} {status.label}</Badge>}</td>
         <td className="p-2">{canEdit && !context ? <ToneSelect tone={PRIORITY_TONE[priorityKey]} icon={priority.icon} aria-label={`Priority for ${row.title}`} value={row.priority} disabled={pending} onChange={(e) => edit(row, "priority", e.target.value)}>{ISSUE_ENUMS.priority.map((v) => <option key={v} value={v}>{PRIORITY_META[normalizePriority(v)].short} · {PRIORITY_META[normalizePriority(v)].label}</option>)}</ToneSelect> : <Badge tone={PRIORITY_TONE[priorityKey]} className="[&_svg]:text-current!">{priority.icon} {priority.short} · {priority.label}</Badge>}</td>
         <td className="p-2"><div className="flex items-center gap-2">
-          <Avatar size="sm" name={row.assigneeName || undefined} className={row.assigneeId ? avatarTone(row.assigneeId) : "border-dashed text-subtle-foreground"} />
-          {canAssign && !context ? <select className={control} aria-label={`Assignee for ${row.title}`} value={row.assigneeId || ""} disabled={pending} onChange={(e) => edit(row, "assigneeId", e.target.value)}><option value="">Unassigned</option>{row.assigneeId && !users.some((u) => u.id === row.assigneeId) && <option value={row.assigneeId}>{row.assigneeName || "Current assignee"}</option>}{users.map((u) => <option key={u.id} value={u.id}>{u.name || "Unnamed"}</option>)}</select> : <span className={`text-xs ${row.assigneeId ? "" : "text-muted-foreground"}`}>{row.assigneeName || "Unassigned"}</span>}
+          {canAssign && !context ? <AssigneePicker label={`Assignees for ${row.title}`} users={[...users, ...row.assignees.filter(user => !users.some(option => option.id === user.id))]} value={row.assignees.map(user => user.id)} disabled={pending} onChange={ids => edit(row, "assigneeIds", ids)} /> : <div className="flex flex-wrap gap-2">{row.assignees.length ? row.assignees.map(user => <span key={user.id} className="inline-flex items-center gap-1 text-xs"><Avatar size="sm" src={user.image} name={user.name} className={avatarTone(user.id)} />{user.name || user.id}</span>) : <span className="text-xs text-muted-foreground">Unassigned</span>}</div>}
         </div></td>
         <td className="whitespace-nowrap p-2 text-xs" suppressHydrationWarning>
           <span className={`inline-flex items-center gap-1 ${due.className}`} title={due.label}>{due.label && <CalendarClock className="h-3.5 w-3.5" />}{formatDate(row.dueDate)}</span>
@@ -243,8 +245,8 @@ export function PagedIssueGrid({ page, users, canEdit, canAssign, signedIn, save
       <span className="text-xs font-semibold text-primary">{selected.length} selected</span>
       <ToneSelect aria-label="Bulk status" tone={bulk.status && isStatus(bulk.status) ? STATUS_META[bulk.status].tone : "neutral"} icon={bulk.status && isStatus(bulk.status) ? STATUS_META[bulk.status].icon : <ListFilter className="h-3.5 w-3.5" />} value={bulk.status || ""} onChange={(e) => setBulk((prev) => ({ ...prev, status: e.target.value }))} disabled={pending}><option value="">Keep status</option><StatusOptions /></ToneSelect>
       {(["type", "priority"] as const).map((field) => <select key={field} aria-label={`Bulk ${field}`} className={control} value={bulk[field] || ""} onChange={(e) => setBulk((prev) => ({ ...prev, [field]: e.target.value }))} disabled={pending}><option value="">Keep {field}</option>{ISSUE_ENUMS[field].map((v) => <option key={v}>{v}</option>)}</select>)}
-      {canAssign && <select aria-label="Bulk assignee" className={control} value={bulk.assigneeId || ""} onChange={(e) => setBulk((prev) => ({ ...prev, assigneeId: e.target.value }))} disabled={pending}><option value="">Keep assignee</option><option value="none">Unassign</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name || "Unnamed"}</option>)}</select>}
-      <Button disabled={pending || selected.length > 100 || !Object.values(bulk).some(Boolean)} onClick={applyBulk}>Apply to selected</Button>
+      {canAssign && <><select aria-label="Bulk assignment" className={control} value={bulkAssignment} onChange={event => setBulkAssignment(event.target.value)} disabled={pending}><option value="keep">Keep assignees</option><option value="set">Replace assignees</option><option value="clear">Unassign everyone</option></select>{bulkAssignment === "set" && <AssigneePicker label="Bulk assignees" users={users} value={bulkAssigneeIds} onChange={setBulkAssigneeIds} disabled={pending} />}</>}
+      <Button disabled={pending || selected.length > 100 || (!Object.values(bulk).some(Boolean) && bulkAssignment === "keep")} onClick={applyBulk}>Apply to selected</Button>
       <Button disabled={pending} onClick={() => setSelected([])}>Clear selection</Button>
       {selected.length > 100 && <p role="alert" className="text-xs text-danger">Select at most 100 issues per update.</p>}
     </div>}

@@ -1,53 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { Select } from "@/components/ui/Select";
-import { setAssignee } from "@/app/actions";
+import { AssigneePicker } from "@/components/issues/AssigneePicker";
+import { updateIssueAssignees } from "@/app/actions";
+import type { IssueAssigneeUser } from "@/lib/issue-assignees";
 
 export function AssigneeSelect({
     issueId,
-    defaultValue,
+    defaultValues,
     users,
 }: {
     issueId: string;
-    defaultValue: string;
-    users: { id: string; name: string | null }[];
+    defaultValues: string[];
+    users: IssueAssigneeUser[];
 }) {
-    const [value, setValue] = useState(defaultValue);
-    const [submitting, setSubmitting] = useState(false);
-
-    const options = [
-        { value: "none", label: "Unassigned" },
-        ...users.map((u) => ({ value: u.id, label: u.name || u.id })),
-    ];
+    const router = useRouter();
+    const [value, setValue] = useState(defaultValues);
+    const [pending, startTransition] = useTransition();
+    const [error, setError] = useState("");
 
     return (
         <form
-            action={async (formData) => {
-                setSubmitting(true);
-                try {
-                    await setAssignee(formData);
-                } finally {
-                    setSubmitting(false);
-                }
+            onSubmit={event => {
+                event.preventDefault();
+                setError("");
+                startTransition(async () => {
+                    try {
+                        const result = await updateIssueAssignees(issueId, value);
+                        if (result.error) setError(result.error);
+                        else router.refresh();
+                    } catch {
+                        setError("Could not save assignees. Please try again.");
+                    }
+                });
             }}
             className="space-y-2"
         >
-            <input type="hidden" name="issueId" value={issueId} />
-            <input type="hidden" name="assigneeId" value={value} />
-            <Select
-                value={value}
-                onChange={setValue}
-                options={options}
-                size="xs"
-                maxVisibleItems={3}
-            />
-            <Button type="submit" variant="primary" size="xs" disabled={submitting}>
-                {submitting && <Loader2 className="h-3 w-3 animate-spin" />}
-                Update assignee
+            <AssigneePicker users={users} value={value} onChange={setValue} disabled={pending} />
+            <Button type="submit" variant="primary" size="xs" disabled={pending}>
+                {pending && <Loader2 className="h-3 w-3 animate-spin" />}
+                Update assignees
             </Button>
+            {error && <p role="alert" className="text-xs text-danger">{error}</p>}
         </form>
     );
 }

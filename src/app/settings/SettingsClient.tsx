@@ -46,6 +46,7 @@ type ExportIssue = {
     status?: string | null;
     reporter?: { name?: string | null } | null;
     assignee?: { name?: string | null } | null;
+    assignees?: { user: { id: string; name: string | null } }[];
     createdAt: string | Date;
 };
 
@@ -173,7 +174,7 @@ export function SettingsClient({
         setIsExporting("csv");
         try {
             const data = (await exportProjectData()) as ExportPayload;
-            const headers = ["ID", "Title", "Type", "Priority", "Status", "Reporter", "Assignee", "Created At"];
+            const headers = ["ID", "Title", "Type", "Priority", "Status", "Reporter", "Assignees", "Created At"];
             const rows = data.issues.map((issue) => [
                 issue.id,
                 `"${(issue.title || "").replace(/"/g, '""')}"`,
@@ -181,7 +182,7 @@ export function SettingsClient({
                 issue.priority || "",
                 issue.status || "",
                 `"${(issue.reporter?.name || "Unknown").replace(/"/g, '""')}"`,
-                `"${(issue.assignee?.name || "Unassigned").replace(/"/g, '""')}"`,
+                `"${(issue.assignees?.map(({ user }) => user.name || user.id).join(", ") || issue.assignee?.name || "Unassigned").replace(/"/g, '""')}"`,
                 new Date(issue.createdAt).toISOString(),
             ]);
             const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");

@@ -52,7 +52,7 @@ export function EditIssueDetailsForm({ issue }: { issue: IssueForEdit }) {
             <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted/40 [&::-webkit-details-marker]:hidden">
                 Edit details
                 <p className="mt-1 text-xs font-normal text-muted-foreground">
-                    Status, type, and assignee live in the sidebar. Use this for narrative fields, tags,
+                    Status, type, and assignees live in the sidebar. Use this for narrative fields, tags,
                     and scheduling.
                 </p>
             </summary>

@@ -61,6 +61,7 @@ import { WorkflowFields } from "./components/WorkflowFields";
 import { AssigneeSelect } from "./components/AssigneeSelect";
 import { IssueActivityTimeline } from "./components/IssueActivityTimeline";
 import { WatchersMeta } from "./components/WatchersMeta";
+import { assigneeUsers, issueAssigneeInclude } from "@/lib/issue-assignees";
 
 export default async function IssueDetailsPage({
     params,
@@ -77,7 +78,7 @@ export default async function IssueDetailsPage({
         where: { OR: [{ publicKey: normalizedRef }, { id: rawRef }] },
         include: {
             reporter: true,
-            assignee: true,
+            assignees: issueAssigneeInclude,
             parentIssue: { select: { id: true, publicKey: true, title: true } },
             subtasks: {
                 select: {
@@ -356,11 +357,12 @@ export default async function IssueDetailsPage({
                     )}
 
                     {canEdit && canAssign && (
-                        <Section title="Assignee" defaultOpen>
+                        <Section title="Assignees" defaultOpen>
                             <AssigneeSelect
+                                key={issue.assignees.map(row => row.userId).join(",")}
                                 issueId={issue.id}
-                                defaultValue={issue.assigneeId ?? "none"}
-                                users={assignableUsers}
+                                defaultValues={issue.assignees.map(row => row.userId)}
+                                users={[...assignableUsers, ...assigneeUsers(issue.assignees).filter(user => !assignableUsers.some(option => option.id === user.id))]}
                             />
                         </Section>
                     )}
@@ -382,15 +384,16 @@ export default async function IssueDetailsPage({
                                 </div>
                             </Meta>
 
-                            <Meta label="Assignee">
-                                {issue.assignee ? (
-                                    <div className="flex items-center gap-2">
+                            <Meta label="Assignees">
+                                {issue.assignees.length > 0 ? (
+                                    <div className="space-y-2">{issue.assignees.map(({ user }) => <div key={user.id} className="flex items-center gap-2">
                                         <Avatar
-                                            src={issue.assignee.image}
-                                            name={issue.assignee.name}
+                                            src={user.image}
+                                            name={user.name}
                                             size="sm"
                                         />
-                                        <span className="text-sm">{issue.assignee.name}</span>
+                                        <span className="text-sm">{user.name || user.id}</span>
+                                    </div>)}
                                     </div>
                                 ) : (
                                     <span className="text-sm text-subtle-foreground">Unassigned</span>

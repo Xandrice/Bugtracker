@@ -21,6 +21,7 @@ import { formatIssueRef } from "@/lib/issue-ids";
 import { StatusBadge } from "@/components/views/DataGrid";
 import { normalizeStatus } from "@/lib/issue-tokens";
 import { Avatar } from "@/components/ui/Avatar";
+import { issueAssigneeInclude } from "@/lib/issue-assignees";
 
 function StatCard({
   label,
@@ -73,17 +74,17 @@ export default async function DashboardPage() {
       where: { priority: "URGENT", status: { not: "DONE" } },
     }),
     db.issue.count({
-      where: { assigneeId: null, status: "OPEN" },
+      where: { assignees: { none: {} }, status: "OPEN" },
     }),
     userId
       ? db.issue.count({
-          where: { assigneeId: userId, status: { not: "DONE" } },
+          where: { assignees: { some: { userId } }, status: { not: "DONE" } },
         })
       : Promise.resolve(0),
     db.issue.findMany({
       take: 8,
       orderBy: { updatedAt: "desc" },
-      include: { assignee: true },
+      include: { assignees: issueAssigneeInclude },
     }),
     db.note.findMany({
       where: { issueId: { not: null }, ...(userId ? {} : { internal: false }) },
@@ -187,12 +188,11 @@ export default async function DashboardPage() {
                         {issue.title}
                       </p>
                     </div>
-                    {issue.assignee ? (
-                      <Avatar
-                        src={issue.assignee.image}
-                        name={issue.assignee.name}
-                        size="xs"
-                      />
+                    {issue.assignees.length > 0 ? (
+                      <span className="flex shrink-0 items-center gap-1" title={issue.assignees.map(({ user }) => user.name || user.id).join(", ")}>
+                        {issue.assignees.slice(0, 3).map(({ user }) => <Avatar key={user.id} src={user.image} name={user.name} size="xs" />)}
+                        {issue.assignees.length > 3 && <span className="text-xs text-muted-foreground">+{issue.assignees.length - 3}</span>}
+                      </span>
                     ) : (
                       <UserCircle2 className="h-4 w-4 text-subtle-foreground" />
                     )}

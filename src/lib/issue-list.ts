@@ -2,10 +2,11 @@ import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { parseIssueListState, type IssueListParams, type IssueListScope, type IssueListState } from "./issue-list-state";
 import { pgTable } from "./pg-schema";
+import type { IssueAssigneeUser } from "./issue-assignees";
 
 export type IssueListRow = {
   id: string; publicKey: string | null; title: string; status: string; type: string; priority: string; severity: string;
-  assigneeId: string | null; assigneeName: string | null; dueDate: Date | null; updatedAt: Date;
+  assignees: IssueAssigneeUser[]; dueDate: Date | null; updatedAt: Date;
   resourceName: string | null; storyPoints: number | null; parentIssueId: string | null;
   matches: boolean; childCount: number;
 };
@@ -16,15 +17,17 @@ export type IssueListPage = { groups: IssueGroup[]; state: IssueListState; group
 export function issueMatchSql(state: IssueListState, scope: IssueListScope, userId: string | null, alias: "i" | "c") {
   const col = (name: string) => Prisma.raw(`${alias}."${name}"`);
   const filters: Prisma.Sql[] = [Prisma.sql`TRUE`];
-  if (scope === "assigned") filters.push(Prisma.sql`${col("assigneeId")} = ${userId}`);
+  const assigned = (id: string | null) => Prisma.sql`EXISTS (SELECT 1 FROM ${pgTable("IssueAssignee")} a WHERE a."issueId" = ${col("id")} AND a."userId" = ${id})`;
+  const unassigned = Prisma.sql`NOT EXISTS (SELECT 1 FROM ${pgTable("IssueAssignee")} a WHERE a."issueId" = ${col("id")})`;
+  if (scope === "assigned") filters.push(assigned(userId));
   if (scope === "watching") filters.push(Prisma.sql`EXISTS (SELECT 1 FROM ${pgTable("IssueWatcher")} w WHERE w."issueId" = ${col("id")} AND w."userId" = ${userId})`);
-  if (scope === "triage") filters.push(Prisma.sql`${col("assigneeId")} IS NULL AND ${col("status")} = 'OPEN'`);
+  if (scope === "triage") filters.push(Prisma.sql`${unassigned} AND ${col("status")} = 'OPEN'`);
   if (state.status === "ACTIVE") filters.push(Prisma.sql`${col("status")} <> 'DONE'`);
   else if (state.status !== "ALL") filters.push(Prisma.sql`${col("status")} = ${state.status}`);
   if (state.priority && state.priority !== "ALL") filters.push(Prisma.sql`${col("priority")} = ${state.priority}`);
   if (state.type !== "ALL") filters.push(Prisma.sql`${col("type")} = ${state.type}`);
-  if (state.assignee === "UNASSIGNED") filters.push(Prisma.sql`${col("assigneeId")} IS NULL`);
-  else if (state.assignee !== "ALL") filters.push(Prisma.sql`${col("assigneeId")} = ${state.assignee}`);
+  if (state.assignee === "UNASSIGNED") filters.push(unassigned);
+  else if (state.assignee !== "ALL") filters.push(assigned(state.assignee));
   if (state.q) {
     const query = `%${state.q.replace(/[\\%_]/g, "\\$&")}%`;
     filters.push(Prisma.sql`(${col("title")} ILIKE ${query} OR COALESCE(${col("publicKey")}, ${col("id")}) ILIKE ${query})`);
@@ -35,14 +38,16 @@ function orderSql(state: IssueListState) {
   const order = {
     id: Prisma.sql`COALESCE(i."publicKey", i.id)`, title: Prisma.sql`i.title`, type: Prisma.sql`i.type`, status: Prisma.sql`i.status`,
     priority: Prisma.sql`CASE i.priority WHEN 'LOW' THEN 1 WHEN 'MEDIUM' THEN 2 WHEN 'HIGH' THEN 3 WHEN 'URGENT' THEN 4 ELSE 0 END`,
-    assignee: Prisma.sql`u.name`, dueDate: Prisma.sql`i."dueDate"`, updatedAt: Prisma.sql`i."updatedAt"`,
+    assignee: Prisma.sql`(SELECT string_agg(COALESCE(u.name, u.id), ', ' ORDER BY COALESCE(u.name, u.id), u.id) FROM ${pgTable("IssueAssignee")} a JOIN ${pgTable("User")} u ON u.id = a."userId" WHERE a."issueId" = i.id)`, dueDate: Prisma.sql`i."dueDate"`, updatedAt: Prisma.sql`i."updatedAt"`,
   }[state.sort];
   return Prisma.sql`${order} ${state.direction === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`} NULLS LAST, i.id ASC`;
 }
-const columns = Prisma.sql`i.id, i."publicKey", i.title, i.status, i.type, i.priority, i.severity, i."assigneeId", u.name AS "assigneeName", i."dueDate", i."updatedAt", i."resourceName", i."storyPoints", i."parentIssueId"`;
+const columns = Prisma.sql`i.id, i."publicKey", i.title, i.status, i.type, i.priority, i.severity,
+  COALESCE((SELECT jsonb_agg(jsonb_build_object('id', u.id, 'name', u.name, 'image', u.image) ORDER BY a."userId") FROM ${pgTable("IssueAssignee")} a JOIN ${pgTable("User")} u ON u.id = a."userId" WHERE a."issueId" = i.id), '[]'::jsonb) AS assignees,
+  i."dueDate", i."updatedAt", i."resourceName", i."storyPoints", i."parentIssueId"`;
 
 export async function getIssueChildren(parentId: string, state: IssueListState, scope: IssueListScope, userId: string | null, offset = 0, client: Prisma.TransactionClient = db): Promise<IssueListRow[]> {
-  return client.$queryRaw<IssueListRow[]>(Prisma.sql`SELECT ${columns}, TRUE AS matches, 0::int AS "childCount" FROM ${pgTable("Issue")} i LEFT JOIN ${pgTable("User")} u ON u.id = i."assigneeId" WHERE i."parentIssueId" = ${parentId} AND ${issueMatchSql(state, scope, userId, "i")} ORDER BY ${orderSql(state)} LIMIT 50 OFFSET ${offset}`);
+  return client.$queryRaw<IssueListRow[]>(Prisma.sql`SELECT ${columns}, TRUE AS matches, 0::int AS "childCount" FROM ${pgTable("Issue")} i WHERE i."parentIssueId" = ${parentId} AND ${issueMatchSql(state, scope, userId, "i")} ORDER BY ${orderSql(state)} LIMIT 50 OFFSET ${offset}`);
 }
 
 export async function getIssueListPage(params: IssueListParams, scope: IssueListScope, userId: string | null): Promise<IssueListPage> {
@@ -56,7 +61,7 @@ export async function getIssueListPage(params: IssueListParams, scope: IssueList
     state.page = Math.min(state.page, pageCount);
     const parents = await tx.$queryRaw<IssueListRow[]>(Prisma.sql`SELECT ${columns}, ${parentMatch} AS matches,
       (SELECT COUNT(*)::int FROM ${pgTable("Issue")} c WHERE c."parentIssueId" = i.id AND ${childMatch}) AS "childCount"
-      FROM ${pgTable("Issue")} i LEFT JOIN ${pgTable("User")} u ON u.id = i."assigneeId" WHERE ${groupWhere}
+      FROM ${pgTable("Issue")} i WHERE ${groupWhere}
       ORDER BY ${orderSql(state)} LIMIT 50 OFFSET ${(state.page - 1) * 50}`);
     const groups: IssueGroup[] = [];
     for (const parent of parents) groups.push({ parent, expanded: !parent.matches, children: !parent.matches ? await getIssueChildren(parent.id, state, scope, userId, 0, tx) : [] });

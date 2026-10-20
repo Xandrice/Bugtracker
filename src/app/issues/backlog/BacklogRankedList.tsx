@@ -41,7 +41,7 @@ import {
 export type BacklogUser = {
     id: string;
     name: string | null;
-    image: string | null;
+    image?: string | null;
 };
 
 export type BacklogIssue = {
@@ -50,7 +50,7 @@ export type BacklogIssue = {
     title: string;
     type: IssueType;
     priority: IssuePriority;
-    assignee: BacklogUser | null;
+    assignees: BacklogUser[];
     dueDate?: Date | string | null;
     storyPoints?: number | null;
     parentIssueRef?: string | null;
@@ -148,15 +148,11 @@ function BacklogRow({
             </Link>
 
             <div className="hidden w-36 shrink-0 items-center gap-1.5 sm:flex">
-                {issue.assignee ? (
+                {issue.assignees.length > 0 ? (
                     <>
-                        <Avatar
-                            src={issue.assignee.image}
-                            name={issue.assignee.name}
-                            size="xs"
-                        />
-                        <span className="truncate text-xs text-foreground">
-                            {issue.assignee.name}
+                        {issue.assignees.slice(0, 2).map(user => <Avatar key={user.id} src={user.image} name={user.name} size="xs" />)}
+                        <span className="truncate text-xs text-foreground" title={issue.assignees.map(user => user.name || user.id).join(", ")}>
+                            {issue.assignees.map(user => user.name || user.id).join(", ")}
                         </span>
                     </>
                 ) : (
@@ -195,9 +191,7 @@ export function BacklogRankedList({
     const assignees = useMemo(() => {
         const map = new Map<string, BacklogUser>();
         for (const issue of items) {
-            if (issue.assignee && !map.has(issue.assignee.id)) {
-                map.set(issue.assignee.id, issue.assignee);
-            }
+            for (const user of issue.assignees) map.set(user.id, user);
         }
         return Array.from(map.values()).sort((a, b) =>
             (a.name || "").localeCompare(b.name || "")
@@ -211,8 +205,8 @@ export function BacklogRankedList({
                 return false;
             }
             if (assigneeFilter === "UNASSIGNED") {
-                if (issue.assignee) return false;
-            } else if (assigneeFilter !== "ALL" && issue.assignee?.id !== assigneeFilter) {
+                if (issue.assignees.length > 0) return false;
+            } else if (assigneeFilter !== "ALL" && !issue.assignees.some(user => user.id === assigneeFilter)) {
                 return false;
             }
             if (!q) return true;

@@ -22,6 +22,17 @@ test('creation and editing validate types, dates, enum values, and estimates', (
   assert.deepEqual(validateIssueFields({ dueDate: '', storyPoints: '' }).data, { dueDate: null, storyPoints: null });
 });
 
+test('multiple assignees validate as a deduplicated set and preserve legacy single-assignee updates', () => {
+  assert.deepEqual(validateIssueFields({ assigneeIds: [' b ', 'a', 'b'] }).data.assigneeIds, ['a', 'b']);
+  assert.deepEqual(validateIssueFields({ assigneeIds: [] }).data.assigneeIds, []);
+  assert.deepEqual(validateIssueFields({ assigneeId: 'staff' }).data.assigneeIds, ['staff']);
+  assert.deepEqual(validateIssueFields({ assigneeId: null }).data.assigneeIds, []);
+  for (const assigneeIds of [null, 'staff', [null], [''], [' '], [123], Array(101).fill('staff')]) {
+    assert.ok(validateIssueFields({ assigneeIds }).fieldErrors.assigneeIds);
+  }
+  assert.equal('assigneeIds' in validateIssueFields({ priority: 'HIGH' }).data, false);
+});
+
 test('template switches retain edited fields and unrelated fields; replacement is explicit', () => {
   const original = { title: 'My title', description: 'Original body', type: 'BUG', tags: 'police' };
   const template = { title: 'New title', description: 'New body', type: 'TASK' };

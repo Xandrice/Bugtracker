@@ -11,15 +11,23 @@ export type IssueFields = {
   priority?: string; severity?: string; dueDate?: Date | null; storyPoints?: number | null;
   tags?: string | null; environment?: string | null; resourceName?: string | null;
   serverVersion?: string | null; reproductionSteps?: string | null; expectedBehavior?: string | null;
-  label?: string | null; assigneeId?: string | null; discordThreadId?: string | null; discordChannelId?: string | null;
+  label?: string | null; assigneeIds?: string[]; discordThreadId?: string | null; discordChannelId?: string | null;
 };
-const textFields = ["description", "tags", "environment", "resourceName", "serverVersion", "reproductionSteps", "expectedBehavior", "label", "assigneeId", "discordThreadId", "discordChannelId"] as const;
+const textFields = ["description", "tags", "environment", "resourceName", "serverVersion", "reproductionSteps", "expectedBehavior", "label", "discordThreadId", "discordChannelId"] as const;
 
 export function validateIssueFields(input: Record<string, unknown>, create = false): {
   data: IssueFields; fieldErrors: Record<string, string>;
 } {
   const data: IssueFields = {};
   const fieldErrors: Record<string, string> = {};
+  if ("assigneeIds" in input || "assigneeId" in input) {
+    const ids = "assigneeIds" in input ? input.assigneeIds : input.assigneeId == null || input.assigneeId === "" ? [] : [input.assigneeId];
+    if (!Array.isArray(ids) || ids.length > 100 || ids.some(id => typeof id !== "string" || !id.trim() || id.length > 200)) {
+      fieldErrors.assigneeIds = "Choose up to 100 valid assignees.";
+    } else {
+      data.assigneeIds = [...new Set(ids.map(id => id.trim()))].sort();
+    }
+  }
   if (create || "title" in input) {
     if (typeof input.title !== "string" || !input.title.trim()) fieldErrors.title = "Enter a title.";
     else data.title = input.title.trim();
@@ -56,7 +64,7 @@ export function validateIssueFields(input: Record<string, unknown>, create = fal
 }
 
 export function issueFieldChanges(previous: Record<string, unknown>, data: IssueFields) {
-  const text = (value: unknown) => value instanceof Date ? value.toISOString() : value == null ? null : String(value);
+  const text = (value: unknown) => value instanceof Date ? value.toISOString() : value == null ? null : Array.isArray(value) ? JSON.stringify(value) : String(value);
   return Object.entries(data).flatMap(([field, value]) => {
     const oldValue = text(previous[field]);
     const newValue = text(value);

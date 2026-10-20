@@ -18,6 +18,8 @@ import { formatIssueRef } from "@/lib/issue-ids";
 import { cn } from "@/components/ui/cn";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
+import { Avatar } from "@/components/ui/Avatar";
+import type { IssueAssigneeUser } from "@/lib/issue-assignees";
 import {
     PRIORITY_META,
     STATUS_META,
@@ -35,6 +37,7 @@ export type KanbanSubtask = {
     status: IssueStatus;
     priority: IssuePriority;
     type: IssueType;
+    assignees: IssueAssigneeUser[];
 };
 
 export type KanbanIssue = {
@@ -48,6 +51,7 @@ export type KanbanIssue = {
     /** Shown when this card is an orphaned subtask (parent not on board). */
     orphanParentRef?: string | null;
     subtasks: KanbanSubtask[];
+    assignees: IssueAssigneeUser[];
 };
 
 const COLUMNS: { status: IssueStatus; title: string }[] = [
@@ -124,6 +128,10 @@ function SubtaskRow({
             >
                 {subtask.title}
             </Link>
+            {subtask.assignees.length > 0 && <span className="flex shrink-0 items-center gap-0.5" title={subtask.assignees.map(user => user.name || user.id).join(", ")}>
+                {subtask.assignees.slice(0, 2).map(user => <Avatar key={user.id} src={user.image} name={user.name} size="xs" />)}
+                {subtask.assignees.length > 2 && <span className="text-[10px] text-muted-foreground">+{subtask.assignees.length - 2}</span>}
+            </span>}
         </div>
     );
 }
@@ -241,6 +249,16 @@ function KanbanCard({
                                     ))}
                                 </div>
                             )}
+                        </div>
+                    )}
+                    {issue.assignees.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5" aria-label="Assignees">
+                            {issue.assignees.map(user => (
+                                <span key={user.id} className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                                    <Avatar src={user.image} name={user.name} size="xs" />
+                                    {user.name || user.id}
+                                </span>
+                            ))}
                         </div>
                     )}
                 </div>

@@ -48,6 +48,7 @@ model User {
   // BugTracker Relations
   reportedIssues Issue[]        @relation("Reporter")
   assignedIssues Issue[]        @relation("Assignee")
+  issueAssignments IssueAssignee[]
   watchedIssues  IssueWatcher[]
   notes          Note[]
   notifications  Notification[] @relation("NotificationRecipient")
@@ -105,8 +106,10 @@ model Issue {
 
   reporterId String
   reporter   User     @relation("Reporter", fields: [reporterId], references: [id])
+  // Compatibility mirror of the first assignee. IssueAssignee is authoritative.
   assigneeId String?
   assignee   User?    @relation("Assignee", fields: [assigneeId], references: [id])
+  assignees  IssueAssignee[]
   notes      Note[]
   activities IssueActivity[]
   watchers   IssueWatcher[]
@@ -161,9 +164,19 @@ model IssueTemplate {
   @@index([archivedAt, sortOrder])
 }
 
-// Explicit issue subscriptions. Reporter and assignee are implicit watchers for
+model IssueAssignee {
+  issueId String
+  userId  String
+  issue   Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, userId])
+  @@index([userId, issueId])
+}
+
+// Explicit issue subscriptions. Reporter and all assignees are implicit watchers for
 // STATUS_CHANGE (they are notified without a row). Watch / Unwatch only manages
-// this table. Comment notifications go to the assignee (existing) plus explicit watchers.
+// this table. Comment notifications go to all assignees plus explicit watchers.
 model IssueWatcher {
   id        String   @id @default(cuid())
   issueId   String

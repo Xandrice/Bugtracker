@@ -14,7 +14,7 @@ async function main() {
       let contents;
       if (args.path === 'next/link') contents = 'import React from "react"; export default function Link({children,prefetch,scroll,replace,...props}) { return React.createElement("a",props,children); }';
       else if (args.path === 'next/navigation') contents = 'export function useRouter(){return window.issueRouter;} export function usePathname(){return location.pathname;}';
-      else contents = ['createIssue', 'saveIssueDetails', 'updateIssueWorkflow', 'updateIssueAssignee', 'bulkUpdateIssues', 'loadIssueChildren', 'saveSavedView', 'deleteSavedView'].map((name) => `export async function ${name}(...args){return window.issueTest.${name}(...args);}`).join('\n');
+      else contents = ['createIssue', 'saveIssueDetails', 'updateIssueWorkflow', 'updateIssueAssignee', 'updateIssueAssignees', 'bulkUpdateIssues', 'loadIssueChildren', 'saveSavedView', 'deleteSavedView'].map((name) => `export async function ${name}(...args){return window.issueTest.${name}(...args);}`).join('\n');
       return { contents, loader: 'jsx', resolveDir: root };
     });
   } }] });
@@ -33,6 +33,29 @@ async function main() {
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     const base = `http://127.0.0.1:${server.address().port}`;
+    fs.mkdirSync(path.join(root, '.next/issue-checks'), { recursive: true });
+    await page.goto(`${base}/assignments`);
+    await page.locator('summary[aria-label="Assignees"]').click();
+    assert.equal(await page.getByRole('checkbox', { name: 'Staff', exact: true }).isChecked(), true);
+    assert.equal(await page.getByRole('checkbox', { name: 'Helper', exact: true }).isChecked(), true);
+    await page.locator('main').screenshot({ path: path.join(root, '.next/issue-checks/assignment-picker.png') });
+    await page.getByRole('checkbox', { name: 'Staff', exact: true }).uncheck();
+    await page.getByRole('button', { name: 'Update assignees', exact: true }).click();
+    await page.waitForFunction(() => window.detailAssigneeIds?.join(',') === 'helper');
+    await page.locator('summary[aria-label="Assignees"]').click();
+    await page.getByRole('checkbox', { name: 'Staff', exact: true }).check();
+    await page.evaluate(() => { window.failAssignment = true; });
+    await page.getByRole('button', { name: 'Update assignees', exact: true }).click();
+    await page.getByRole('alert').filter({ hasText: 'Simulated assignment failure' }).waitFor();
+    assert.equal(await page.getByRole('checkbox', { name: 'Staff', exact: true }).isChecked(), true, 'A failed save preserves the draft selection');
+    await page.evaluate(() => { window.failAssignment = false; });
+    await page.getByRole('button', { name: 'Update assignees', exact: true }).click();
+    await page.waitForFunction(() => window.detailAssigneeIds?.length === 2);
+    await page.locator('summary[aria-label="Assignees"]').click();
+    await page.getByRole('button', { name: 'Clear assignees', exact: true }).click();
+    await page.getByRole('button', { name: 'Update assignees', exact: true }).click();
+    await page.waitForFunction(() => window.detailAssigneeIds?.length === 0);
+    await page.locator('summary[aria-label="Assignees"]').filter({ hasText: 'Unassigned' }).waitFor();
     await page.goto(`${base}/forms`);
     await page.getByLabel('Title', { exact: true }).fill('My unfinished report');
     await page.getByRole('button', { name: 'Issue template', exact: true }).click();
@@ -70,6 +93,18 @@ async function main() {
     await page.getByLabel('Status for child-two', { exact: true }).selectOption('DONE');
     await page.getByText('Simulated update failed', { exact: true }).waitFor();
     assert.equal(await page.getByLabel('Status for child-two', { exact: true }).inputValue(), 'OPEN');
+    const picker = page.locator('details').filter({ has: page.locator('summary[aria-label="Assignees for child-two"]') });
+    await picker.locator('summary').click();
+    await picker.getByRole('checkbox', { name: 'Staff', exact: true }).check();
+    await page.waitForFunction(() => window.lastAssignees?.join(',') === 'staff');
+    await picker.locator('summary').filter({ hasText: 'Staff' }).waitFor();
+    await picker.getByRole('checkbox', { name: 'Helper', exact: true }).check();
+    await page.waitForFunction(() => window.lastAssignees?.length === 2);
+    await picker.locator('summary').filter({ hasText: 'Staff, Helper' }).waitFor();
+    const checkboxBox = await picker.getByRole('checkbox', { name: 'Helper', exact: true }).boundingBox();
+    assert.ok(checkboxBox);
+    assert.ok(await page.evaluate(({ x, y, width, height }) => document.elementFromPoint(x + width / 2, y + height / 2)?.tagName === 'INPUT', checkboxBox), 'Assignee choices must remain visible and clickable inside the scrolling table');
+    await picker.locator('summary').click();
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     await page.getByRole('link', { name: 'next-parent', exact: true }).first().waitFor();
     assert.equal(new URL(page.url()).searchParams.get('page'), '2');
@@ -99,7 +134,7 @@ async function main() {
     await page.getByRole('button', { name: 'Expand subtasks for parent', exact: true }).click();
     await page.screenshot({ path: path.join(root, '.next/issue-checks/issue-table.png'), fullPage: true });
     assert.deepEqual(errors, []);
-    console.log('Browser checks passed: draft preservation, validation recovery, unique form errors, template replacement, context selection, bulk failure recovery, refreshed subtasks, pagination, history, search, saved views, mobile form, keyboard focus.');
+    console.log('Browser checks passed: multiple assignees, removal, clearing, failed assignment recovery, inline picker visibility, draft preservation, validation recovery, context selection, bulk failure recovery, refreshed subtasks, pagination, history, search, saved views, mobile form, keyboard focus.');
   } finally { await browser.close(); await new Promise((resolve) => server.close(resolve)); }
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

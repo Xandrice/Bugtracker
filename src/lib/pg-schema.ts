@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-type PgTable = "Issue" | "User" | "IssueWatcher";
+type PgTable = "Issue" | "User" | "IssueWatcher" | "IssueAssignee";
 
 /** Prisma model queries qualify `?schema=` from DATABASE_URL; `$queryRaw` does not. */
 export function postgresSchema(): string {
