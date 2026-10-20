@@ -128,6 +128,7 @@ export async function globalSearch(query: string) {
 // ---------- Saved views ----------
 
 export type SavedViewFilters = {
+    priority?: string;
   status?: string;
   type?: string;
   assignee?: string;

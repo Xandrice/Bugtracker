@@ -1,3 +1,4 @@
+import { secretsEqual } from "@/lib/secrets";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
@@ -11,7 +12,7 @@ export function authorizeDiscordWebhook(req: Request): NextResponse | null {
     }
 
     const headerSecret = req.headers.get("x-discord-webhook-secret");
-    if (!headerSecret || headerSecret !== secret) {
+    if (!headerSecret || !secretsEqual(headerSecret, secret)) {
         return NextResponse.json(
             { error: "Unauthorized" },
             { status: 401 }

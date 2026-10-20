@@ -1,15 +1,9 @@
+import { after } from "next/server";
 import { db } from "./db";
 import { syncIssueNotesFromDiscord } from "./discordSync";
 
-export async function loadIssueComments(issueId: string) {
-  let syncWarning = false;
-  try {
-    const sync = await syncIssueNotesFromDiscord(issueId);
-    syncWarning = sync.reason === "discord-fetch-failed";
-  } catch (error) {
-    console.error("Failed to sync Discord notes for issue", issueId, error);
-    syncWarning = true;
-  }
-  const notes = await db.note.findMany({ where: { issueId }, include: { author: true }, orderBy: { createdAt: "asc" } });
-  return { notes, syncWarning };
+export async function loadIssueComments(issueId: string, signedIn = false) {
+  const notes = await db.note.findMany({ where: { issueId, ...(signedIn ? {} : { internal: false }) }, include: { author: true }, orderBy: { createdAt: "asc" } });
+  after(async () => { try { await syncIssueNotesFromDiscord(issueId); } catch { console.error("Discord catch-up failed; stored comments are available."); } });
+  return { notes, syncWarning: false };
 }

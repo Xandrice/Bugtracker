@@ -78,6 +78,8 @@ async function main() {
     await page.getByLabel('Search issue titles and keys').fill('police');
     await page.getByLabel('Search issue titles and keys').press('Enter');
     await page.waitForURL(/q=police/);
+    // history.pushState happens before React commits the replacement keyed grid.
+    await page.waitForFunction(() => new URLSearchParams(document.querySelector('main[data-issue-filters]')?.dataset.issueFilters).get('q') === 'police');
     await page.getByLabel('Saved view name').fill('Police bugs');
     await page.getByRole('button', { name: 'Save view', exact: true }).click();
     await page.getByRole('button', { name: 'Delete saved view Police bugs' }).waitFor();

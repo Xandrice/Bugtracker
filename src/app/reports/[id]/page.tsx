@@ -1,3 +1,4 @@
+import { EvidenceLinks } from "@/components/ui/EvidenceLinks";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/../auth";
 import { db } from "@/lib/db";
@@ -70,7 +71,7 @@ export default async function ReportDetailPage({
           </div>
           {report.evidenceLinks && (
             <pre className="rounded-md border border-border bg-muted p-3 text-xs whitespace-pre-wrap">
-              {report.evidenceLinks}
+              <EvidenceLinks content={report.evidenceLinks} />
             </pre>
           )}
           {canManage && (

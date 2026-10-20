@@ -100,6 +100,7 @@ export function SettingsClient({
 
     const [suggestionsForumId, setSuggestionsForumId] = useState("");
     const [bugsForumId, setBugsForumId] = useState("");
+    const [archiveOnResolve, setArchiveOnResolve] = useState(false);
     const [modLogChannelId, setModLogChannelId] = useState("");
 
     useEffect(() => {
@@ -109,6 +110,7 @@ export function SettingsClient({
                 const settings = await getDiscordForumSettings();
                 setSuggestionsForumId(settings.suggestionsForumId);
                 setBugsForumId(settings.bugsForumId);
+                setArchiveOnResolve(settings.archiveOnResolve);
             } catch {}
             try {
                 const modLog = await getModLogSettings();
@@ -120,7 +122,7 @@ export function SettingsClient({
     const saveForumSettings = async () => {
         setIsSavingForums(true);
         try {
-            await saveDiscordForumSettings({ suggestionsForumId, bugsForumId });
+            await saveDiscordForumSettings({ suggestionsForumId, bugsForumId, archiveOnResolve });
             alert("Discord forum settings saved.");
         } catch {
             alert("Failed to save Discord forum settings.");
@@ -256,6 +258,7 @@ export function SettingsClient({
                                         placeholder="e.g. 987654321098765432"
                                     />
                                 </FieldRow>
+                                <label className="flex gap-2 text-sm"><input type="checkbox" checked={archiveOnResolve} onChange={event => setArchiveOnResolve(event.target.checked)} />Archive Discord threads when resolved and reopen them when reopened</label>
                                 <Button
                                     type="button"
                                     onClick={saveForumSettings}
@@ -539,7 +542,7 @@ export function SettingsClient({
                                 </CardHeader>
                                 <CardBody className="space-y-3">
                                     <p className="text-xs text-muted-foreground">
-                                        Once you delete project data there is no going back. All issues, notes, links,
+                                        Once you delete project data there is no going back. All issues, notes, links, mod-log entries, incidents,
                                         and notifications will be cleared.
                                     </p>
                                     <Button

@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/Input";
 import { ReportSubjectFields } from "./ReportSubjectFields";
 import { discordSignInUrl } from "@/lib/auth-urls";
 
-export default async function NewReportPage() {
+export default async function NewReportPage({ searchParams }: { searchParams: Promise<{ description?: string; evidenceLinks?: string; subjectName?: string }> }) {
+  const params = await searchParams;
   const session = await auth();
   if (!session?.user?.id) redirect(discordSignInUrl("/reports/new"));
 
@@ -33,11 +34,12 @@ export default async function NewReportPage() {
               <label className="mb-1 block text-[11px] text-muted-foreground">Details</label>
               <textarea
                 name="description"
+                defaultValue={params.description?.slice(0, 10000)}
                 placeholder="What happened, the context, and any outcome…"
                 className="min-h-[120px] w-full rounded-md border border-input bg-elevated px-3 py-2 text-sm focus-ring"
               />
             </div>
-            <ReportSubjectFields members={members} />
+            <ReportSubjectFields members={members} initialName={params.subjectName?.slice(0, 200)} />
             <div>
               <label className="mb-1 block text-[11px] text-muted-foreground">
                 Reporting staff / source (optional)
@@ -65,6 +67,7 @@ export default async function NewReportPage() {
               </label>
               <textarea
                 name="evidenceLinks"
+                defaultValue={params.evidenceLinks?.slice(0, 10000)}
                 placeholder="Screenshots, clips, Discord message links…"
                 className="min-h-[80px] w-full rounded-md border border-input bg-elevated px-3 py-2 text-sm focus-ring"
               />

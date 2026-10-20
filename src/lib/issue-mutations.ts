@@ -1,3 +1,4 @@
+import { syncDiscordIssueStatus } from "./discord-chat";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { canAssignIssues, type PermissionContext } from "@/lib/permissions";
@@ -22,7 +23,7 @@ export async function mutateIssue(issueId: string, input: Record<string, unknown
       await tx.$queryRaw`SELECT id FROM ${pgTable("Issue")} WHERE id = ${issueId} FOR UPDATE`;
       const previous = await tx.issue.findUnique({ where: { id: issueId }, include: { assignee: { select: { name: true } } } });
       if (!previous) return null;
-      let assigneeName = "Unassigned";
+      let assigneeName: string | null = null;
       if (data.assigneeId) {
         const assignee = await tx.user.findUnique({ where: { id: data.assigneeId }, select: { name: true } });
         if (!assignee) throw new Error("ASSIGNEE_NOT_FOUND");
@@ -37,7 +38,7 @@ export async function mutateIssue(issueId: string, input: Record<string, unknown
           issueId, actorId: actor.userId,
           action: change.field === "status" ? "STATUS_CHANGE" : change.field === "assigneeId" ? "ASSIGNEE_CHANGE" : "FIELD_CHANGE",
           field: change.field === "assigneeId" ? "assignee" : change.field,
-          oldValue: change.field === "assigneeId" ? previous.assignee?.name || "Unassigned" : change.oldValue,
+          oldValue: change.field === "assigneeId" ? previous.assignee?.name ?? null : change.oldValue,
           newValue: change.field === "assigneeId" ? assigneeName : change.newValue,
         } });
       }
@@ -46,6 +47,7 @@ export async function mutateIssue(issueId: string, input: Record<string, unknown
     if (!committed) return { error: "Issue not found." };
     for (const change of committed.changes) {
       try {
+        if (change.field === "status") await syncDiscordIssueStatus(issueId, change.newValue || "OPEN", actor.name || "Staff");
         if (change.field === "status") await recordActivity({ issueId, actorId: actor.userId, actorName: actor.name, action: "STATUS_CHANGE", ...change, notifyStatusChange: true, activityAlreadyRecorded: true });
         if (change.field === "assigneeId" && change.newValue && change.newValue !== actor.userId) {
           const ref = formatIssueRef(committed.issue.publicKey, issueId);

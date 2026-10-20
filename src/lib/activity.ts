@@ -115,38 +115,4 @@ export async function recordActivity(input: {
   }
 }
 
-export function formatActivityLabel(activity: {
-  action: string;
-  field?: string | null;
-  oldValue?: string | null;
-  newValue?: string | null;
-}): string {
-  const field = activity.field;
-  const oldVal = activity.oldValue ?? "—";
-  const newVal = activity.newValue ?? "—";
-
-  switch (activity.action) {
-    case "CREATED":
-      return "Created this issue";
-    case "STATUS_CHANGE":
-      return `Changed status from ${oldVal} to ${newVal}`;
-    case "ASSIGNEE_CHANGE":
-      return newVal === "—" || !activity.newValue
-        ? "Unassigned this issue"
-        : `Assigned to ${newVal}`;
-    case "FIELD_CHANGE":
-      return field
-        ? `Changed ${field} from ${oldVal} to ${newVal}`
-        : `Updated ${newVal}`;
-    case "LINK_ADDED":
-      return `Linked issue ${newVal}`;
-    case "LINK_REMOVED":
-      return `Removed link to ${oldVal}`;
-    case "SUBTASK_ADDED":
-      return `Added subtask ${newVal}`;
-    case "SUBTASK_REMOVED":
-      return `Removed subtask ${oldVal}`;
-    default:
-      return activity.action.replace(/_/g, " ").toLowerCase();
-  }
-}
+export { formatActivityLabel } from "./activity-labels";

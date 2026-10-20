@@ -1,5 +1,7 @@
 "use server";
 
+import { after } from "next/server";
+import { deliverIssueComment, deleteDiscordIssueComment } from "@/lib/discord-chat";
 import { db } from "@/lib/db";
 import { auth } from "@/../auth";
 import { Prisma } from "@prisma/client";
@@ -20,6 +22,7 @@ import {
     canManageMembers,
     canManageNote,
     getPermissionContext,
+    legacyStaffPermissionsForRole,
     PROJECT_ROLES,
     requirePermission,
 } from "@/lib/permissions";
@@ -117,7 +120,9 @@ function parseStaffPermissionKey(value: FormDataEntryValue | null): StaffPermiss
         key !== "vehicles.view" &&
         key !== "vehicles.manage" &&
         key !== "economy.view" &&
-        key !== "schema.refresh"
+        key !== "schema.refresh" &&
+        key !== "logs.view" &&
+        key !== "logs.advanced"
     ) {
         throw new Error("Invalid staff permission.");
     }
@@ -207,6 +212,7 @@ async function notifyMentionedUsers(input: {
     targetLink: string;
     issueId?: string | null;
     pageTitle?: string;
+    internal?: boolean;
 }) {
     const mentions = input.content.match(/@([A-Za-z0-9_.-]+)/g);
     if (!mentions || mentions.length === 0) return;
@@ -247,7 +253,7 @@ async function notifyMentionedUsers(input: {
             body: snippet,
             link: input.targetLink.replace(baseUrl, "") || input.targetLink,
             issueId: input.issueId || null,
-            discordMessage: target.discordId ? dmBody : null,
+            discordMessage: !input.internal && target.discordId ? dmBody : null,
             // Self-mentions ARE intentional — typing @yourself counts as opting in.
             notifySelf: true,
         });
@@ -596,15 +602,22 @@ export async function createTeamNote(formData: FormData) {
     const senderName = session.user.name || "Someone";
 
     if (issueId) {
-        await db.note.create({
+        const linked = await db.issue.findUnique({ where: { id: issueId }, select: { discordThreadId: true } });
+        if (!linked) throw new Error("Issue not found.");
+        const internal = formData.get("internal") === "true";
+        const sendToDiscord = !!linked.discordThreadId && !internal;
+        const note = await db.note.create({
             data: {
                 title,
                 content,
                 authorId: session.user.id,
+                internal,
+                discordSyncStatus: sendToDiscord ? "PENDING" : "NONE",
                 issueId,
             }
         });
 
+        if (sendToDiscord) after(() => deliverIssueComment(note.id));
         const issueRef = await getIssuePublicRef(issueId);
         const [issue, watcherIds] = await Promise.all([
             db.issue.findUnique({
@@ -621,6 +634,7 @@ export async function createTeamNote(formData: FormData) {
             targetLink: `${baseUrl}/issues/${issueRef}`,
             issueId,
             pageTitle: issue?.title,
+            internal,
         });
 
         // Comments already notify the assignee; explicit watchers share that path.
@@ -639,7 +653,7 @@ export async function createTeamNote(formData: FormData) {
                     body: snippet,
                     link: `/issues/${issueRef}`,
                     issueId,
-                    discordMessage: dmBody,
+                    discordMessage: internal ? null : dmBody,
                 });
             }
         }
@@ -981,11 +995,11 @@ export async function toggleStaffRolePermissionAction(formData: FormData) {
 
     const role = await db.staffRole.findUnique({
         where: { id: roleId },
-        select: { permissions: true },
+        select: { permissions: true, baseRole: true },
     });
     if (!role) throw new Error("Role not found.");
 
-    const current = normalizeStaffPanelPermissions(role.permissions);
+    const current = normalizeStaffPanelPermissions(role.permissions, legacyStaffPermissionsForRole(parseProjectRole(role.baseRole)));
     const next = setStaffPermissionValue(current, key, !getStaffPermissionValue(current, key));
 
     await db.staffRole.update({
@@ -1032,12 +1046,13 @@ export async function toggleMemberStaffPermissionOverrideAction(formData: FormDa
         where: { id: memberId },
         select: {
             staffPermissionOverrides: true,
-            staffRole: { select: { permissions: true } },
+            role: true,
+            staffRole: { select: { permissions: true, baseRole: true } },
         },
     });
     if (!member) throw new Error("Member not found.");
 
-    const rolePermissions = normalizeStaffPanelPermissions(member.staffRole?.permissions);
+    const rolePermissions = normalizeStaffPanelPermissions(member.staffRole?.permissions, legacyStaffPermissionsForRole(parseProjectRole(member.staffRole?.baseRole || member.role)));
     const effectivePermissions = mergeStaffPanelPermissions(
         rolePermissions,
         member.staffPermissionOverrides
@@ -1133,6 +1148,10 @@ const DISCORD_FORUM_SUGGESTIONS_KEY = "discord.forum.suggestions";
 const DISCORD_FORUM_BUGS_KEY = "discord.forum.bugs";
 
 export async function getDiscordForumSettings() {
+    const actor = await getActorContext();
+    if (!actor) redirectToSignIn();
+    const denied = requirePermission(canExportData(actor.permissions));
+    if (denied) throw new Error(denied.error);
     const suggestions = await (db as any).appSetting.findUnique({
         where: { key: DISCORD_FORUM_SUGGESTIONS_KEY },
         select: { value: true },
@@ -1143,18 +1162,20 @@ export async function getDiscordForumSettings() {
     });
 
     return {
+        archiveOnResolve: (await db.appSetting.findUnique({ where: { key: "discord.archiveOnResolve" } }))?.value === "true",
         suggestionsForumId: suggestions?.value || "",
         bugsForumId: bugs?.value || "",
     };
 }
 
-export async function saveDiscordForumSettings(input: { suggestionsForumId?: string; bugsForumId?: string }) {
+export async function saveDiscordForumSettings(input: { suggestionsForumId?: string; bugsForumId?: string; archiveOnResolve?: boolean }) {
     const actor = await getActorContext();
     if (!actor) redirectToSignIn();
 
     const denied = requirePermission(canExportData(actor.permissions));
     if (denied) throw new Error(denied.error);
 
+    if (typeof input.archiveOnResolve === "boolean") await db.appSetting.upsert({ where: { key: "discord.archiveOnResolve" }, create: { key: "discord.archiveOnResolve", value: String(input.archiveOnResolve) }, update: { value: String(input.archiveOnResolve) } });
     const cleanSuggestions = (input.suggestionsForumId || "").trim();
     const cleanBugs = (input.bugsForumId || "").trim();
 
@@ -1199,7 +1220,7 @@ export async function updateIssueComment(formData: FormData) {
 
     const note = await db.note.findFirst({
         where: { id: noteId, issueId },
-        select: { id: true, authorId: true, source: true },
+        select: { id: true, authorId: true, source: true, internal: true, discordMessageId: true, discordSyncStatus: true, updatedAt: true },
     });
     if (!note) throw new Error("Comment not found");
     if (note.source === "DISCORD") {
@@ -1211,13 +1232,14 @@ export async function updateIssueComment(formData: FormData) {
         throw new Error("You do not have permission to edit this comment.");
     }
 
-    await db.note.update({
-        where: { id: noteId },
-        data: { content },
+    const updated = await db.note.updateMany({
+        where: { id: noteId, updatedAt: note.updatedAt, discordSyncStatus: { notIn: ["SENDING", "DELETING"] } },
+        data: { content, ...(!note.internal && (note.discordMessageId || note.discordSyncStatus !== "NONE") ? { discordSyncStatus: "PENDING" } : {}) },
     });
+    if (!updated.count) throw new Error("This comment changed or is syncing. Refresh and try again.");
+    if (!note.internal && (note.discordMessageId || note.discordSyncStatus !== "NONE")) after(() => deliverIssueComment(noteId));
 
     revalidatePath(`/issues/${issueId}`);
-    await redirectToIssue(issueId);
 }
 
 export async function deleteIssueComment(formData: FormData) {
@@ -1230,7 +1252,7 @@ export async function deleteIssueComment(formData: FormData) {
 
     const note = await db.note.findFirst({
         where: { id: noteId, issueId },
-        select: { id: true, authorId: true },
+        select: { id: true, authorId: true, discordSyncStatus: true },
     });
     if (!note) throw new Error("Comment not found");
 
@@ -1239,10 +1261,10 @@ export async function deleteIssueComment(formData: FormData) {
         throw new Error("You do not have permission to delete this comment.");
     }
 
-    await db.note.delete({ where: { id: noteId } });
+    if (note.discordSyncStatus === "SENDING") throw new Error("This comment is being sent. Please try again in a moment.");
+    await deleteDiscordIssueComment(noteId);
 
     revalidatePath(`/issues/${issueId}`);
-    await redirectToIssue(issueId);
 }
 
 // ---------- Notifications ----------

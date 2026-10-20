@@ -67,12 +67,12 @@ export function resolvePlayerLogRange(params: PlayerLogParams, now = Date.now())
 export function playerCitizenTagPattern(identifier: string): string {
   if (!identifier.trim() || /[,\r\n]/.test(identifier)) throw new Error("This player has no usable Citizen ID for log matching.");
   const escaped = identifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return `(^|,)citizenid:${escaped}(,|$)`;
+  return `(^|,)\\s*citizenid:${escaped}(,|$)`;
 }
 
 export function buildPlayerLogsQuery(identifier: string, limit: number): string {
   if (![200, 500, 1000].includes(limit)) throw new Error("Invalid log limit.");
-  return `tags:~${JSON.stringify(playerCitizenTagPattern(identifier))} | sort by (_time) desc | limit ${limit}`;
+  return `tags:${JSON.stringify(`citizenid:${identifier}`)} AND tags:~${JSON.stringify(playerCitizenTagPattern(identifier))} | sort by (_time) desc | limit ${limit}`;
 }
 
 export function playerProfileTab(params: PlayerLogParams, allowedLogs: boolean) {

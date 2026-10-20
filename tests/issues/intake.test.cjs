@@ -49,37 +49,29 @@ test('saved views return a real identifier and delete only the current user reco
   assert.deepEqual(removed, { id: 'persisted-id', userId: 'staff' });
 });
 
-test('comments are read after sync and stored comments survive sync failures', async () => {
-  const events = [];
-  const stored = [];
-  let fail = false;
-  const load = loader({ 'src/lib/db': { db: { note: { findMany: async () => { events.push('read'); return stored; } } } }, './discordSync': {
-    syncIssueNotesFromDiscord: async () => { events.push('sync'); if (fail) throw new Error('offline'); stored.push({ id: 'new-comment' }); return { reason: 'ok' }; },
-  } });
+test('comments render from the database before a non-blocking catch-up, and public reads hide internal notes', async () => {
+  const events = []; const callbacks = []; let filter;
+  const stored = [{ id: 'stored' }];
+  const load = loader({ 'next/server': { after: callback => callbacks.push(callback) }, 'src/lib/db': { db: { note: { findMany: async ({where}) => { filter = where; events.push('read'); return stored; } } } }, './discordSync': { syncIssueNotesFromDiscord: async () => { events.push('sync'); throw new Error('offline'); } } });
   const { loadIssueComments } = load('src/lib/issue-comments.ts');
-  assert.equal((await loadIssueComments('issue')).notes[0].id, 'new-comment');
-  assert.deepEqual(events, ['sync', 'read']);
-  fail = true;
-  const result = await loadIssueComments('issue');
-  assert.equal(result.notes.length, 1);
-  assert.equal(result.syncWarning, true);
+  assert.equal((await loadIssueComments('issue')).notes[0].id, 'stored'); assert.equal(filter.internal, false); assert.deepEqual(events, ['read']);
+  await callbacks[0](); assert.deepEqual(events, ['read', 'sync']);
+  await loadIssueComments('issue', true); assert.equal(filter.internal, undefined);
 });
 
-test('Discord imports remain deduplicated across repeated refreshes', async () => {
-  const stored = [];
-  const message = { id: 'message', timestamp: '2026-09-07T00:00:00Z', content: 'Reproduction details', author: { id: 'discord-user', username: 'Reporter' } };
+test('Discord imports remain deduplicated and background sync is throttled across refreshes', async () => {
+  const stored = []; let syncedAt = null; let fetches = 0;
+  const message = { id: 'message', channel_id: 'thread', timestamp: '2026-09-07T00:00:00Z', content: 'Reproduction details', author: { id: 'discord-user', username: 'Reporter' } };
   const db = {
-    issue: { findUnique: async () => ({ id: 'issue', discordThreadId: 'thread' }) },
+    appSetting: { findUnique: async () => null, deleteMany: async () => {} },
+    issue: { findUnique: async () => ({ id: 'issue', discordThreadId: 'thread', discordSyncedAt: syncedAt }), updateMany: async ({ data }) => { if (syncedAt) return { count: 0 }; syncedAt = data.discordSyncedAt; return { count: 1 }; } },
     account: { findUnique: async () => ({ user: { id: 'author' } }) },
-    user: { update: async () => ({ id: 'author' }) },
-    note: { findMany: async ({ where }) => where.content ? [] : stored, create: async ({ data }) => stored.push({ id: 'note', ...data }), update: async () => {} },
+    note: { findUnique: async ({where}) => stored.find(note => note.discordMessageId === where.discordMessageId), create: async ({ data }) => stored.push({ id: 'note', ...data }), update: async () => {} },
   };
-  const load = loader({ 'src/lib/db': { db }, '@/lib/discord': { getDiscordChannelMessages: async () => [message], getDiscordChannelMessage: async () => message } });
+  const load = loader({ 'src/lib/db': { db }, './discord-chat': { isOwnDiscordWebhook: async () => false }, './discord': { getDiscordChannelMessages: async () => { fetches++; return [message]; }, getDiscordChannelMessage: async () => message } });
   const { syncIssueNotesFromDiscord } = load('src/lib/discordSync.ts');
-  await syncIssueNotesFromDiscord('issue');
-  await syncIssueNotesFromDiscord('issue');
-  assert.equal(stored.length, 1);
-  assert.equal(stored[0].discordMessageId, 'message');
+  await syncIssueNotesFromDiscord('issue'); await syncIssueNotesFromDiscord('issue');
+  assert.equal(stored.length, 1); assert.equal(stored[0].discordMessageId, 'message'); assert.equal(fetches, 1);
 });
 
 test('Discord message requests carry a ten-second abort signal and fail safely', async (t) => {

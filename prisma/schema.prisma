@@ -101,6 +101,7 @@ model Issue {
   discordChannelId String?
   discordThreadId  String?   @unique
   discordMessageId String?
+  discordSyncedAt  DateTime?
 
   reporterId String
   reporter   User     @relation("Reporter", fields: [reporterId], references: [id])
@@ -221,6 +222,9 @@ model Note {
   category         String?
   parentId         String?
   source           String  @default("APP") // APP, DISCORD
+  internal         Boolean @default(false)
+  discordSyncStatus String @default("NONE") // NONE, PENDING, SENDING, SENT, FAILED
+  discordDelivery  Json? // Per-part message IDs and transport, for retries and long replies
   discordMessageId String? @unique
   discordAuthorId  String?
   discordAuthorTag String?
@@ -233,6 +237,7 @@ model Note {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  @@index([issueId, internal, createdAt])
 }
 
 model ProjectMember {

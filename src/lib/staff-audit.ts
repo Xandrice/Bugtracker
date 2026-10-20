@@ -104,17 +104,19 @@ export async function recordStaffAuditEvent(
 }
 
 export async function listRecentStaffAuditEvents(
-  limit = 15
+  limit = 15,
+  access = { players: true, vehicles: true }
 ): Promise<StaffAuditEventView[]> {
   try {
     const events = await db.staffAuditEvent.findMany({
+      where: { targetType: { in: [ ...(access.players ? ["player"] : []), ...(access.vehicles ? ["vehicle"] : []) ] } },
       orderBy: { createdAt: "desc" },
       take: Math.max(1, Math.min(limit, 50)),
     });
     return events.map(mapAuditEvent);
   } catch (err) {
     console.error("Failed to load staff audit events", err);
-    return [];
+    throw new Error("Staff write history could not be loaded. Please retry.");
   }
 }
 
@@ -148,7 +150,7 @@ export async function listPlayerStaffAuditEvents(input: {
     return events.map(mapAuditEvent);
   } catch (err) {
     console.error("Failed to load player staff audit events", err);
-    return [];
+    throw new Error("Staff write history could not be loaded. Please retry.");
   }
 }
 

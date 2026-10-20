@@ -5,9 +5,9 @@ import { Input } from "@/components/ui/Input";
 
 type Member = { discordId: string; name: string | null };
 
-export function ReportSubjectFields({ members }: { members: Member[] }) {
+export function ReportSubjectFields({ members, initialName = "" }: { members: Member[]; initialName?: string }) {
   const [discordId, setDiscordId] = useState("");
-  const [name, setName] = useState("");
+  const [name, setName] = useState(initialName);
 
   const handleSelect = (value: string) => {
     if (!value) return;

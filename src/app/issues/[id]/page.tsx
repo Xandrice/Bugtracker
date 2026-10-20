@@ -20,6 +20,9 @@ import {
     toggleIssueResolved,
     updateIssueDiscordPost,
 } from "@/app/actions";
+import { MarkdownContent } from "@/components/ui/MarkdownContent";
+import { IssueCommentPoller } from "@/components/issues/IssueCommentPoller";
+import { StartDiscordThread } from "@/components/issues/StartDiscordThread";
 import CommentForm from "./components/CommentForm";
 import DeleteIssueForm from "./components/DeleteIssueForm";
 import { EditIssueDetailsForm } from "./components/EditIssueDetailsForm";
@@ -110,7 +113,7 @@ export default async function IssueDetailsPage({
         redirect(`/issues/${publicIssueRef}`);
     }
 
-    const { notes: issueNotes, syncWarning: commentSyncWarning } = await loadIssueComments(issue.id);
+    const { notes: issueNotes, syncWarning: commentSyncWarning } = await loadIssueComments(issue.id, !!session?.user?.id);
     const assignableUsers = await getStaffUsers();
     const permissionContext = await getPermissionContext(session?.user?.id);
     const canEdit = !!session?.user?.id;
@@ -197,7 +200,7 @@ export default async function IssueDetailsPage({
                                 Description
                             </div>
                             <div className="prose prose-sm dark:prose-invert max-w-none p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-                                {issue.description}
+                                <MarkdownContent content={issue.description} />
                             </div>
                         </div>
                     )}
@@ -289,6 +292,11 @@ export default async function IssueDetailsPage({
                                         content: note.content,
                                         createdAt: note.createdAt.toISOString(),
                                         source: note.source,
+                                        internal: note.internal,
+                                        discordSyncStatus: note.discordSyncStatus,
+                                        discordMessageId: note.discordMessageId,
+                                        discordThreadId: issue.discordThreadId,
+                                        discordGuildId: typeof note.discordDelivery?.guildId === "string" ? note.discordDelivery.guildId : null,
                                         author: {
                                             id: note.author.id,
                                             name: note.author.name,
@@ -308,6 +316,7 @@ export default async function IssueDetailsPage({
 
                         {canEdit && (
                             <CommentForm
+                                linkedDiscord={!!issue.discordThreadId}
                                 issueId={issue.id}
                                 currentUserImage={session?.user?.image || null}
                                 users={assignableUsers}
@@ -320,6 +329,8 @@ export default async function IssueDetailsPage({
                             <History className="h-4 w-4 text-muted-foreground" />
                             Change log
                         </h3>
+                        <IssueCommentPoller />
+                        {canAssign && !issue.discordThreadId && <StartDiscordThread issueId={issue.id} />}
                         <IssueActivityTimeline issueId={issue.id} />
                     </div>
                 </div>

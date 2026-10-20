@@ -4,7 +4,8 @@ import { auth } from "@/../auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
-  canAccessAnyStaffTool,
+  canViewStaffPlayers,
+  canViewStaffEconomy,
   canManageStaffPlayers,
   canManageStaffVehicles,
   canRefreshStaffSchema,
@@ -152,7 +153,7 @@ export async function refreshStaffSchemaAction() {
 }
 
 export async function captureSnapshotAction() {
-  await ensureStaffActor(canAccessAnyStaffTool);
+  await ensureStaffActor(context => canViewStaffPlayers(context) && canViewStaffEconomy(context));
   await captureMetricSnapshot();
   revalidatePath("/staff-tools/dashboard");
 }

@@ -21,6 +21,7 @@ export function issueMatchSql(state: IssueListState, scope: IssueListScope, user
   if (scope === "triage") filters.push(Prisma.sql`${col("assigneeId")} IS NULL AND ${col("status")} = 'OPEN'`);
   if (state.status === "ACTIVE") filters.push(Prisma.sql`${col("status")} <> 'DONE'`);
   else if (state.status !== "ALL") filters.push(Prisma.sql`${col("status")} = ${state.status}`);
+  if (state.priority && state.priority !== "ALL") filters.push(Prisma.sql`${col("priority")} = ${state.priority}`);
   if (state.type !== "ALL") filters.push(Prisma.sql`${col("type")} = ${state.type}`);
   if (state.assignee === "UNASSIGNED") filters.push(Prisma.sql`${col("assigneeId")} IS NULL`);
   else if (state.assignee !== "ALL") filters.push(Prisma.sql`${col("assigneeId")} = ${state.assignee}`);

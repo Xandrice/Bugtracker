@@ -64,10 +64,10 @@ function toProjectRole(value: string | null | undefined): ProjectRole | null {
   return PROJECT_ROLES.includes(value as ProjectRole) ? (value as ProjectRole) : null;
 }
 
-function legacyStaffPermissionsForRole(role: ProjectRole | null): StaffPanelPermissions {
-  return role && STAFF_TOOL_ROLES.has(role)
-    ? FULL_STAFF_PANEL_PERMISSIONS
-    : EMPTY_STAFF_PANEL_PERMISSIONS;
+export function legacyStaffPermissionsForRole(value: string | null): StaffPanelPermissions {
+  const role = toProjectRole(value);
+  const base = role && STAFF_TOOL_ROLES.has(role) ? FULL_STAFF_PANEL_PERMISSIONS : EMPTY_STAFF_PANEL_PERMISSIONS;
+  return { ...base, logs: { view: role === "Moderator" || (!!role && LOG_VIEW_ROLES.has(role)), advanced: role === "Owner" || role === "Admin" } };
 }
 
 export async function getPermissionContext(
@@ -244,7 +244,11 @@ export function canRefreshStaffSchema(context: PermissionContext | null): boolea
 }
 
 export function canViewLogs(context: PermissionContext | null): boolean {
-  return hasRole(context, LOG_VIEW_ROLES);
+  return context?.staffPermissions.logs.view ?? hasRole(context, LOG_VIEW_ROLES);
+}
+
+export function canUseAdvancedLogs(context: PermissionContext | null): boolean {
+  return context?.staffPermissions.logs.advanced ?? false;
 }
 
 export function canManageNote(

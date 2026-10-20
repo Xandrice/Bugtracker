@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { PlayerLogControls } from "@/components/staff/PlayerLogControls";
 import { PlayerLogs } from "@/components/staff/PlayerLogs";
 import { playerProfileTab, readLogParam, type PlayerLogParams } from "@/lib/player-logs";
 import Image from "next/image";
@@ -196,7 +195,7 @@ export default async function StaffPlayerDetailPage({
     playerIdentifier: player.identifier,
     vehicleKeys: player.vehicles.map((vehicle) => vehicle.key),
     limit: 20,
-  }) : [];
+  }).catch(() => null) : [];
 
   const showInventory =
     !!inventory &&
@@ -319,6 +318,7 @@ export default async function StaffPlayerDetailPage({
           </Card>
         )}
 
+        {allowedLogs && <Card><CardHeader><CardTitle>Recent activity</CardTitle></CardHeader><CardBody><Suspense fallback={<p role="status" className="text-xs text-muted-foreground">Loading recent activity?</p>}><PlayerLogs identifier={player.identifier} params={{}} permissions={permissions} recent /></Suspense></CardBody></Card>}
         {player.discordId && (
           <Card>
             <CardHeader>
@@ -799,7 +799,7 @@ export default async function StaffPlayerDetailPage({
         </CardHeader>
         <CardBody>
           <StaffAuditList
-            events={auditEvents}
+            events={auditEvents || []} error={auditEvents === null ? "Could not load staff writes. Please refresh to retry." : undefined}
             emptyLabel="No dashboard ban, whitelist, or vehicle writes for this player yet."
           />
         </CardBody>
@@ -811,8 +811,7 @@ export default async function StaffPlayerDetailPage({
         <Card>
           <CardHeader><CardTitle>Player logs</CardTitle></CardHeader>
           <CardBody className="space-y-4">
-            <PlayerLogControls key={filterQuery.toString()} params={filters} />
-            <Suspense key={`${player.identifier}-${filterQuery}`} fallback={<p role="status" className="text-sm text-muted-foreground">Loading player logs?</p>}>
+            <Suspense key={`${player.identifier}-${filterQuery}`} fallback={<p role="status" className="text-sm text-muted-foreground">Loading player logs…</p>}>
               <PlayerLogs identifier={player.identifier} params={filters} permissions={permissions} />
             </Suspense>
           </CardBody>

@@ -68,26 +68,27 @@ At minimum set:
 Optional:
 
 - `NEXTAUTH_URL` (not required on Vercel, but can be set to your production URL)
-- `DISCORD_BOT_TOKEN` (required for DM mentions and posting tracker notices in Discord forum posts)
+- `DISCORD_BOT_TOKEN` (required for Discord replies, thread management, and DM mentions)
 - `DISCORD_PUBLIC_KEY` (if receiving signed Discord interaction-style webhook requests)
 - `DISCORD_WEBHOOK_SECRET` (shared-secret fallback for relayed bot gateway events)
 - `VICTORIALOGS_URL` (required for in-panel logs viewer integration)
 - `VICTORIALOGS_BEARER_TOKEN` (optional bearer auth for VictoriaLogs)
 - `VICTORIALOGS_USERNAME` / `VICTORIALOGS_PASSWORD` (optional basic auth for VictoriaLogs)
 - `VICTORIALOGS_ACCOUNT_ID` / `VICTORIALOGS_PROJECT_ID` (optional default tenant headers)
-- `LOG_VIEW_ROLES` (comma-separated roles allowed to view `/logs` and player profile logs; default `Owner,Admin`)
+- `LOG_VIEW_ROLES` (legacy fallback for log viewing; role permissions take precedence)
+- `CRON_SECRET` (required in production for the daily snapshot route)
 
 ### Player profile logs
 
-Player profiles open on Overview, with Assets, History, and Logs sections. The Logs section additionally requires player staff-tool access and queries VictoriaLogs only when opened. It matches a complete `citizenid:<profile identifier>` token in the comma-separated `tags` field; entries without that tag are excluded. It does not identify players by their temporary `source` ID.
+Player profiles open on Overview, with Assets, History, and Logs sections. The shared guided explorer requires `logs.view` and player staff-tool access. Searches are locked to the player's citizenid, license, and Discord identifiers, matching either separate fields or complete tokens in `tags`. Temporary server source IDs are never used. Overview also shows ten recent events from the last 24 hours.
 
-Use a preset range, a custom duration such as `90m` or `1h30m`, or custom start/end dates with seconds. Dates use the browser's timezone and are sent to the backend in UTC. Apply saves filters in the URL; Refresh reruns the applied range. Results show the newest 200 entries by default, with limits up to 1,000 and expandable event details.
+Use a preset range, a custom duration such as `90m` or `1h30m`, or custom start/end dates with seconds. Dates use the browser's timezone and are sent to the backend in UTC. Searches save filters in the URL. Results load in pages of 200, with timeline zoom, event details, evidence draft links, and CSV export of up to 1,000 rows. Live tail polls every five seconds and pauses while hidden or scrolled down.
 
-Run the focused matching and time-range tests with:
+Run the log, formatting, permission, and integration tests with:
 
 ```powershell
-npx tsc src/lib/player-logs.ts src/lib/player-logs.test.ts --module commonjs --target es2020 --esModuleInterop --skipLibCheck --outDir .next/player-logs-tests
-node .next/player-logs-tests/player-logs.test.js
+npm run test:issues:setup
+npm run test:dashboard
 ```
 
 ### Discord forum sync notes
@@ -95,10 +96,15 @@ node .next/player-logs-tests/player-logs.test.js
 - Issue form now supports optional Discord channel/thread IDs.
 - When an issue has linked Discord IDs, the bot posts an "added to developer tracker" message in the linked forum post/thread.
 - Webhook endpoint: `/api/discord/webhooks`
-- Supported inbound events: `MESSAGE_CREATE` and `THREAD_UPDATE`
+- Supported inbound events: `MESSAGE_CREATE`, `MESSAGE_UPDATE`, `MESSAGE_DELETE`, and `THREAD_UPDATE`. Update the relay bot to forward edits and deletes, including `id` and `channel_id`.
 - Inbound Discord comments become issue notes without requiring the Discord user to be a ProjectMember.
 - If a linked thread is archived (`THREAD_UPDATE` with `archived=true`), the linked issue is auto-set to `DONE`.
-- Sync is one-way for close state: resolving in the tracker does not archive/close Discord threads.
+- New tracker replies are mirrored through a forum webhook under the staff name/avatar, with bot fallback. Long replies are split and persisted part by part so retries resume failed sends. Linked staff mentions can ping users; everyone and role mentions are disabled.
+- Internal notes never reach Discord and are hidden from signed-out visitors. Existing comments are not sent retroactively. Failed sends display a Retry button.
+- Tracker-authored replies can be edited and deleted from the tracker. Discord-authored messages must be edited in Discord because the bot cannot edit another user's message; their edits and deletes are imported. Deleting mirrored messages in Discord removes the tracker reply and its remaining parts.
+- Settings includes an optional archive-on-resolution toggle. Resolving posts a status line and optionally archives the thread; reopening unarchives it. Issues without a thread offer Start Discord thread using the configured bugs/suggestions forum.
+- Issue pages read the database immediately. `after()` runs catch-up at most every three minutes, and visible issue pages poll every ten seconds. Busy-thread catch-up resumes older ranges across runs rather than dropping messages past one batch. Recent messages are re-read for edits; the relay handles edits to older messages and deletes.
+- Give the bot Manage Webhooks, Send Messages in Threads, Manage Threads, Create Posts, and Read Message History. Manage Messages is needed when tracker staff delete another user's Discord reply.
 
 #### Public issue creation API
 
@@ -191,7 +197,10 @@ curl -X POST https://tracker.example.com/api/reports \
 - Logs page endpoint: `/logs`
 - Query backend: `POST /select/logsql/query`
 - The page passes `AccountID` and `ProjectID` headers when configured.
-- Access is controlled by `LOG_VIEW_ROLES`, so logs can be restricted to specific staff roles.
+- Settings role permissions control `logs.view` (guided explorer) and `logs.advanced` (raw LogsQL, tenants, and diagnostics). Moderators inherit view access, Owner/Admin inherit Advanced, and explicit role/member overrides take precedence over the environment fallback.
+- Guided searches use escaped words and JSON extra filters, with server-side timeouts and sensitive-field hiding/redaction. Only Advanced users see connection diagnostics.
+- Admins can inspect `/logs/catalog` for resource/event counts and samples from the last seven days. Review real event keys there before extending `src/lib/log-events.ts`; unmapped events keep their original message rather than inventing a summary.
+- Serve VictoriaLogs over HTTPS when using credentials.
 
 ### Staff compensation queue
 
@@ -219,6 +228,7 @@ Signed-in users can Watch / Unwatch an issue from the issue detail sidebar (Peop
   - `pnpm prisma migrate deploy` (after baseline/migrations are set up).
 - Backlog ranking (`Issue.backlogRank`) ships as migration `20260823_issue_backlog_rank`. Apply it with `pnpm prisma migrate deploy`, or `pnpm prisma db push` if you are not using migration history. Do not run Prisma migrate as part of the Vercel build.
 - Keeping Prisma out of build avoids accidental table drops in shared/existing databases.
+- Two-way Discord chat ships as `20261004000000_discord_two_way`. Apply it with `pnpm prisma migrate deploy` **outside the build and before serving the new code**. It adds internal/sync/delivery fields on Note and a catch-up timestamp on Issue; existing comments retain sync status NONE. Webhook credentials and catch-up cursors are stored in AppSetting and must be treated as secrets.
 - Staff tools write audit (`StaffAuditEvent` — ban, whitelist, garage/storage toggles) is a Prisma table. Apply `prisma/migrations/20260823_staff_audit_events` with `pnpm prisma migrate deploy` or `pnpm prisma db push` **outside** `vercel-build` / `next build`. Do not add migrate to the Vercel build command.
 - Compensation queue (`CompensationRequest`) ships as `prisma/migrations/20260823_compensation_requests`. Apply it with `pnpm prisma migrate deploy` or `pnpm prisma db push` against your Postgres instance — do not run migrate as part of `vercel-build` / `next build`.
 - Issue templates (`IssueTemplate`) ship as `prisma/migrations/20260824_issue_templates`, including four seed templates (bug report, script crash, feature request, player-facing task). The INSERT is one-shot (`ON CONFLICT DO NOTHING`) so later staff edits are kept. A matching upsert also runs on `/issues/new` and `/issues/templates` for databases that used `db push` without the SQL seed. Apply the migration with `pnpm prisma migrate deploy` or `pnpm prisma db push` **outside** `vercel-build` / `next build`. Owner/Admin staff manage templates at `/issues/templates`; everyone else can optionally pick one on `/issues/new`.
@@ -241,6 +251,16 @@ npm run test:issues:browser
 ```
 
 The database tests use temporary PGlite databases. Browser checks render the actual issue components with mocked navigation and server actions, using CSS from the production build. They cover draft preservation, validation, context parents, partial bulk failures, refreshed subtasks, filters, saved views, and mobile layout. They do not send Discord messages or use the configured application database. Browser screenshots are saved under `.next/issue-checks/`.
+
+### Dashboard rollout checks
+
+Run `npm run test:dashboard`, `npm run test:issues`, `npm run build`, and `npm run test:issues:browser`. Dashboard integration tests use mocks and temporary PostgreSQL, covering migration defaults, partial sends/retries, concurrent delivery, inbound edits/deletes, permissions, query requests, and paging.
+
+After a production build, `npm run test:logs:preview` serves the real explorer with representative Moderator data at `http://localhost:3101/logs` for desktop/phone UI review. It mocks navigation and server actions and does not contact application databases or external services.
+
+Rotate `DISCORD_WEBHOOK_SECRET` after deploying the removed secret logging and update the relay with the same value. If the former environment example was shared, also rotate the Postgres password, AUTH_SECRET, Discord client secret, and VictoriaLogs password. Set CRON_SECRET and HTTPS for VictoriaLogs.
+
+Before rollout, test as a real Moderator against VictoriaLogs, inspect `/logs/catalog`, and run a test-forum round trip: send, reply, edit, delete, internal note, retry, status change, archive, and reopen. Automated checks do not exercise external Discord or game/log servers.
 
 ### 5) Cut over from Render
 

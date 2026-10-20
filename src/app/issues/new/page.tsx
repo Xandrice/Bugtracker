@@ -12,7 +12,7 @@ import { NewIssueForm } from "./NewIssueForm";
 export default async function NewIssuePage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; status?: string; template?: string }>;
+  searchParams: Promise<{ type?: string; status?: string; template?: string; description?: string }>;
 }) {
   const params = await searchParams;
   const [session] = await Promise.all([auth(), ensureDefaultIssueTemplates()]);
@@ -28,6 +28,7 @@ export default async function NewIssuePage({
   return (
     <NewIssueForm
       key={`${selected?.id ?? "none"}-${params.status === "BACKLOG" ? "backlog" : "open"}-${normalizeType(params.type ?? "BUG")}`}
+      evidenceDescription={params.description?.slice(0, 10000)}
       templates={templates.map(toIssueTemplateSummary)}
       selectedTemplate={selected ? toIssueTemplateSummary(selected) : null}
       createInBacklog={params.status === "BACKLOG"}

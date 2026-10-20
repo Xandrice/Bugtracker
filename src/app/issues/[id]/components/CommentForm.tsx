@@ -17,11 +17,15 @@ export default function CommentForm({
     issueId,
     currentUserImage,
     users,
+    linkedDiscord = false,
 }: {
     issueId: string;
     currentUserImage: string | null;
     users: User[];
+    linkedDiscord?: boolean;
 }) {
+    const [internal, setInternal] = useState(false);
+    const [error, setError] = useState("");
     const [content, setContent] = useState("");
     const [mentionFilter, setMentionFilter] = useState("");
     const [showMentions, setShowMentions] = useState(false);
@@ -95,12 +99,13 @@ export default function CommentForm({
 
     const handleAction = async (formData: FormData) => {
         setIsPending(true);
+        setError("");
         try {
             await createTeamNote(formData);
             setContent("");
             setShowMentions(false);
         } catch (err) {
-            console.error(err);
+            setError(err instanceof Error ? err.message : "Could not save your comment. Please try again.");
         } finally {
             setIsPending(false);
         }
@@ -109,6 +114,7 @@ export default function CommentForm({
     return (
         <form action={handleAction} className="flex items-start gap-3 pt-3">
             <input type="hidden" name="issueId" value={issueId} />
+            <input type="hidden" name="internal" value={String(internal)} />
             <Avatar src={currentUserImage} size="md" name="You" />
             <div className="relative flex-1 min-w-0 overflow-visible rounded-md border border-input bg-elevated focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30 transition-colors">
                 {showMentions && filteredUsers.length > 0 && (
@@ -136,6 +142,9 @@ export default function CommentForm({
                     </div>
                 )}
 
+                <label className="flex items-center gap-2 px-3 pt-3 text-xs text-muted-foreground"><input type="checkbox" checked={internal} onChange={event => setInternal(event.target.checked)} disabled={isPending} />Internal note (visible only when signed in)</label>
+                {linkedDiscord && <p className="px-3 pt-1 text-xs text-muted-foreground">{internal ? "This note stays in the tracker." : "This reply will also be posted to the Discord thread."}</p>}
+                {error && <p role="alert" className="px-3 pt-2 text-xs text-danger">{error}</p>}
                 <textarea
                     ref={textareaRef}
                     name="content"

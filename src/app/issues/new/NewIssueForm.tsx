@@ -248,16 +248,18 @@ export function NewIssueForm({
   createInBacklog,
   fallbackType,
   canManageTemplates,
+  evidenceDescription,
 }: {
   templates: IssueTemplateSummary[];
   selectedTemplate: IssueTemplateSummary | null;
   createInBacklog: boolean;
   fallbackType: IssueType;
   canManageTemplates: boolean;
+  evidenceDescription?: string;
 }) {
   const [templateId, setTemplateId] = useState(selectedTemplate?.id ?? "");
-  const [draft, setDraft] = useState<IssueDraft>(() => ({ label: "", tags: "", dueDate: "", discordPostId: "", ...templateDraft(issueFormPrefillFromTemplate(selectedTemplate, fallbackType)) }));
-  const dirty = useRef(new Set<string>());
+  const [draft, setDraft] = useState<IssueDraft>(() => ({ label: "", tags: "", dueDate: "", discordPostId: "", ...templateDraft(issueFormPrefillFromTemplate(selectedTemplate, fallbackType)), ...(evidenceDescription ? { description: evidenceDescription } : {}) }));
+  const dirty = useRef(new Set<string>(evidenceDescription ? ["description"] : []));
   const selected = templates.find((template) => template.id === templateId) ?? null;
   const prefill = issueFormPrefillFromTemplate(selected, fallbackType);
   const edit = (field: string, value: string) => {

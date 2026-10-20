@@ -10,6 +10,7 @@ export type StaffPanelPermissions = {
   economy: {
     view: boolean;
   };
+  logs: { view: boolean; advanced: boolean };
   schema: {
     refresh: boolean;
   };
@@ -21,7 +22,9 @@ export type StaffPermissionKey =
   | "vehicles.view"
   | "vehicles.manage"
   | "economy.view"
-  | "schema.refresh";
+  | "schema.refresh"
+  | "logs.view"
+  | "logs.advanced";
 
 export const STAFF_PERMISSION_DEFINITIONS: Array<{
   key: StaffPermissionKey;
@@ -58,6 +61,8 @@ export const STAFF_PERMISSION_DEFINITIONS: Array<{
     label: "Refresh schema",
     description: "Refresh detected FiveM database tables and columns.",
   },
+  { key: "logs.view", label: "View logs", description: "Use guided investigations and player logs." },
+  { key: "logs.advanced", label: "Advanced logs", description: "Run LogsQL, switch tenants, and inspect connection details." },
 ];
 
 export const EMPTY_STAFF_PANEL_PERMISSIONS: StaffPanelPermissions = {
@@ -65,6 +70,7 @@ export const EMPTY_STAFF_PANEL_PERMISSIONS: StaffPanelPermissions = {
   vehicles: { view: false, manage: false },
   economy: { view: false },
   schema: { refresh: false },
+  logs: { view: false, advanced: false },
 };
 
 export const FULL_STAFF_PANEL_PERMISSIONS: StaffPanelPermissions = {
@@ -72,6 +78,7 @@ export const FULL_STAFF_PANEL_PERMISSIONS: StaffPanelPermissions = {
   vehicles: { view: true, manage: true },
   economy: { view: true },
   schema: { refresh: true },
+  logs: { view: true, advanced: true },
 };
 
 function readBoolean(value: unknown, fallback: boolean): boolean {
@@ -93,8 +100,10 @@ export function normalizeStaffPanelPermissions(
   const vehicles = asRecord(root.vehicles);
   const economy = asRecord(root.economy);
   const schema = asRecord(root.schema);
+  const logs = asRecord(root.logs);
 
   const normalized: StaffPanelPermissions = {
+    logs: { view: readBoolean(logs.view, fallback.logs.view), advanced: readBoolean(logs.advanced, fallback.logs.advanced) },
     players: {
       view: readBoolean(players.view, fallback.players.view),
       manage: readBoolean(players.manage, fallback.players.manage),
@@ -111,6 +120,7 @@ export function normalizeStaffPanelPermissions(
     },
   };
 
+  if (normalized.logs.advanced) normalized.logs.view = true;
   if (normalized.players.manage) normalized.players.view = true;
   if (normalized.vehicles.manage) normalized.vehicles.view = true;
 
@@ -131,8 +141,10 @@ export function mergeStaffPanelPermissions(
   const vehicles = asRecord(root.vehicles);
   const economy = asRecord(root.economy);
   const schema = asRecord(root.schema);
+  const logs = asRecord(root.logs);
 
   return normalizeStaffPanelPermissions({
+    logs: { view: readBoolean(logs.view, base.logs.view), advanced: readBoolean(logs.advanced, base.logs.advanced) },
     players: {
       view: typeof players.view === "boolean" ? players.view : base.players.view,
       manage: typeof players.manage === "boolean" ? players.manage : base.players.manage,
@@ -155,6 +167,8 @@ export function getStaffPermissionValue(
   key: StaffPermissionKey
 ): boolean {
   switch (key) {
+    case "logs.view": return permissions.logs.view;
+    case "logs.advanced": return permissions.logs.advanced;
     case "players.view":
       return permissions.players.view;
     case "players.manage":
@@ -180,9 +194,12 @@ export function setStaffPermissionValue(
     vehicles: { ...permissions.vehicles },
     economy: { ...permissions.economy },
     schema: { ...permissions.schema },
+    logs: { ...permissions.logs },
   };
 
   switch (key) {
+    case "logs.view": next.logs.view = value; if (!value) next.logs.advanced = false; break;
+    case "logs.advanced": next.logs.advanced = value; if (value) next.logs.view = true; break;
     case "players.view":
       next.players.view = value;
       if (!value) next.players.manage = false;

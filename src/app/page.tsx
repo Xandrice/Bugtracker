@@ -1,3 +1,4 @@
+import { markdownPreview } from "@/lib/markdown-preview";
 import Link from "next/link";
 import {
   Archive,
@@ -85,7 +86,7 @@ export default async function DashboardPage() {
       include: { assignee: true },
     }),
     db.note.findMany({
-      where: { issueId: { not: null } },
+      where: { issueId: { not: null }, ...(userId ? {} : { internal: false }) },
       take: 6,
       orderBy: { createdAt: "desc" },
       include: {
@@ -93,12 +94,12 @@ export default async function DashboardPage() {
         issue: { select: { id: true, publicKey: true, title: true } },
       },
     }),
-    (db as any).incident.findMany({
+    userId ? (db as any).incident.findMany({
       where: { status: { not: "RESOLVED" } },
       take: 3,
       orderBy: { updatedAt: "desc" },
       include: { assignee: true },
-    }),
+    }) : Promise.resolve([]),
   ]);
 
   return (
@@ -241,7 +242,7 @@ export default async function DashboardPage() {
                       </span>
                     </div>
                     <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                      {comment.content}
+                      {markdownPreview(comment.content)}
                     </p>
                   </Link>
                 );

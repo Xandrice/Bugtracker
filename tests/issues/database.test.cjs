@@ -73,6 +73,11 @@ test('PostgreSQL integration: grouped queries, scope, pagination, migration and 
   assert.equal((await getIssueListPage({}, 'assigned', 'staff')).matchingCount, 70);
   assert.equal((await getIssueListPage({}, 'triage', null)).matchingCount, 101);
   assert.equal((await getIssueListPage({ q: "%' OR 1=1 --" }, 'all', null)).matchingCount, 0);
+  await pg.exec(`UPDATE "Issue" SET priority='URGENT' WHERE id IN ('p002','c001');`);
+  const urgent = await getIssueListPage({ priority: 'URGENT' }, 'all', null);
+  assert.equal(urgent.matchingCount, 2); assert.equal(urgent.groupCount, 2);
+  assert.ok(urgent.groups.flatMap(group => [group.parent, ...group.children]).filter(row => row.matches).every(row => row.priority === 'URGENT'));
+  await pg.exec(`UPDATE "Issue" SET priority='MEDIUM' WHERE priority='URGENT';`);
   const { mutateIssue } = load('src/lib/issue-mutations.ts');
   const actor = { userId: 'staff', name: 'Staff', permissions: { assign: true } };
   const missingAssignee = await mutateIssue('p002', { status: 'REVIEW', assigneeId: 'missing' }, actor);

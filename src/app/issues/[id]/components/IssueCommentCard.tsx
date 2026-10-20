@@ -7,12 +7,20 @@ import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
 import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import { updateIssueComment, deleteIssueComment } from "@/app/actions";
+import { retryDiscordComment } from "@/app/issues/discord-actions";
+import { discordCommentDisplay, discordMessageUrl } from "@/lib/discord-format";
+import { useRouter } from "next/navigation";
 
 export type IssueCommentItem = {
     id: string;
     content: string;
     createdAt: string;
     source: string;
+    internal?: boolean;
+    discordSyncStatus?: string;
+    discordMessageId?: string | null;
+    discordThreadId?: string | null;
+    discordGuildId?: string | null;
     author: {
         id: string;
         name: string | null;
@@ -40,10 +48,12 @@ export function IssueCommentCard({
     const [content, setContent] = useState(note.content);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [error, setError] = useState("");
+    const [retrying, setRetrying] = useState(false);
+    const router = useRouter();
 
     const isDiscord = note.source === "DISCORD";
-    // Discord-sourced notes are mirrors of Discord activity — editing them
-    // server-side won't update Discord. Hide edit but allow delete (admin).
+    // Discord does not allow bots to edit messages written by another user.
     const canEdit = canManage && !isDiscord;
     const canDelete = canManage;
 
@@ -58,9 +68,11 @@ export function IssueCommentCard({
                         </span>
                         {isDiscord && (
                             <span className="rounded border border-info/30 bg-info/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-info">
-                                Discord
+                                via Discord
                             </span>
                         )}
+                        {note.internal && <span className="text-[10px] text-muted-foreground">🔒 Internal</span>}
+                        {isDiscord && note.discordMessageId && note.discordThreadId && <a href={discordMessageUrl(note.discordThreadId, note.discordMessageId, note.discordGuildId, note.content)} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary underline">Open in Discord</a>}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                         <span
@@ -72,7 +84,7 @@ export function IssueCommentCard({
                         {!editing && canEdit && (
                             <button
                                 type="button"
-                                onClick={() => setEditing(true)}
+                                onClick={() => { setContent(note.content); setError(""); setEditing(true); }}
                                 className="text-subtle-foreground transition-colors hover:text-foreground"
                                 title="Edit comment"
                             >
@@ -91,6 +103,9 @@ export function IssueCommentCard({
                                     setDeleting(true);
                                     try {
                                         await deleteIssueComment(formData);
+                                        router.refresh();
+                                    } catch (cause) {
+                                        setError(cause instanceof Error ? cause.message : "Could not delete this comment.");
                                     } finally {
                                         setDeleting(false);
                                     }
@@ -122,6 +137,9 @@ export function IssueCommentCard({
                             try {
                                 await updateIssueComment(formData);
                                 setEditing(false);
+                                router.refresh();
+                            } catch (cause) {
+                                setError(cause instanceof Error ? cause.message : "Could not update this comment.");
                             } finally {
                                 setSaving(false);
                             }
@@ -167,8 +185,11 @@ export function IssueCommentCard({
                         </div>
                     </form>
                 ) : (
-                    <MarkdownContent content={note.content} className="px-3 py-2" />
+                    <MarkdownContent content={isDiscord ? discordCommentDisplay(note.content) : note.content} className="px-3 py-2" />
                 )}
+                {error && <p role="alert" className="px-3 pb-2 text-xs text-danger">{error}</p>}
+                {note.discordSyncStatus === "FAILED" && <div className="flex items-center gap-2 px-3 pb-2 text-xs text-warning"><span>Not sent to Discord</span>{canManage && <Button size="xs" disabled={retrying} onClick={async () => { setRetrying(true); setError(""); try { await retryDiscordComment(note.id); router.refresh(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not retry."); } finally { setRetrying(false); } }}>Retry</Button>}</div>}
+                {(note.discordSyncStatus === "PENDING" || note.discordSyncStatus === "SENDING") && <p role="status" className="px-3 pb-2 text-xs text-muted-foreground">Sending to Discord…</p>}
             </div>
         </div>
     );

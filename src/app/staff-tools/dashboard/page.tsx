@@ -118,10 +118,10 @@ export default async function StaffDashboardPage() {
   const showCompensationLink = canViewCompensation(permissions);
 
   const [metrics, history, lastSnapshot, recentWrites] = await Promise.all([
-    getDashboardMetrics(),
-    getMetricHistory(30),
+    getDashboardMetrics({ players: showPlayersLink, economy: showEconomyLink, vehicles: showVehiclesLink }),
+    showEconomyLink && showPlayersLink ? getMetricHistory(30) : Promise.resolve([]),
     getLatestSnapshotTime(),
-    listRecentStaffAuditEvents(15),
+    listRecentStaffAuditEvents(15, { players: showPlayersLink, vehicles: showVehiclesLink }).catch(() => null),
   ]);
 
   const cashVsBank = [
@@ -201,12 +201,12 @@ export default async function StaffDashboardPage() {
                 Compensation
               </Link>
             )}
-            <form action={captureSnapshotAction}>
+            {showEconomyLink && showPlayersLink && <form action={captureSnapshotAction}>
               <Button type="submit" variant="outline" size="sm">
                 <CameraIcon className="h-3.5 w-3.5" />
                 Capture snapshot
               </Button>
-            </form>
+            </form>}
             {canRefreshSchema && (
               <form action={refreshStaffSchemaAction}>
                 <Button type="submit" variant="outline" size="sm">
@@ -228,7 +228,8 @@ export default async function StaffDashboardPage() {
         </CardHeader>
         <CardBody>
           <StaffAuditList
-            events={recentWrites}
+            events={recentWrites || []}
+            error={recentWrites === null ? "Could not load staff writes. Please refresh to retry." : undefined}
             showTarget
             emptyLabel="No dashboard ban, whitelist, or garage/storage writes yet."
           />
@@ -262,28 +263,28 @@ export default async function StaffDashboardPage() {
       {metrics.configured && !metrics.connectionError && (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard
+            {showPlayersLink && <StatCard
               label="Players"
               value={formatNumber(metrics.players.total)}
               hint={`${formatNumber(metrics.players.activeLast7d)} active this week`}
-            />
-            <StatCard
+            />}
+            {showEconomyLink && <StatCard
               label="Total money"
               value={formatCurrency(metrics.economy.total)}
               hint={`${formatCurrency(metrics.economy.totalBank)} banked`}
-            />
-            <StatCard
+            />}
+            {showVehiclesLink && <StatCard
               label="Vehicles"
               value={formatNumber(metrics.vehicles.total)}
               hint={`${formatNumber(metrics.vehicles.impounded)} impounded`}
-            />
-            <StatCard
+            />}
+            {showPlayersLink && <StatCard
               label="On duty"
               value={formatNumber(metrics.jobs.onDuty)}
               hint={`${formatNumber(metrics.players.jailed)} jailed · ${formatNumber(
                 metrics.players.dead
               )} dead`}
-            />
+            />}
           </div>
 
           {trend.length >= 2 && (
@@ -299,7 +300,8 @@ export default async function StaffDashboardPage() {
             </ChartCard>
           )}
 
-          <h2 className="pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {showEconomyLink && <>
+<h2 className="pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Economy
           </h2>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -313,8 +315,10 @@ export default async function StaffDashboardPage() {
               <HorizontalBarPanel data={topPlayers} color={CHART_COLORS[1]} />
             </ChartCard>
           </div>
+</>}
 
-          <h2 className="pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {showPlayersLink && <>
+<h2 className="pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Jobs & gangs
           </h2>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -328,8 +332,10 @@ export default async function StaffDashboardPage() {
               <HorizontalBarPanel data={metrics.jobs.topGangs} color={CHART_COLORS[5]} emptyLabel="No gang members." />
             </ChartCard>
           </div>
+</>}
 
-          <h2 className="pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {showVehiclesLink && <>
+<h2 className="pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Vehicles
           </h2>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -343,6 +349,7 @@ export default async function StaffDashboardPage() {
               <DonutPanel data={vehicleStatus} />
             </ChartCard>
           </div>
+</>}
 
           <p className="pt-2 text-[11px] text-muted-foreground">
             Metrics generated {new Date(metrics.generatedAt).toLocaleString()}

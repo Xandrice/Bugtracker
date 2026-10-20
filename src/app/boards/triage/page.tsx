@@ -29,8 +29,7 @@ export default async function BugTriagePage({ searchParams }: { searchParams: Pr
                     <div>
                         <div className="font-semibold text-foreground">Triage goals</div>
                         <p className="text-muted-foreground">
-                            Priority assignment, severity validation, finding duplicates, and component
-                            tagging.
+                            Review new unassigned issues, set their priority and type, then assign an owner.
                         </p>
                     </div>
                 </CardBody>

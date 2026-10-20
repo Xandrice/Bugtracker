@@ -1,4 +1,5 @@
 import "server-only";
+import { numericVehicleState, vehicleStoredState } from "./vehicle-state";
 
 import mysql from "mysql2/promise";
 import type { Pool, ResultSetHeader, RowDataPacket } from "mysql2/promise";
@@ -1028,7 +1029,7 @@ function resolveVehicleStoredValue(
 
   if (!capabilities.stateColumn) return null;
   const raw = row[capabilities.stateColumn];
-  if (typeof raw === "number") return raw >= 1;
+  if (numericVehicleState(raw) !== null) return vehicleStoredState(raw);
   return toBoolean(raw);
 }
 
@@ -1069,7 +1070,7 @@ function mapVehicleRow(row: Record<string, unknown>, capabilities: VehicleTableC
   const model = resolveVehicleModel(row, capabilities);
   const garage = capabilities.garageColumn ? normalizeText(row[capabilities.garageColumn]) : null;
   const stored = resolveVehicleStoredValue(row, capabilities);
-  const impounded = capabilities.impoundedColumn
+  const impounded = (capabilities.stateColumn && numericVehicleState(row[capabilities.stateColumn]) === 2) ? true : capabilities.impoundedColumn
     ? toBoolean(row[capabilities.impoundedColumn])
     : null;
   const state = capabilities.stateColumn ? normalizeText(row[capabilities.stateColumn]) : null;
@@ -1766,6 +1767,27 @@ async function fetchPlayerBans(table: TableSchema, license: string | null): Prom
   });
 }
 
+export async function searchStaffLogPlayers(search: string) {
+  if (!hasFiveMDbConfig()) return [];
+  const schema = await getSchemaSnapshot();
+  const caps = detectPlayerCapabilities(schema);
+  if (!caps) return [];
+  const players = await fetchPlayers(caps, search, 10, detectIdentifierTables(schema, caps));
+  return players.map(player => ({ id: player.identifier, name: player.displayName }));
+}
+
+export async function getStaffPlayerLogIdentity(identifier: string) {
+  if (!hasFiveMDbConfig()) return null;
+  const schema = await getSchemaSnapshot();
+  const caps = detectPlayerCapabilities(schema);
+  if (!caps) return null;
+  const row = await fetchPlayerRawRow(caps, identifier.trim());
+  if (!row) return null;
+  const identifierTables = detectIdentifierTables(schema, caps);
+  const identifierRows = await fetchRelatedIdentifierRows(identifierTables, row);
+  return { citizenid: normalizeText(row[caps.idColumn]) || identifier, license: normalizeText(getField(row, caps.licenseColumn || "license")) || normalizeText(getField(row, caps.license2Column || "license2")), discord: resolveDiscordId(row, identifierRows) };
+}
+
 export async function getStaffPlayerDetail(identifier: string): Promise<StaffPlayerDetail | null> {
   const trimmed = identifier.trim();
   if (!trimmed) return null;
@@ -1934,7 +1956,7 @@ function emptyDashboardMetrics(configured: boolean): DashboardMetrics {
 // Computes current-state aggregate metrics from the FiveM database for the
 // analytics dashboard. Reductions run in JS so the logic stays robust across
 // different QBCore/ESX-style schemas rather than relying on JSON SQL functions.
-export async function getDashboardMetrics(): Promise<DashboardMetrics> {
+export async function getDashboardMetrics(access = { players: true, economy: true, vehicles: true }): Promise<DashboardMetrics> {
   const metrics = emptyDashboardMetrics(hasFiveMDbConfig());
   if (!metrics.configured) return metrics;
 
@@ -1946,11 +1968,11 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     const playerCaps = detectPlayerCapabilities(schema);
     const vehicleCaps = detectVehicleCapabilities(schema);
 
-    if (playerCaps) {
+    if (playerCaps && (access.players || access.economy)) {
       const rows = await queryRows<RowDataPacket>(
-        `SELECT * FROM ${quoteIdentifier(playerCaps.tableName)} LIMIT 10000`
+        `SELECT ${buildSelectColumns([playerCaps.idColumn, ...(access.economy ? [playerCaps.moneyJsonColumn, playerCaps.cashColumn, playerCaps.bankColumn, playerCaps.displayNameColumn, playerCaps.firstNameColumn, playerCaps.lastNameColumn, playerCaps.profileJsonColumn] : []), ...(access.players ? [playerCaps.jobColumn, playerCaps.updatedAtColumn, "gang", "metadata", "isdead", "jail_time"] : [])].filter(column => column && schema.byName.get(playerCaps.tableName)?.columnSet.has(column))).map(quoteIdentifier).join(", ")} FROM ${quoteIdentifier(playerCaps.tableName)} LIMIT 10000`
       );
-      metrics.players.total = rows.length;
+      if (access.players) metrics.players.total = rows.length;
 
       const jobMap = new Map<string, number>();
       const gangMap = new Map<string, number>();
@@ -1960,65 +1982,69 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
       for (const raw of rows) {
         const row = raw as Record<string, unknown>;
 
-        const money = asObject(getField(row, playerCaps.moneyJsonColumn || "money"));
-        const cash =
-          toNumber(money?.cash) ??
-          (playerCaps.cashColumn ? toNumber(getField(row, playerCaps.cashColumn)) : null) ??
-          0;
-        const bank =
-          toNumber(money?.bank) ??
-          (playerCaps.bankColumn ? toNumber(getField(row, playerCaps.bankColumn)) : null) ??
-          0;
-        const crypto = toNumber(money?.crypto) ?? 0;
-        metrics.economy.totalCash += cash;
-        metrics.economy.totalBank += bank;
-        metrics.economy.totalCrypto += crypto;
+        if (access.economy) {
+          const money = asObject(getField(row, playerCaps.moneyJsonColumn || "money"));
+          const cash =
+            toNumber(money?.cash) ??
+            (playerCaps.cashColumn ? toNumber(getField(row, playerCaps.cashColumn)) : null) ??
+            0;
+          const bank =
+            toNumber(money?.bank) ??
+            (playerCaps.bankColumn ? toNumber(getField(row, playerCaps.bankColumn)) : null) ??
+            0;
+          const crypto = toNumber(money?.crypto) ?? 0;
+          metrics.economy.totalCash += cash;
+          metrics.economy.totalBank += bank;
+          metrics.economy.totalCrypto += crypto;
 
-        const total = cash + bank;
-        if (total < 10000) wealth[0]++;
-        else if (total < 50000) wealth[1]++;
-        else if (total < 250000) wealth[2]++;
-        else if (total < 1000000) wealth[3]++;
-        else wealth[4]++;
+          const total = cash + bank;
+          if (total < 10000) wealth[0]++;
+          else if (total < 50000) wealth[1]++;
+          else if (total < 250000) wealth[2]++;
+          else if (total < 1000000) wealth[3]++;
+          else wealth[4]++;
 
-        topList.push({
-          identifier: normalizeText(getField(row, playerCaps.idColumn)) || "?",
-          name: resolvePlayerDisplayName(row, playerCaps),
-          total,
-        });
+          topList.push({
+            identifier: normalizeText(getField(row, playerCaps.idColumn)) || "?",
+            name: resolvePlayerDisplayName(row, playerCaps),
+            total,
+          });
 
-        const job = asObject(getField(row, playerCaps.jobColumn || "job"));
-        const jobName = (job ? normalizeText(job.label) || normalizeText(job.name) : null) || "Unknown";
-        bumpCount(jobMap, jobName);
-        if (job && job.onduty === true) metrics.jobs.onDuty++;
-        else metrics.jobs.offDuty++;
+        }
+        if (access.players) {
+          const job = asObject(getField(row, playerCaps.jobColumn || "job"));
+          const jobName = (job ? normalizeText(job.label) || normalizeText(job.name) : null) || "Unknown";
+          bumpCount(jobMap, jobName);
+          if (job && job.onduty === true) metrics.jobs.onDuty++;
+          else metrics.jobs.offDuty++;
 
-        const gang = asObject(getField(row, "gang"));
-        if (gang) {
-          const gangName = normalizeText(gang.label) || normalizeText(gang.name);
-          const rawName = normalizeText(gang.name);
-          if (gangName && (!rawName || rawName.toLowerCase() !== "none")) {
-            bumpCount(gangMap, gangName);
+          const gang = asObject(getField(row, "gang"));
+          if (gang) {
+            const gangName = normalizeText(gang.label) || normalizeText(gang.name);
+            const rawName = normalizeText(gang.name);
+            if (gangName && (!rawName || rawName.toLowerCase() !== "none")) {
+              bumpCount(gangMap, gangName);
+            }
           }
-        }
 
-        const metadata = asObject(getField(row, "metadata"));
-        if (toBoolean(getField(row, "isdead")) === true || metadata?.isdead === true) {
-          metrics.players.dead++;
-        }
-        const jailTime = toNumber(getField(row, "jail_time")) ?? toNumber(metadata?.injail);
-        if (jailTime && jailTime > 0) metrics.players.jailed++;
+          const metadata = asObject(getField(row, "metadata"));
+          if (toBoolean(getField(row, "isdead")) === true || metadata?.isdead === true) {
+            metrics.players.dead++;
+          }
+          const jailTime = toNumber(getField(row, "jail_time")) ?? toNumber(metadata?.injail);
+          if (jailTime && jailTime > 0) metrics.players.jailed++;
 
-        const updated = getField(row, playerCaps.updatedAtColumn || "last_updated");
-        const ts =
-          updated instanceof Date
-            ? updated.getTime()
-            : typeof updated === "string"
-              ? Date.parse(updated)
-              : NaN;
-        if (Number.isFinite(ts)) {
-          if (now - ts <= 7 * DAY) metrics.players.activeLast7d++;
-          if (now - ts <= 30 * DAY) metrics.players.activeLast30d++;
+          const updated = getField(row, playerCaps.updatedAtColumn || "last_updated");
+          const ts =
+            updated instanceof Date
+              ? updated.getTime()
+              : typeof updated === "string"
+                ? Date.parse(updated)
+                : NaN;
+          if (Number.isFinite(ts)) {
+            if (now - ts <= 7 * DAY) metrics.players.activeLast7d++;
+            if (now - ts <= 30 * DAY) metrics.players.activeLast30d++;
+          }
         }
       }
 
@@ -2035,7 +2061,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
       metrics.jobs.topGangs = topCounts(gangMap, 8);
     }
 
-    if (vehicleCaps) {
+    if (vehicleCaps && access.vehicles) {
       const rows = await queryRows<RowDataPacket>(
         `SELECT * FROM ${quoteIdentifier(vehicleCaps.tableName)} LIMIT 20000`
       );
@@ -2062,7 +2088,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
 
         const impound = normalizeText(getField(row, "impound"));
         const impoundData = normalizeText(getField(row, "impound_data"));
-        if ((impound && impound.toLowerCase() !== "no") || (impoundData && impoundData.length > 2)) {
+        if (mapVehicleRow(row, vehicleCaps).impounded || (impound && impound.toLowerCase() !== "no") || (impoundData && impoundData.length > 2)) {
           metrics.vehicles.impounded++;
         }
         if (toBoolean(getField(row, "financed")) === true) metrics.vehicles.financed++;
@@ -2179,11 +2205,8 @@ export async function toggleVehicleStorageState(vehicleKey: string): Promise<Veh
   const row = await fetchVehicleRawRow(capabilities, vehicleKey);
   const vehicle = mapVehicleRow(row, capabilities);
   const currentValue = getField(row, targetColumn);
-  const currentBool = capabilities.storedColumn
-    ? toBoolean(currentValue)
-    : typeof currentValue === "number"
-      ? currentValue >= 1
-      : toBoolean(currentValue);
+  if (vehicle.impounded) throw new Error("Impounded vehicles cannot have their storage state toggled.");
+  const currentBool = resolveVehicleStoredValue(row, capabilities);
   const oldValue = currentBool ?? false;
   const nextValue = !oldValue;
   const updateValue = coerceBooleanForDatabase(currentValue, nextValue);
@@ -2238,6 +2261,7 @@ export async function putVehicleInGarage(
 
   const row = await fetchVehicleRawRow(capabilities, vehicleKey);
   const vehicle = mapVehicleRow(row, capabilities);
+  if (vehicle.impounded) throw new Error("Release this vehicle from impound before moving it to a garage.");
   const currentStorageValue = getField(row, storageColumn);
   const storedValue = coerceBooleanForDatabase(currentStorageValue, true);
 

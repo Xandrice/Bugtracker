@@ -19,6 +19,43 @@ async function discordApi(path: string, init: RequestInit) {
     });
 }
 
+export type ForumWebhook = { id: string; token: string };
+export type DiscordChannel = { id: string; parent_id?: string; guild_id?: string; thread_metadata?: { archived: boolean } };
+async function checkedDiscord<T>(path: string, init: RequestInit): Promise<T> {
+    const response = await discordApi(path, init);
+    if (!response?.ok) throw new Error(response ? `Discord request failed (${response.status}).` : "Discord bot is not configured.");
+    return response.status === 204 ? undefined as T : await response.json() as T;
+}
+export function readDiscordChannel(channelId: string) {
+    return checkedDiscord<DiscordChannel>(`/channels/${channelId}`, { method: "GET", cache: "no-store" });
+}
+export async function createForumWebhook(channelId: string): Promise<ForumWebhook> {
+    // Tokens are returned only for webhooks created by this bot.
+    const existing = await checkedDiscord<Array<{ id: string; token?: string; name: string }>>(`/channels/${channelId}/webhooks`, { method: "GET", cache: "no-store" });
+    const webhook = existing.find(item => item.name === "Tracker replies" && item.token);
+    if (webhook?.token) return { id: webhook.id, token: webhook.token };
+    return checkedDiscord<ForumWebhook>(`/channels/${channelId}/webhooks`, { method: "POST", body: JSON.stringify({ name: "Tracker replies" }) });
+}
+async function webhookRequest(webhook: ForumWebhook, threadId: string, messageId: string | null, method: "POST" | "PATCH" | "DELETE", payload?: unknown) {
+    const path = `/webhooks/${webhook.id}/${webhook.token}${messageId ? `/messages/${messageId}` : ""}?thread_id=${threadId}&wait=true`;
+    const response = await fetch(`https://discord.com/api/v10${path}`, { method, headers: { "Content-Type": "application/json" }, ...(payload ? { body: JSON.stringify(payload) } : {}), signal: AbortSignal.timeout(10000), cache: "no-store" });
+    if (!response.ok && !(method === "DELETE" && response.status === 404)) throw new Error(`Discord webhook request failed (${response.status}).`);
+    return response.status === 204 || response.status === 404 ? null : await response.json() as { id: string };
+}
+export function sendWebhookMessage(webhook: ForumWebhook, threadId: string, payload: unknown) { return webhookRequest(webhook, threadId, null, "POST", payload); }
+export function editWebhookMessage(webhook: ForumWebhook, threadId: string, messageId: string, payload: unknown) { return webhookRequest(webhook, threadId, messageId, "PATCH", payload); }
+export function deleteWebhookMessage(webhook: ForumWebhook, threadId: string, messageId: string) { return webhookRequest(webhook, threadId, messageId, "DELETE"); }
+export function sendBotThreadMessage(threadId: string, payload: unknown) { return checkedDiscord<{ id: string }>(`/channels/${threadId}/messages`, { method: "POST", body: JSON.stringify(payload) }); }
+export function editBotThreadMessage(threadId: string, messageId: string, payload: unknown) { return checkedDiscord<{ id: string }>(`/channels/${threadId}/messages/${messageId}`, { method: "PATCH", body: JSON.stringify(payload) }); }
+export async function deleteBotThreadMessage(threadId: string, messageId: string) {
+    const response = await discordApi(`/channels/${threadId}/messages/${messageId}`, { method: "DELETE" });
+    if (!response?.ok && response?.status !== 404) throw new Error("Could not delete the Discord message. Check bot permissions and retry.");
+}
+export function setDiscordThreadArchived(threadId: string, archived: boolean) { return checkedDiscord<DiscordChannel>(`/channels/${threadId}`, { method: "PATCH", body: JSON.stringify({ archived }) }); }
+export function createDiscordForumPost(forumId: string, title: string, content: string) {
+    return checkedDiscord<DiscordChannel>(`/channels/${forumId}/threads`, { method: "POST", body: JSON.stringify({ name: title.slice(0, 100), auto_archive_duration: 10080, message: { content: content.slice(0, 2000), allowed_mentions: { parse: [] } } }) });
+}
+
 export function getAppBaseUrl() {
     return process.env.NEXTAUTH_URL
         || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "")
@@ -184,6 +221,8 @@ type DiscordApiMessage = {
     guild_id?: string;
     content?: string;
     timestamp?: string;
+    edited_timestamp?: string;
+    webhook_id?: string;
     author?: DiscordApiAuthor;
     attachments?: DiscordApiAttachment[];
 };
@@ -218,19 +257,21 @@ function normalizeDiscordApiMessage(payload: unknown): DiscordApiMessage | null 
         guild_id: typeof payload.guild_id === "string" ? payload.guild_id : undefined,
         content: typeof payload.content === "string" ? payload.content : undefined,
         timestamp: typeof payload.timestamp === "string" ? payload.timestamp : undefined,
+        edited_timestamp: typeof payload.edited_timestamp === "string" ? payload.edited_timestamp : undefined,
+        webhook_id: typeof payload.webhook_id === "string" ? payload.webhook_id : undefined,
         author,
         attachments,
     };
 }
 
-export async function getDiscordChannelMessages(channelId: string, limit = 50): Promise<DiscordApiMessage[] | null> {
+export async function getDiscordChannelMessages(channelId: string, limit = 50, before?: string): Promise<DiscordApiMessage[] | null> {
     const token = getDiscordToken();
     if (!token || !channelId) {
         return null;
     }
 
     try {
-        const response = await discordApi(`/channels/${channelId}/messages?limit=${Math.min(Math.max(limit, 1), 100)}`, {
+        const response = await discordApi(`/channels/${channelId}/messages?limit=${Math.min(Math.max(limit, 1), 100)}${before ? `&before=${encodeURIComponent(before)}` : ""}`, {
             method: "GET",
             cache: "no-store",
         });

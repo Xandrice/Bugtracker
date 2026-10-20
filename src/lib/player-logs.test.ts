@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { buildPlayerLogsQuery, localLogDateInput, localLogDateToUtc, parseLogDuration, playerCitizenTagPattern, playerProfileTab, resolvePlayerLogRange } from "./player-logs";
 
 const pattern = new RegExp(playerCitizenTagPattern("82258"));
-for (const tags of ["citizenid:82258", "citizenid:82258,resource:robbery", "resource:robbery,citizenid:82258", "resource:robbery,citizenid:82258,username:Skyla Tretyakova"]) {
+for (const tags of ["citizenid:82258", "citizenid:82258,resource:robbery", "resource:robbery,citizenid:82258", "resource:robbery,citizenid:82258,username:Skyla Tretyakova", "resource:robbery, citizenid:82258, username:Skyla"]) {
   assert.ok(pattern.test(tags), tags);
 }
 for (const tags of ["", "citizenid:822580", "citizenid:182258", "othercitizenid:82258", "source:82258", "username:82258", "citizenid:123,username:Skyla Tretyakova"]) {
@@ -10,7 +10,7 @@ for (const tags of ["", "citizenid:822580", "citizenid:182258", "othercitizenid:
 }
 for (const identifier of ["a.b", 'a"b', "a\\b", "a|b", "a$", "a[0]", "a+b", "a(b)"]) {
   const query = buildPlayerLogsQuery(identifier, 200);
-  const literal = query.slice("tags:~".length, query.indexOf(" | sort"));
+  const literal = query.slice(query.indexOf(" AND tags:~") + " AND tags:~".length, query.indexOf(" | sort"));
   const decoded = JSON.parse(literal);
   assert.ok(new RegExp(decoded).test(`citizenid:${identifier}`));
   assert.equal(new RegExp(decoded).test("citizenid:unrelated"), false);

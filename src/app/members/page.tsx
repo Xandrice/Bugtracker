@@ -107,7 +107,7 @@ export default async function MembersPage() {
     });
 
     const syncedProfiles = await syncProjectMemberProfiles(profileInputs, lastSeenByUserId, {
-        force: true,
+        force: false,
     });
 
     const enrichedMembers: EnrichedMember[] = projectMembers.map((member) => {
@@ -181,7 +181,7 @@ export default async function MembersPage() {
                     <thead className="border-b border-border bg-surface-2 text-[10px] uppercase tracking-wider text-subtle-foreground">
                         <tr>
                             <th className="px-4 py-2 font-medium">Member</th>
-                            <th className="px-4 py-2 font-medium">Discord ID</th>
+                            {canManage && <th className="px-4 py-2 font-medium">Discord ID</th>}
                             <th className="px-4 py-2 font-medium">Last seen</th>
                             <th className="px-4 py-2 font-medium">App Role</th>
                             <th className="px-4 py-2 font-medium">Staff Role</th>
@@ -206,7 +206,7 @@ export default async function MembersPage() {
                                                 <div className="text-sm font-medium text-foreground">
                                                     {member.displayName || "Pending…"}
                                                 </div>
-                                                {member.user?.email && (
+                                                {canManage && member.user?.email && (
                                                     <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                                                         <Mail className="h-3 w-3" />
                                                         {member.user.email}
@@ -215,9 +215,7 @@ export default async function MembersPage() {
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                                        {member.discordId}
-                                    </td>
+                                    {canManage && <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{member.discordId}</td>}
                                     <td className="px-4 py-3">
                                         <div className="flex flex-col gap-1">
                                             <Badge tone={activityTone(member.activityStatus)}>

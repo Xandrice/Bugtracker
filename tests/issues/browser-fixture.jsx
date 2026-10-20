@@ -43,6 +43,6 @@ function App() {
       <input name="title" aria-label="Second title" defaultValue="keep me" /><IssueFieldError field="title" /><button>Submit second</button>
     </IssueActionForm>
   </>;
-  return <main className="p-6"><PagedIssueGrid key={issueListSearchParams(page.state, 'all').toString()} page={page} users={[{ id: 'staff', name: 'Staff' }]} canEdit canAssign signedIn savedViews={[]} /></main>;
+  return <main className="p-6" data-issue-filters={issueListSearchParams(page.state, 'all').toString()}><PagedIssueGrid key={issueListSearchParams(page.state, 'all').toString()} page={page} users={[{ id: 'staff', name: 'Staff' }]} canEdit canAssign signedIn savedViews={[]} /></main>;
 }
 createRoot(document.getElementById('root')).render(<App />);

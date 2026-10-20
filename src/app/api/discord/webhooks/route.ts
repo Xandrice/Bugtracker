@@ -1,6 +1,8 @@
+import { secretsEqual } from "@/lib/secrets";
 import { NextResponse } from "next/server";
 import nacl from "tweetnacl";
 import { revalidatePath } from "next/cache";
+import { importDiscordMessage, updateInboundDiscordMessage } from "@/lib/discord-inbound";
 import { db } from "@/lib/db";
 
 type InboundEvent = {
@@ -19,6 +21,9 @@ type DiscordAuthor = {
 
 type DiscordMessageData = {
     id?: string;
+    webhook_id?: string;
+    timestamp?: string;
+    edited_timestamp?: string;
     channel_id?: string;
     channelId?: string;
     parent_id?: string;
@@ -64,7 +69,7 @@ function verifyDiscordRequest(rawBody: string, signature: string, timestamp: str
     const signatureBytes = hexToUint8Array(signature);
     const publicKeyBytes = hexToUint8Array(publicKey);
 
-    if (!signatureBytes || !publicKeyBytes) {
+    if (!signatureBytes || !publicKeyBytes || signatureBytes.length !== 64 || publicKeyBytes.length !== 32) {
         return false;
     }
 
@@ -101,56 +106,10 @@ function parseEvent(payload: unknown): InboundEvent | null {
     return null;
 }
 
-async function getOrCreateDiscordAuthor(author: DiscordAuthor) {
-    const discordId = author.id;
-    if (!discordId) {
-        return null;
-    }
-
-    const existingAccount = await db.account.findUnique({
-        where: {
-            provider_providerAccountId: {
-                provider: "discord",
-                providerAccountId: discordId,
-            }
-        },
-        include: { user: true },
-    });
-
-    const preferredName = author.global_name || author.username || `Discord ${discordId}`;
-    const avatarHash = author.avatar as string | undefined;
-    const image = avatarHash ? `https://cdn.discordapp.com/avatars/${discordId}/${avatarHash}.png` : null;
-
-    if (existingAccount?.user) {
-        await db.user.update({
-            where: { id: existingAccount.user.id },
-            data: {
-                name: preferredName,
-                image,
-            }
-        });
-        return existingAccount.user;
-    }
-
-    return db.user.create({
-        data: {
-            name: preferredName,
-            image,
-            accounts: {
-                create: {
-                    provider: "discord",
-                    providerAccountId: discordId,
-                    type: "oauth",
-                }
-            }
-        }
-    });
-}
-
 async function getForumSettings(): Promise<ForumSettings> {
     const [suggestions, bugs] = await Promise.all([
-        (db as any).appSetting.findUnique({ where: { key: "discord.forum.suggestions" }, select: { value: true } }),
-        (db as any).appSetting.findUnique({ where: { key: "discord.forum.bugs" }, select: { value: true } }),
+        db.appSetting.findUnique({ where: { key: "discord.forum.suggestions" }, select: { value: true } }),
+        db.appSetting.findUnique({ where: { key: "discord.forum.bugs" }, select: { value: true } }),
     ]);
 
     return {
@@ -185,6 +144,9 @@ function normalizedMessageData(data: Record<string, unknown>): DiscordMessageDat
             }
             : undefined,
         attachments,
+        webhook_id: typeof data.webhook_id === "string" ? data.webhook_id : undefined,
+        timestamp: typeof data.timestamp === "string" ? data.timestamp : undefined,
+        edited_timestamp: typeof data.edited_timestamp === "string" ? data.edited_timestamp : undefined,
     };
 }
 
@@ -222,7 +184,7 @@ async function resolveIssueForMessageEvent(data: DiscordMessageData) {
         return null;
     }
 
-    return (db as any).issue.findFirst({
+    return db.issue.findFirst({
         where: {
             discordThreadId: channelId,
         },
@@ -230,22 +192,9 @@ async function resolveIssueForMessageEvent(data: DiscordMessageData) {
     });
 }
 
-function buildDiscordAuthorTag(author: DiscordAuthor) {
-    if (author.global_name && author.username) {
-        return `${author.global_name} (@${author.username})`;
-    }
-
-    if (author.username && author.discriminator && author.discriminator !== "0") {
-        return `${author.username}#${author.discriminator}`;
-    }
-
-    return author.username || author.global_name || "Discord User";
-}
-
 async function handleMessageCreate(data: DiscordMessageData) {
     const messageId = data.id;
     const author = data.author;
-    const content = data.content?.trim() || "";
 
     console.log("[handleMessageCreate] messageId:", messageId, "authorId:", author?.id, "isBot:", author?.bot);
 
@@ -260,7 +209,7 @@ async function handleMessageCreate(data: DiscordMessageData) {
     const isMsgFromConfiguredForum = isMessageFromConfiguredForum(data, forumSettings);
     console.log("[handleMessageCreate] Message from configured forum:", isMsgFromConfiguredForum, "(parentId:", data.parent_id || data.parentId, ")");
     
-    if (!isMsgFromConfiguredForum) {
+    if (!isMsgFromConfiguredForum && (data.parent_id || data.parentId)) {
         console.log("[handleMessageCreate] Filtered out - not from configured forum");
         return;
     }
@@ -273,53 +222,8 @@ async function handleMessageCreate(data: DiscordMessageData) {
         return;
     }
 
-    const noteAuthor = await getOrCreateDiscordAuthor(author);
-    console.log("[handleMessageCreate] Note author created/retrieved:", noteAuthor?.id);
-    
-    if (!noteAuthor) {
-        console.log("[handleMessageCreate] Failed to get or create author");
-        return;
-    }
-
-    const authorTag = buildDiscordAuthorTag(author);
-    const guildId = data.guild_id || data.guildId || null;
-    const channelId = data.channel_id || data.channelId || null;
-    const postLink = guildId && channelId ? `https://discord.com/channels/${guildId}/${channelId}` : null;
-    const attachments = Array.isArray(data.attachments) ? data.attachments : [];
-    const attachmentLines = attachments
-        .map((attachment) => attachment?.url)
-        .filter((url): url is string => typeof url === "string" && url.length > 0);
-
-    const noteContentParts = [
-        `**Discord - ${authorTag}**`,
-        ...(postLink ? [`Post: ${postLink}`] : []),
-        content || "_(no text content)_"
-    ];
-    if (attachmentLines.length > 0) {
-        noteContentParts.push(`Attachments:\n${attachmentLines.join("\n")}`);
-    }
-
-    try {
-        console.log("[handleMessageCreate] Creating note for issue:", issue.id);
-        await (db as any).note.create({
-            data: {
-                issueId: issue.id,
-                authorId: noteAuthor.id,
-                content: noteContentParts.join("\n\n"),
-                source: "DISCORD",
-                discordMessageId: messageId,
-                discordAuthorId: author.id,
-                discordAuthorTag: authorTag,
-            }
-        });
-        console.log("[handleMessageCreate] Note created successfully");
-        revalidateIssue(issue.id);
-    } catch (error: unknown) {
-        console.log("[handleMessageCreate] Error creating note:", error);
-        if (!isRecord(error) || error.code !== "P2002") {
-            throw error;
-        }
-    }
+    await importDiscordMessage(issue.id, { ...data, channel_id: data.channel_id || data.channelId });
+    revalidateIssue(issue.id);
 }
 
 async function handleThreadUpdate(data: DiscordThreadUpdateData) {
@@ -330,7 +234,7 @@ async function handleThreadUpdate(data: DiscordThreadUpdateData) {
         return;
     }
 
-    const issue = await (db as any).issue.findUnique({
+    const issue = await db.issue.findUnique({
         where: { discordThreadId: threadId },
         select: { id: true, status: true },
     });
@@ -339,7 +243,7 @@ async function handleThreadUpdate(data: DiscordThreadUpdateData) {
         return;
     }
 
-    await (db as any).issue.update({
+    await db.issue.update({
         where: { id: issue.id },
         data: { status: "DONE" },
     });
@@ -366,8 +270,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
         }
     } else if (relaySecret) {
-        const isValid = relayHeader === relaySecret;
-        console.log("[Discord Webhook] Relay auth check:", isValid ? "PASS" : "FAIL", "(header:", relayHeader, ", expected:", relaySecret, ")");
+        const isValid = secretsEqual(relayHeader, relaySecret);
         if (!relayHeader || !isValid) {
             return NextResponse.json({ error: "Unauthorized relay" }, { status: 401 });
         }
@@ -382,7 +285,6 @@ export async function POST(req: Request) {
     let payload: unknown = null;
     try {
         payload = rawBody ? JSON.parse(rawBody) : null;
-        console.log("[Discord Webhook] Parsed payload:", JSON.stringify(payload, null, 2).substring(0, 500));
     } catch (e) {
         console.log("[Discord Webhook] JSON parse error:", e);
         return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
@@ -399,6 +301,13 @@ export async function POST(req: Request) {
     if (!event) {
         console.log("[Discord Webhook] No matching event type found");
         return NextResponse.json({ ok: true, ignored: true });
+    }
+
+    if (["MESSAGE_UPDATE", "MESSAGEUPDATE", "MESSAGE_DELETE", "MESSAGEDELETE"].includes(event.type)) {
+        const data = normalizedMessageData(event.data);
+        const issueId = await updateInboundDiscordMessage({ ...data, channel_id: data.channel_id || data.channelId }, event.type.includes("DELETE"));
+        if (issueId) revalidateIssue(issueId);
+        return NextResponse.json({ ok: true, handled: event.type });
     }
 
     if (event.type === "MESSAGE_CREATE" || event.type === "MESSAGECREATE") {

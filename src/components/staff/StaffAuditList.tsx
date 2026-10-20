@@ -48,11 +48,14 @@ export function StaffAuditList({
   events,
   emptyLabel = "No staff writes recorded yet.",
   showTarget = false,
+  error,
 }: {
   events: StaffAuditEventView[];
   emptyLabel?: string;
   showTarget?: boolean;
+  error?: string;
 }) {
+  if (error) return <p role="alert" className="text-xs text-danger">{error}</p>;
   if (events.length === 0) {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -66,7 +69,7 @@ export function StaffAuditList({
     <div className="space-y-2">
       {events.map((event) => {
         const targetHref = showTarget ? staffAuditTargetHref(event) : null;
-        const target = showTarget ? staffAuditTargetLabel(event) : null;
+        const target = (showTarget || event.targetType === "vehicle") ? staffAuditTargetLabel(event) : null;
         const change = changeLabel(event.oldValue, event.newValue);
 
         return (
@@ -101,9 +104,10 @@ export function StaffAuditList({
                 </p>
               )}
             </div>
-            <p className="flex shrink-0 items-center gap-1 text-[11px] text-subtle-foreground">
+            <p title={new Date(event.createdAt).toLocaleString()} className="flex shrink-0 items-center gap-1 text-[11px] text-subtle-foreground">
               <Clock className="h-3 w-3" />
               {formatRelativeTime(event.createdAt)}
+              <span>{new Date(event.createdAt).toLocaleString()}</span>
             </p>
           </div>
         );

@@ -1,3 +1,4 @@
+import { EvidenceLinks } from "@/components/ui/EvidenceLinks";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, Banknote } from "lucide-react";
@@ -166,7 +167,7 @@ export default async function CompensationDetailPage({
                 Evidence
               </p>
               <pre className="rounded-md border border-border bg-muted p-3 text-xs whitespace-pre-wrap">
-                {request.evidence}
+                <EvidenceLinks content={request.evidence} />
               </pre>
             </div>
           )}
