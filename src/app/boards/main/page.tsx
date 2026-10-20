@@ -1,10 +1,12 @@
 import { db } from "@/lib/db";
 import { auth } from "@/../auth";
+import Link from "next/link";
 import { MainKanbanBoard, type KanbanIssue, type KanbanSubtask } from "./MainKanbanBoard";
 import { BoardNewIssueButton } from "./BoardNewIssueButton";
 import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { formatIssueRef } from "@/lib/issue-ids";
 import type { IssuePriority, IssueStatus, IssueType } from "@/lib/issue-tokens";
+import { cn } from "@/components/ui/cn";
 
 function mapSubtask(s: {
     id: string;
@@ -24,9 +26,17 @@ function mapSubtask(s: {
     };
 }
 
-export default async function MainBoardPage() {
+export default async function MainBoardPage({
+    searchParams,
+}: {
+    searchParams: Promise<{ assignee?: string }>;
+}) {
     const session = await auth();
+    const userId = session?.user?.id;
+    const assignedToMe = (await searchParams).assignee === "me" && !!userId;
+    const assignmentFilter = assignedToMe && userId ? { assigneeId: userId } : {};
     const rawIssues = await db.issue.findMany({
+        where: assignmentFilter,
         orderBy: { updatedAt: "desc" },
         select: {
             id: true,
@@ -40,6 +50,7 @@ export default async function MainBoardPage() {
                 select: { id: true, publicKey: true },
             },
             subtasks: {
+                where: assignmentFilter,
                 orderBy: { createdAt: "asc" },
                 select: {
                     id: true,
@@ -88,6 +99,33 @@ export default async function MainBoardPage() {
             {!canDrag && (
                 <p className="text-xs text-warning">
                     Sign in to move cards on the board.
+                </p>
+            )}
+            {userId && (
+                <nav aria-label="Board assignment filter" className="flex flex-wrap gap-2">
+                    {[
+                        { href: "/boards/main", label: "All issues", active: !assignedToMe },
+                        { href: "/boards/main?assignee=me", label: "Assigned to me", active: assignedToMe },
+                    ].map(({ href, label, active }) => (
+                        <Link
+                            key={href}
+                            href={href}
+                            aria-current={active ? "page" : undefined}
+                            className={cn(
+                                "inline-flex h-8 items-center rounded-md border px-3 text-xs font-medium transition-colors focus-ring",
+                                active
+                                    ? "border-primary bg-primary text-primary-foreground"
+                                    : "border-border bg-surface text-muted-foreground hover:bg-muted hover:text-foreground"
+                            )}
+                        >
+                            {label}
+                        </Link>
+                    ))}
+                </nav>
+            )}
+            {assignedToMe && issues.length === 0 && (
+                <p role="status" className="text-sm text-muted-foreground">
+                    No issues are assigned to you.
                 </p>
             )}
             <MainKanbanBoard issues={issues} interactive={canDrag} />
