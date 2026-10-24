@@ -12,6 +12,8 @@
     "test:issues:setup": "npm install --prefix node_modules/.cache/issue-test-tools --no-save --no-package-lock @electric-sql/pglite@0.5.8 playwright@1.63.0 esbuild@0.28.2",
     "test:issues": "node --test tests/issues/*.test.cjs",
     "test:issues:browser": "node tests/issues/browser.cjs",
+    "test:roadmap": "node --test tests/roadmap/core.test.cjs",
+    "test:roadmap:browser": "node tests/roadmap/browser.cjs",
     "test:dashboard": "node --test tests/dashboard/*.test.cjs",
     "test:logs:preview": "node tests/dashboard/preview.cjs",
     "test:logs": "node --test tests/dashboard/core.test.cjs"

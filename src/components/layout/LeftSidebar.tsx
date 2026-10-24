@@ -19,6 +19,7 @@ import {
   Coins,
   BarChart3,
   Banknote,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { QuickCreateTrigger } from "@/components/issues/QuickCreateIssue";
@@ -53,6 +54,7 @@ function navItems(canViewLogs: boolean, staffToolAccess: StaffToolAccess) {
       { name: "All issues", href: "/issues", icon: ListTodo },
       { name: "Backlog", href: "/issues/backlog", icon: Archive },
       { name: "Main board", href: "/boards/main", icon: KanbanSquare },
+      { name: "Roadmap", href: "/roadmap", icon: CalendarDays },
       { name: "Triage", href: "/boards/triage", icon: KanbanSquare },
     ],
   },

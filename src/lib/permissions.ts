@@ -175,6 +175,10 @@ export function canDeleteIssues(context: PermissionContext | null): boolean {
   return hasRole(context, MANAGE_ROLES);
 }
 
+export function canManageRoadmap(context: PermissionContext | null): boolean {
+  return hasRole(context, new Set<ProjectRole>(["Owner", "Admin", "Developer"]));
+}
+
 export function canManageMembers(context: PermissionContext | null): boolean {
   return hasRole(context, MANAGE_ROLES);
 }

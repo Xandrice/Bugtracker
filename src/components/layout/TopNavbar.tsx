@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Shield, Settings, LogOut } from "lucide-react";
+import { Shield, Settings, LogOut, CalendarDays } from "lucide-react";
 import { auth } from "@/../auth";
 import { SignInButton } from "@/components/auth/SignInButton";
 import { db } from "@/lib/db";
@@ -47,6 +47,7 @@ export async function TopNavbar() {
             </div>
 
             <div className="flex items-center gap-1">
+                {session?.user?.id && <Link href="/roadmap" className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"><CalendarDays className="h-3.5 w-3.5" />Roadmap</Link>}
                 <ThemeToggle />
                 {session?.user?.id && <NotificationBell unread={unread} />}
                 <Link

@@ -29,6 +29,12 @@ or split credentials:
 - `FIVEM_DB_PASSWORD`
 - `FIVEM_DB_NAME`
 
+### Roadmap
+
+Signed-in users can view `/roadmap` from the Work sidebar (or the Roadmap link in the mobile header). Switch between a monthly calendar and a list of all milestones, search, or filter by status. Undated milestones appear under Unscheduled in the calendar. Owners, admins, and developers can create, edit, and delete milestones, set optional target dates, and link up to 100 existing issues. Linked issue completion is calculated from `DONE` issues; the milestone's overall status is set separately. Deleting a milestone keeps its issues.
+
+Roadmap milestones use the existing `Release` and `ReleaseIssue` tables, so no new migration is required. Target dates are calendar days stored at midnight UTC. Run `npm run test:roadmap` for date/permission/mutation checks and `npm run test:roadmap:browser` for interaction and responsive checks (uses the tools installed by `npm run test:issues:setup`).
+
 ## Deploy to Vercel (migration from Render)
 
 This app expects PostgreSQL for production on Vercel.
