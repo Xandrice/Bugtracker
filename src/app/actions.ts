@@ -92,6 +92,7 @@ function revalidateIssuePaths(issueId: string) {
     revalidatePath("/issues/backlog");
     revalidatePath("/boards/triage");
     revalidatePath("/boards/main");
+    revalidatePath("/roadmap");
     revalidatePath(`/issues/${issueId}`);
 }
 
@@ -1126,6 +1127,7 @@ export async function deleteIssue(formData: FormData) {
     revalidatePath("/issues/me");
     revalidatePath("/boards/triage");
     revalidatePath("/boards/main");
+    revalidatePath("/roadmap");
     revalidatePath(`/issues/${issueId}`);
 
     redirect("/issues");

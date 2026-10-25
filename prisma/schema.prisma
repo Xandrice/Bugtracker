@@ -96,6 +96,8 @@ model Issue {
   expectedBehavior  String? // What should happen (bugs/features)
 
   // Jira/Trello/Asana-style
+  startDate        DateTime?
+  categories       ScheduleCategory[]
   dueDate          DateTime?
   storyPoints      Int? // 1,2,3,5,8 for estimation
   label            String? // Optional single label/category; tags for multi
@@ -364,6 +366,8 @@ model Release {
   name        String
   description String?
   status      String   @default("PLANNED")
+  startDate   DateTime?
+  categories  ScheduleCategory[]
   targetDate  DateTime?
   authorId    String
   author      User     @relation("ReleaseAuthor", fields: [authorId], references: [id], onDelete: Cascade)
@@ -474,4 +478,13 @@ model CompensationRequest {
   @@index([status])
   @@index([playerIdentifier])
   @@index([discordId])
+}
+
+// Shared Outlook-style categories for roadmap events and scheduled board work.
+model ScheduleCategory {
+  id       String @id @default(cuid())
+  name     String @unique
+  color    String
+  issues   Issue[]
+  releases Release[]
 }

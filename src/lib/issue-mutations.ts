@@ -24,6 +24,7 @@ export async function mutateIssue(issueId: string, input: Record<string, unknown
       await tx.$queryRaw`SELECT id FROM ${pgTable("Issue")} WHERE id = ${issueId} FOR UPDATE`;
       const previous = await tx.issue.findUnique({ where: { id: issueId }, include: { assignees: issueAssigneeInclude } });
       if (!previous) return null;
+      if (data.dueDate && previous.startDate && data.dueDate < previous.startDate) throw new Error("INVALID_SCHEDULE_RANGE");
       const previousUsers = assigneeUsers(previous.assignees);
       const previousIds = previousUsers.map(user => user.id).sort();
       let nextUsers = previousUsers;
@@ -71,6 +72,7 @@ export async function mutateIssue(issueId: string, input: Record<string, unknown
     return { issue: committed.issue };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return { error: "This Discord post is already linked to another issue.", fieldErrors: { discordPostId: "Choose a post that is not already linked." } };
+    if (error instanceof Error && error.message === "INVALID_SCHEDULE_RANGE") return { error: "Due date must be on or after the start date.", fieldErrors: { dueDate: "Choose a date on or after the scheduled start date." } };
     if (error instanceof Error && error.message === "ASSIGNEE_NOT_FOUND") return { error: "An assignee no longer exists.", fieldErrors: { assigneeIds: "Refresh and choose valid assignees." } };
     console.error("Issue transaction failed", error);
     return { error: "Could not save this issue. Refresh and try again." };

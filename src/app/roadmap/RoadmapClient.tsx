@@ -3,13 +3,16 @@
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CalendarDays, ChevronLeft, ChevronRight, Flag, List, Plus, Search, X } from "lucide-react";
+import { ChartGantt, CalendarDays, ChevronLeft, ChevronRight, Flag, List, Plus, Search, X } from "lucide-react";
 import { PageContainer, PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { FieldRow, Input, Textarea } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { cn } from "@/components/ui/cn";
-import { calendarDays, formatRoadmapDate, moveMonth, ROADMAP_STATUSES, ROADMAP_STATUS_LABELS, type RoadmapIssue, type RoadmapMilestone, type RoadmapStatus } from "@/lib/roadmap";
+import { CategoryManager, CategoryPicker, CategoryTags } from "@/components/schedule/Categories";
+import { GanttChart } from "@/components/schedule/GanttChart";
+import { TaskScheduleForm } from "@/components/schedule/TaskScheduleForm";
+import { ganttItems, type GanttItem, type ScheduledTask, type ScheduleCategory, calendarDays, formatRoadmapDate, moveMonth, ROADMAP_STATUSES, ROADMAP_STATUS_LABELS, type RoadmapIssue, type RoadmapMilestone, type RoadmapStatus } from "@/lib/roadmap";
 import { deleteRoadmapMilestone, saveRoadmapMilestone, searchRoadmapIssues } from "./actions";
 
 const statusColor: Record<string, string> = {
@@ -34,8 +37,9 @@ function Status({ status }: { status: string }) {
   </span>;
 }
 
-function MilestoneEditor({ milestone, date, canManage, onClose }: {
+function MilestoneEditor({ milestone, date, canManage, categories, onClose }: {
   milestone: RoadmapMilestone | null;
+  categories: ScheduleCategory[];
   date: string;
   canManage: boolean;
   onClose: () => void;
@@ -106,9 +110,11 @@ function MilestoneEditor({ milestone, date, canManage, onClose }: {
         <FieldRow label="Milestone name" htmlFor="milestone-name"><Input id="milestone-name" name="name" required maxLength={200} defaultValue={milestone?.name} placeholder="e.g. Economy update" autoFocus /></FieldRow>
         <FieldRow label="Description" htmlFor="milestone-description"><Textarea id="milestone-description" name="description" maxLength={10000} defaultValue={milestone?.description ?? ""} placeholder="What are we working toward?" /></FieldRow>
         <div className="grid gap-4 sm:grid-cols-2">
+          <FieldRow label="Start date" htmlFor="milestone-start" hint="Optional; requires a target date."><Input id="milestone-start" type="date" name="startDate" min="1900-01-01" max="9999-12-31" defaultValue={milestone?.startDate ?? ""} /></FieldRow>
           <FieldRow label="Target date" htmlFor="milestone-date" hint="Leave empty to keep it unscheduled."><Input id="milestone-date" type="date" name="targetDate" min="1900-01-01" max="9999-12-31" defaultValue={milestone?.targetDate ?? date} /></FieldRow>
           <FieldRow label="Status" htmlFor="milestone-status"><select id="milestone-status" name="status" defaultValue={milestone?.status ?? "PLANNED"} className="h-9 w-full rounded-md border border-input bg-elevated px-3 text-sm focus-ring">{ROADMAP_STATUSES.map((value) => <option key={value} value={value}>{ROADMAP_STATUS_LABELS[value]}</option>)}</select></FieldRow>
         </div>
+        <CategoryPicker categories={categories} selected={milestone?.categories} />
         <FieldRow label={`Linked issues (${issues.length}/100)`} htmlFor="milestone-issues" hint="Link work to track completion automatically.">
           <Input id="milestone-issues" value={query} maxLength={200} onChange={(event) => { setQuery(event.target.value); setResults([]); setSearchError(""); setSearching(!!event.target.value.trim()); }} placeholder="Search by title or issue key…" />
         </FieldRow>
@@ -134,23 +140,40 @@ function MilestoneEditor({ milestone, date, canManage, onClose }: {
     </form> : <div className="space-y-4 p-5">
       <h3 className="text-lg font-semibold">{milestone?.name}</h3>
       <div className="flex items-center gap-3"><Status status={milestone?.status ?? "PLANNED"} /><span className="text-xs text-muted-foreground">{milestone?.targetDate ? formatRoadmapDate(milestone.targetDate) : "Unscheduled"}</span></div>
+      <CategoryTags categories={milestone?.categories ?? []} />
+      {milestone?.startDate && <p className="text-xs text-muted-foreground">Starts {formatRoadmapDate(milestone.startDate)}</p>}
       {milestone?.description && <p className="whitespace-pre-wrap text-sm text-muted-foreground">{milestone.description}</p>}
       {issues.length > 0 && <div className="space-y-2"><h4 className="text-xs font-semibold">Linked issues</h4>{issues.map((issue) => <Link key={issue.id} href={`/issues/${issue.id}`} className="block text-sm hover:text-primary">{issue.publicKey ? `${issue.publicKey} · ` : ""}{issue.title}<span className="ml-2 text-xs text-muted-foreground">{issue.status === "DONE" ? "Done" : "Open"}</span></Link>)}</div>}
     </div>}
   </dialog>;
 }
 
-export function RoadmapClient({ milestones, canManage, today: initialToday }: { milestones: RoadmapMilestone[]; canManage: boolean; today: string }) {
+function TaskEditor({ task, categories, canEdit, onClose }: { task: ScheduledTask; categories: ScheduleCategory[]; canEdit: boolean; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => { dialog.current?.showModal(); }, []);
+  return <dialog ref={dialog} aria-labelledby="task-schedule-title" onCancel={event => { event.preventDefault(); onClose(); }} className="fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-xl space-y-4 overflow-auto rounded-lg border border-border bg-elevated p-5 text-foreground shadow-xl backdrop:bg-black/50"><div className="flex items-start justify-between gap-3"><h2 id="task-schedule-title" className="font-semibold">{task.title}</h2><Button onClick={onClose}>Close</Button></div><Link href={`/issues/${task.id}`} className="block text-xs text-primary">Open board task</Link>{canEdit ? <TaskScheduleForm id={task.id} startDate={task.startDate} dueDate={task.dueDate} selected={task.categories} categories={categories} onSaved={onClose} /> : <><p className="text-sm">{formatRoadmapDate(task.startDate)} to {formatRoadmapDate(task.dueDate)}</p><CategoryTags categories={task.categories} /></>}</dialog>;
+}
+
+export function RoadmapClient({ milestones, canManage, today: initialToday, tasks = [], categories = [], canEditTasks = false }: { milestones: RoadmapMilestone[]; canManage: boolean; today: string; tasks?: ScheduledTask[]; categories?: ScheduleCategory[]; canEditTasks?: boolean }) {
   const today = useSyncExternalStore(subscribeCalendarDay, localCalendarDay, () => initialToday);
-  const [view, setView] = useState<"calendar" | "list">("calendar");
+  const [view, setView] = useState<"calendar" | "list" | "gantt">("calendar");
   const [selectedMonth, setMonth] = useState<string | null>(null);
   const month = selectedMonth ?? today.slice(0, 7);
+  const [category, setCategory] = useState("ALL");
+  const [managingCategories, setManagingCategories] = useState(false);
+  const [taskEditor, setTaskEditor] = useState<ScheduledTask | null>(null);
+  const matchesCategory = (item: { categories?: ScheduleCategory[] }) => category === "ALL" || (category === "NONE" ? !item.categories?.length : item.categories?.some(tag => tag.id === category));
   const [status, setStatus] = useState("ALL");
   const [query, setQuery] = useState("");
   const [editor, setEditor] = useState<{ milestone: RoadmapMilestone | null; date: string } | null>(null);
-  const filtered = milestones.filter((item) => (status === "ALL" || item.status === status) && `${item.name} ${item.description ?? ""}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const filtered = milestones.filter((item) => matchesCategory(item) && (status === "ALL" || item.status === status) && `${item.name} ${item.description ?? ""}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const gantt = ganttItems(milestones, tasks).filter(item => matchesCategory(item) && item.name.toLowerCase().includes(query.trim().toLowerCase()) && (status === "ALL" || (item.kind === "RELEASE" ? item.status : item.status === "DONE" ? "RELEASED" : ["IN_PROGRESS", "REVIEW"].includes(item.status) ? "IN_PROGRESS" : "PLANNED") === status));
+  function openGantt(item: GanttItem) {
+    if (item.kind === "RELEASE") { const milestone = milestones.find(value => value.id === item.id); if (milestone) openMilestone(milestone); }
+    else { const task = tasks.find(value => value.id === item.id); if (task) setTaskEditor(task); }
+  }
   const undated = filtered.filter((item) => !item.targetDate);
-  const scheduledThisMonth = filtered.filter((item) => item.targetDate?.startsWith(month));
+  const scheduledThisMonth = filtered.filter((item) => item.targetDate && item.targetDate >= `${month}-01` && (item.startDate || item.targetDate).slice(0, 7) <= month);
   const completed = milestones.filter((item) => item.status === "RELEASED").length;
   const overdue = milestones.filter((item) => item.targetDate && item.targetDate < today && item.status !== "RELEASED").length;
   const openMilestone = (milestone: RoadmapMilestone) => setEditor({ milestone, date: milestone.targetDate ?? "" });
@@ -158,26 +181,29 @@ export function RoadmapClient({ milestones, canManage, today: initialToday }: { 
   function card(item: RoadmapMilestone) {
     const done = item.issues.filter((issue) => issue.status === "DONE").length;
     const late = item.targetDate && item.targetDate < today && item.status !== "RELEASED";
-    return <button key={item.id} onClick={() => openMilestone(item)} className="w-full space-y-2 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-border-strong hover:bg-elevated focus-ring">
+    return <button key={item.id} aria-label={item.name} onClick={() => openMilestone(item)} style={{ borderLeftWidth: item.categories?.length ? 4 : undefined, borderLeftColor: item.categories?.[0]?.color }} className="w-full space-y-2 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-border-strong hover:bg-elevated focus-ring">
       <div className="flex flex-wrap items-start justify-between gap-2"><h3 className="text-sm font-semibold">{item.name}</h3><Status status={item.status} /></div>
+      <CategoryTags categories={item.categories ?? []} />
       {item.description && <p className="line-clamp-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{item.description}</p>}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span className={cn("flex items-center gap-1.5", late && "text-danger")}><CalendarDays className="h-3.5 w-3.5" />{item.targetDate ? formatRoadmapDate(item.targetDate) : "No target date"}{late && " · Overdue"}</span>{item.issues.length > 0 && <span>{done}/{item.issues.length} issues complete</span>}</div>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span className={cn("flex items-center gap-1.5", late && "text-danger")}><CalendarDays className="h-3.5 w-3.5" />{item.targetDate ? `${item.startDate ? `${formatRoadmapDate(item.startDate)} - ` : ""}${formatRoadmapDate(item.targetDate)}` : "No target date"}{late && " · Overdue"}</span>{item.issues.length > 0 && <span>{done}/{item.issues.length} issues complete</span>}</div>
       {item.issues.length > 0 && <div role="progressbar" aria-label={`${item.name} issue completion`} aria-valuemin={0} aria-valuemax={item.issues.length} aria-valuenow={done} className="h-1 overflow-hidden rounded bg-muted"><div className="h-full bg-success" style={{ width: `${done / item.issues.length * 100}%` }} /></div>}
     </button>;
   }
 
   return <PageContainer>
-    <PageHeader title="Roadmap" description="Plan milestones, set target dates, and see what’s coming next." icon={<Flag className="h-4 w-4" />} actions={canManage && <Button variant="primary" onClick={() => setEditor({ milestone: null, date: "" })}><Plus className="h-3.5 w-3.5" />New milestone</Button>} />
+    <PageHeader title="Roadmap" description="Plan milestones, categorize events, and schedule board work. See what’s coming next." icon={<Flag className="h-4 w-4" />} actions={canManage && <Button variant="primary" onClick={() => setEditor({ milestone: null, date: "" })}><Plus className="h-3.5 w-3.5" />New milestone</Button>} />
     <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground"><span><strong className="text-foreground">{milestones.length}</strong> milestones</span><span><strong className="text-success">{completed}</strong> completed</span>{overdue > 0 && <span className="text-danger"><strong>{overdue}</strong> overdue</span>}</div>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div aria-label="Roadmap view" className="flex rounded-md border border-border bg-surface p-0.5">{(["calendar", "list"] as const).map((value) => <Button key={value} size="sm" variant={view === value ? "secondary" : "ghost"} aria-pressed={view === value} onClick={() => setView(value)}>{value === "calendar" ? <CalendarDays className="h-3.5 w-3.5" /> : <List className="h-3.5 w-3.5" />}{value === "calendar" ? "Calendar" : "List"}</Button>)}</div>
+        <div aria-label="Roadmap view" className="flex rounded-md border border-border bg-surface p-0.5">{(["calendar", "list", "gantt"] as const).map((value) => <Button key={value} size="sm" variant={view === value ? "secondary" : "ghost"} aria-pressed={view === value} onClick={() => setView(value)}>{value === "calendar" ? <CalendarDays className="h-3.5 w-3.5" /> : value === "gantt" ? <ChartGantt className="h-3.5 w-3.5" /> : <List className="h-3.5 w-3.5" />}{value === "calendar" ? "Calendar" : value === "gantt" ? "Gantt" : "List"}</Button>)}</div>
         <Select aria-label="Filter milestone status" value={status} onChange={setStatus} fullWidth={false} options={[{ value: "ALL", label: "All statuses" }, ...ROADMAP_STATUSES.map((value) => ({ value, label: ROADMAP_STATUS_LABELS[value] }))]} />
+        <Select className="max-w-full" triggerClassName="max-w-64" aria-label="Filter category" value={category} onChange={setCategory} fullWidth={false} options={[{ value: "ALL", label: "All categories" }, { value: "NONE", label: "Uncategorized" }, ...categories.map(item => ({ value: item.id, label: item.name, icon: <span className="h-2.5 w-2.5 rounded-sm border border-foreground/20" style={{ backgroundColor: item.color }} /> }))]} />
+        {canManage && <Button onClick={() => setManagingCategories(true)}>Manage categories</Button>}
       </div>
       <div className="relative w-full sm:w-60"><Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" /><Input aria-label="Search milestones" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search milestones…" className="h-8 pl-8 text-xs" /></div>
     </div>
-    {milestones.length === 0 && <div className="rounded-lg border border-dashed border-border bg-surface p-6 text-center"><Flag className="mx-auto mb-2 h-6 w-6 text-muted-foreground" /><h2 className="text-sm font-semibold">Build your roadmap</h2><p className="mt-1 text-xs text-muted-foreground">{canManage ? "Create your first milestone or choose a day on the calendar to start planning." : "Milestones will appear here when the team adds them."}</p></div>}
-    {view === "calendar" ? <>
+    {view !== "gantt" && milestones.length === 0 && <div className="rounded-lg border border-dashed border-border bg-surface p-6 text-center"><Flag className="mx-auto mb-2 h-6 w-6 text-muted-foreground" /><h2 className="text-sm font-semibold">Build your roadmap</h2><p className="mt-1 text-xs text-muted-foreground">{canManage ? "Create your first milestone or choose a day on the calendar to start planning." : "Milestones will appear here when the team adds them."}</p></div>}
+    {view === "gantt" ? <GanttChart items={gantt} today={today} canManage={canManage} canEditTasks={canEditTasks} onOpen={openGantt} originalStart={item => item.kind === "ISSUE" ? item.start : milestones.find(value => value.id === item.id)?.startDate ?? null} /> : view === "calendar" ? <>
       <section aria-label="Milestone calendar" className="overflow-hidden rounded-lg border border-border bg-surface">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-3">
           <div className="flex items-center gap-1"><Button variant="ghost" size="icon" aria-label="Previous month" onClick={() => setMonth(moveMonth(month, -1))}><ChevronLeft className="h-4 w-4" /></Button><h2 aria-live="polite" className="min-w-36 text-center text-sm font-semibold">{formatRoadmapDate(`${month}-01`, { month: "long", year: "numeric" })}</h2><Button variant="ghost" size="icon" aria-label="Next month" onClick={() => setMonth(moveMonth(month, 1))}><ChevronRight className="h-4 w-4" /></Button></div>
@@ -187,14 +213,16 @@ export function RoadmapClient({ milestones, canManage, today: initialToday }: { 
           <div className="grid grid-cols-7 border-b border-border">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <div key={day} className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{day}</div>)}</div>
           <div className="grid grid-cols-7">{calendarDays(month).map((day) => <div key={day} data-calendar-day={day} className={cn("min-h-28 border-b border-r border-border p-1.5 [&:nth-child(7n)]:border-r-0", !day.startsWith(month) && "bg-background/60", day === today && "bg-primary/5")}>
             <div className="mb-1 flex items-center justify-between"><span aria-label={day === today ? "Today" : undefined} className={cn("flex h-6 w-6 items-center justify-center rounded-full text-[11px]", day === today ? "bg-primary font-semibold text-primary-foreground" : day.startsWith(month) ? "text-foreground" : "text-subtle-foreground")}>{Number(day.slice(-2))}</span>{canManage && <button aria-label={`Add milestone on ${day}`} onClick={() => setEditor({ milestone: null, date: day })} className="rounded p-1 text-subtle-foreground hover:bg-muted hover:text-foreground focus-ring"><Plus className="h-3 w-3" /></button>}</div>
-            <div className="space-y-1">{filtered.filter((item) => item.targetDate === day).map((item) => <button key={item.id} onClick={() => openMilestone(item)} title={`${item.name} · ${ROADMAP_STATUS_LABELS[item.status as RoadmapStatus] ?? item.status}`} className={cn("block w-full rounded border px-1.5 py-1 text-left text-[11px] leading-snug focus-ring", statusColor[item.status] ?? statusColor.PLANNED)}><span className="line-clamp-2 break-words">{item.name}</span></button>)}</div>
+            <div className="space-y-1">{filtered.filter((item) => item.targetDate && (item.startDate || item.targetDate) <= day && item.targetDate >= day).map((item) => <button key={item.id} aria-label={item.name} onClick={() => openMilestone(item)} style={{ borderLeftWidth: item.categories?.length ? 4 : undefined, borderLeftColor: item.categories?.[0]?.color }} title={`${item.name} · ${ROADMAP_STATUS_LABELS[item.status as RoadmapStatus] ?? item.status}`} className={cn("block w-full rounded border px-1.5 py-1 text-left text-[11px] leading-snug focus-ring", statusColor[item.status] ?? statusColor.PLANNED)}><span className="line-clamp-2 break-words">{item.name}</span><CategoryTags categories={item.categories ?? []} /></button>)}</div>
           </div>)}</div>
         </div></div>
         <p className="px-3 py-2 text-xs text-muted-foreground">{scheduledThisMonth.length} {scheduledThisMonth.length === 1 ? "milestone" : "milestones"} this month. <span className="sm:hidden">Scroll sideways to see the full week, or use List.</span></p>
       </section>
       {undated.length > 0 && <section aria-label="Unscheduled milestones" className="space-y-3"><h2 className="text-sm font-semibold">Unscheduled <span className="ml-1 text-xs font-normal text-muted-foreground">{undated.length}</span></h2><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{undated.map(card)}</div></section>}
     </> : <section aria-label="Milestone list" className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{filtered.map(card)}</section>}
-    {milestones.length > 0 && filtered.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No milestones match your search and status filter.</p>}
-    {editor && <MilestoneEditor milestone={editor.milestone} date={editor.date} canManage={canManage} onClose={() => setEditor(null)} />}
+    {view !== "gantt" && milestones.length > 0 && filtered.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No milestones match your search and status filter.</p>}
+    {managingCategories && <CategoryManager categories={categories} onClose={() => setManagingCategories(false)} />}
+    {taskEditor && <TaskEditor task={taskEditor} categories={categories} canEdit={canEditTasks} onClose={() => setTaskEditor(null)} />}
+    {editor && <MilestoneEditor categories={categories} milestone={editor.milestone} date={editor.date} canManage={canManage} onClose={() => setEditor(null)} />}
   </PageContainer>;
 }

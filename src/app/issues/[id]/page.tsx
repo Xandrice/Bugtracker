@@ -11,6 +11,7 @@ import {
     Tag,
     UserCircle2,
 } from "lucide-react";
+import { IssueSchedule } from "@/components/schedule/TaskScheduleForm";
 import { db } from "@/lib/db";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/../auth";
@@ -78,6 +79,7 @@ export default async function IssueDetailsPage({
         where: { OR: [{ publicKey: normalizedRef }, { id: rawRef }] },
         include: {
             reporter: true,
+            categories: { orderBy: { name: "asc" } },
             assignees: issueAssigneeInclude,
             parentIssue: { select: { id: true, publicKey: true, title: true } },
             subtasks: {
@@ -118,6 +120,7 @@ export default async function IssueDetailsPage({
     const assignableUsers = await getStaffUsers();
     const permissionContext = await getPermissionContext(session?.user?.id);
     const canEdit = !!session?.user?.id;
+    const scheduleCategories = await db.scheduleCategory.findMany({ orderBy: { name: "asc" } });
     const canAssign = canAssignIssues(permissionContext);
     const canDelete = canDeleteIssues(permissionContext);
 
@@ -249,6 +252,8 @@ export default async function IssueDetailsPage({
                             </p>
                         </div>
                     )}
+
+                    <IssueSchedule id={issue.id} startDate={issue.startDate?.toISOString().slice(0, 10) ?? ""} dueDate={issue.dueDate?.toISOString().slice(0, 10) ?? ""} selected={issue.categories} categories={scheduleCategories} canEdit={canEdit} />
 
                     {canEdit && (
                         <EditIssueDetailsForm

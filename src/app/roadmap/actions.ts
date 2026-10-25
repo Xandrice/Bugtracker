@@ -4,6 +4,7 @@ import { auth } from "@/../auth";
 import { db } from "@/lib/db";
 import { canManageRoadmap, getPermissionContext } from "@/lib/permissions";
 import { parseRoadmapDate, ROADMAP_STATUSES, type RoadmapIssue } from "@/lib/roadmap";
+import { scheduleCategoryIds, requireScheduleCategories } from "@/lib/schedule-store";
 import { revalidatePath } from "next/cache";
 
 async function roadmapManager() {
@@ -45,19 +46,24 @@ export async function saveRoadmapMilestone(form: FormData): Promise<{ error?: st
   if (typeof description !== "string" || description.length > 10000) return { error: "Description must be 10,000 characters or fewer." };
   if (typeof status !== "string" || !ROADMAP_STATUSES.includes(status as typeof ROADMAP_STATUSES[number])) return { error: "Choose a valid status." };
   if (typeof date !== "string" || (date && !parseRoadmapDate(date))) return { error: "Choose a valid target date." };
+  const start = form.get("startDate") ?? "";
+  if (typeof start !== "string" || (start && (!parseRoadmapDate(start) || !date || start > date))) return { error: "Start date must be on or before the target date." };
+  const categoryIds = scheduleCategoryIds(form);
+  if (!categoryIds) return { error: "Choose up to 100 valid categories." };
   const rawIssueIds = form.getAll("issueId");
   if (rawIssueIds.length > 100 || rawIssueIds.some((value) => typeof value !== "string" || !value || value.length > 100)) return { error: "Choose up to 100 valid issues." };
   const issueIds = [...new Set(rawIssueIds as string[])];
   try {
     await db.$transaction(async (tx) => {
       if (issueIds.length && await tx.issue.count({ where: { id: { in: issueIds } } }) !== issueIds.length) throw new Error("Missing issue");
-      const data = { name: name.trim(), description: description.trim() || null, status, targetDate: date ? parseRoadmapDate(date) : null };
+      await requireScheduleCategories(tx, categoryIds);
+      const data = { startDate: start ? parseRoadmapDate(start) : null, categories: { set: categoryIds.map(id => ({ id })) }, name: name.trim(), description: description.trim() || null, status, targetDate: date ? parseRoadmapDate(date) : null };
       if (id) {
         await tx.release.update({ where: { id }, data: {
           ...data, issues: { deleteMany: {}, create: issueIds.map((issueId) => ({ issueId })) },
         } });
       } else {
-        await tx.release.create({ data: { ...data, authorId, issues: { create: issueIds.map((issueId) => ({ issueId })) } } });
+        await tx.release.create({ data: { ...data, categories: { connect: categoryIds.map(id => ({ id })) }, authorId, issues: { create: issueIds.map((issueId) => ({ issueId })) } } });
       }
     });
   } catch {

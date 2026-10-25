@@ -4,7 +4,7 @@ export function activityFieldLabel(field: string | null | undefined) {
 }
 export function activityValueLabel(value: string | null | undefined, field?: string | null): string {
   if (!value) return "Not set";
-  if (field === "dueDate" && Number.isFinite(Date.parse(value))) return new Date(value).toLocaleDateString("en-US", { timeZone: "UTC", dateStyle: "medium" });
+  if ((field === "dueDate" || field === "startDate") && Number.isFinite(Date.parse(value))) return new Date(value).toLocaleDateString("en-US", { timeZone: "UTC", dateStyle: "medium" });
   return LABELS[value] || value;
 }
 export function formatActivityLabel(activity: { action: string; field?: string | null; oldValue?: string | null; newValue?: string | null }) {
