@@ -245,7 +245,7 @@ async function notifyMentionedUsers(input: {
         : `${baseUrl}${input.targetLink}`;
 
     for (const target of targets) {
-        const dmBody = `You were tagged in BugTracker by **${input.senderName}**: \n${fullLink}\n\n> ${input.content.replace(/\n/g, "\n> ")}`;
+        const dmBody = `You were tagged in BugTracker by **${input.senderName}**${input.pageTitle ? ` in **${input.pageTitle}**` : ""}: \n${fullLink}\n\n> ${input.content.replace(/\n/g, "\n> ")}`;
 
         await notifyUser({
             userId: target.id,
@@ -651,7 +651,7 @@ export async function createTeamNote(formData: FormData) {
         if (commentRecipients.length > 0) {
             const snippet = content.length > 180 ? content.slice(0, 177) + "…" : content;
             const issueUrl = `${baseUrl}/issues/${issueRef}`;
-            const dmBody = `**${senderName}** commented on **${issue?.title}**\n${issueUrl}\n\n> ${content.replace(/\n/g, "\n> ")}`;
+            const dmBody = `**${senderName}** commented on **${issueRef}: ${issue?.title}**\n${issueUrl}\n\n> ${content.replace(/\n/g, "\n> ")}`;
             for (const userId of commentRecipients) {
                 await notifyUser({
                     userId,

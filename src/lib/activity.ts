@@ -96,7 +96,7 @@ export async function recordActivity(input: {
   const body = `${input.oldValue ?? "—"} → ${input.newValue ?? "—"}`;
   const link = `/issues/${issueRef}`;
   const issueUrl = `${getAppBaseUrl()}${link}`;
-  const dmBody = `**${actorName}** changed status on **${issueRef}**: ${body}\n${issueUrl}`;
+  const dmBody = `**${actorName}** changed status on **${issueRef}: ${issue.title}**\n${body}\n${issueUrl}`;
 
   // Implicit: reporter + all assignees. Explicit: IssueWatcher rows.
   const recipients = uniqueUserIds(issue.assignees.map(row => row.userId), issue.reporterId, watcherIds);
