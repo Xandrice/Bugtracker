@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildPlayerLogsQuery, localLogDateInput, localLogDateToUtc, parseLogDuration, playerCitizenTagPattern, playerProfileTab, resolvePlayerLogRange } from "./player-logs";
+import { buildPlayerLogsQuery, characterLogIdentityQuery, localLogDateInput, localLogDateToUtc, parseLogDuration, playerCitizenTagPattern, playerProfileTab, resolvePlayerLogRange } from "./player-logs";
 
 const pattern = new RegExp(playerCitizenTagPattern("82258"));
 for (const tags of ["citizenid:82258", "citizenid:82258,resource:robbery", "resource:robbery,citizenid:82258", "resource:robbery,citizenid:82258,username:Skyla Tretyakova", "resource:robbery, citizenid:82258, username:Skyla"]) {
@@ -10,7 +10,7 @@ for (const tags of ["", "citizenid:822580", "citizenid:182258", "othercitizenid:
 }
 for (const identifier of ["a.b", 'a"b', "a\\b", "a|b", "a$", "a[0]", "a+b", "a(b)"]) {
   const query = buildPlayerLogsQuery(identifier, 200);
-  const literal = query.slice(query.indexOf(" AND tags:~") + " AND tags:~".length, query.indexOf(" | sort"));
+  const literal = query.match(/AND tags:~("(?:\\.|[^"\\])*")/)![1];
   const decoded = JSON.parse(literal);
   assert.ok(new RegExp(decoded).test(`citizenid:${identifier}`));
   assert.equal(new RegExp(decoded).test("citizenid:unrelated"), false);
@@ -19,6 +19,14 @@ assert.throws(() => buildPlayerLogsQuery("", 200));
 assert.throws(() => buildPlayerLogsQuery("123,citizenid:456", 200));
 assert.throws(() => buildPlayerLogsQuery("82258", 999));
 assert.ok(buildPlayerLogsQuery("82258", 500).endsWith("| sort by (_time) desc | limit 500"));
+const rolePatterns = [...characterLogIdentityQuery("82258").matchAll(/AND tags:~("(?:\\.|[^"\\])*")/g)];
+assert.equal(rolePatterns.length, 4);
+for (const [index, role] of ["citizenid", "targetCitizenid", "fromCitizenid", "toCitizenid"].entries()) {
+  const matcher = new RegExp(JSON.parse(rolePatterns[index][1]));
+  assert.ok(matcher.test(`resource:inventory,${role}:82258,amount:1`));
+  assert.equal(matcher.test(`${role}:822580`), false);
+  assert.equal(matcher.test(`other${role}:82258`), false);
+}
 
 assert.equal(parseLogDuration("90m"), 5400000);
 assert.equal(parseLogDuration("1h30m"), 5400000);

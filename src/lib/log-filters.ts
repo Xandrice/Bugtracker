@@ -1,5 +1,5 @@
 import { LOG_CATEGORIES, type LogCategory } from "./log-events";
-import { playerCitizenTagPattern, readLogParam, resolvePlayerLogRange, type PlayerLogParams } from "./player-logs";
+import { characterLogIdentityQuery, readLogParam, resolvePlayerLogRange, type PlayerLogParams } from "./player-logs";
 
 export type LogFilters = {
   q: string; range: string; duration: string; start: string; end: string;
@@ -19,20 +19,7 @@ export function parseLogFilters(params: PlayerLogParams): LogFilters {
 
 export type PlayerLogIdentity = { citizenid: string; license?: string | null; discord?: string | null };
 export function playerIdentityQuery(identity: PlayerLogIdentity): string {
-  const conditions = ["citizenid", "license", "discord"].flatMap((key) => {
-    const raw = identity[key as keyof PlayerLogIdentity];
-    if (!raw) return [];
-    const value = raw.replace(new RegExp(`^${key}:`, "i"), "");
-    const variants = key === "citizenid" ? [value] : [value, `${key}:${value}`];
-    return variants.map(token => {
-      if (!token || /[,\r\n]/.test(token)) throw new Error("This player has an invalid log identifier.");
-      const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const pattern = key === "citizenid" ? playerCitizenTagPattern(token) : `(^|,)\\s*${key}:${escaped}(,|$)`;
-      return `(${key}:=${JSON.stringify(token)} OR (tags:${JSON.stringify(`${key}:${token}`)} AND tags:~${JSON.stringify(pattern)}))`;
-    });
-  });
-  if (!conditions.length) throw new Error("Choose a player with a usable identifier.");
-  return `(${conditions.join(" OR ")})`;
+  return characterLogIdentityQuery(identity.citizenid);
 }
 
 export function buildGuidedLogsQuery(filters: LogFilters, identity?: PlayerLogIdentity, pairs?: { resource: string; event: string }[]) {
